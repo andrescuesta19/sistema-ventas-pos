@@ -142,16 +142,53 @@ const POS = ({ user }) => {
     });
 
     if (res.ok) {
-      setUltimoRecibo({
-        id_venta: Math.floor(Math.random() * 1000000), // Simulado por ahora
+      const ventaData = await res.json();
+      const idVentaReal = ventaData.id_venta;
+
+      const reciboData = {
+        id_venta: idVentaReal,
         fecha: new Date(),
         cliente: id_cliente === 1 ? { nombre_razon_social: 'Consumidor Final', documento_identidad: '22222222' } : datosCliente,
         detalles: carrito,
         totales: totales,
         tipo: tipoDocumento
-      });
+      };
+      setUltimoRecibo(reciboData);
+
+      // Si es Factura Electronica, enviar correo real
+      if (tipoDocumento === 'DIAN_Enviado' && datosCliente.correo) {
+        try {
+          const emailRes = await fetch('http://localhost:3000/api/facturas/enviar-correo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              correo_cliente: datosCliente.correo,
+              nombre_cliente: datosCliente.nombre_razon_social,
+              id_venta: idVentaReal,
+              total_neto: totales.total,
+              detalles: carrito.map(c => ({
+                nombre_producto: c.nombre_producto,
+                cantidad: c.cantidad,
+                precio_unitario: c.precio_venta,
+                subtotal: c.subtotal
+              })),
+              nombre_local: user.nombre_local || 'Sistema Integral de Ventas',
+              metodo_pago: metodoPago
+            })
+          });
+          const emailData = await emailRes.json();
+          if (emailData.preview_url) {
+            // Guardamos la URL de vista previa para mostrarla al cajero
+            reciboData.preview_url = emailData.preview_url;
+            setUltimoRecibo({...reciboData});
+          }
+        } catch (err) {
+          console.warn('No se pudo enviar el correo:', err);
+        }
+      }
+
       setVentaCompletada(true);
-      fetchAllProductos(); // Refrescar stock visualmente
+      fetchAllProductos();
     } else {
       alert('Error procesando la venta');
     }
@@ -365,7 +402,19 @@ const POS = ({ user }) => {
                   {tipoDocumento === 'DIAN_Enviado' ? '¡Factura Electrónica Emitida!' : '¡Venta Exitosa!'}
                 </h2>
                 {tipoDocumento === 'DIAN_Enviado' && (
-                  <p style={{ color: 'var(--text-light)', marginBottom: '1rem' }}>Documento enviado a la DIAN y al correo: {datosCliente.correo}</p>
+                  <div style={{ margin: '0 auto 1rem', padding: '1rem', background: '#e8f8f7', borderRadius: '10px', maxWidth: '400px' }}>
+                    <p style={{ color: '#2A9D8F', fontWeight: 600, marginBottom: '0.3rem' }}>✅ Factura enviada al correo: {datosCliente.correo}</p>
+                    {ultimoRecibo?.preview_url && (
+                      <a 
+                        href={ultimoRecibo.preview_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        style={{ color: '#264653', fontSize: '0.85rem', textDecoration: 'underline' }}
+                      >
+                        👁️ Ver cómo le llegó la factura al cliente →
+                      </a>
+                    )}
+                  </div>
                 )}
                 
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>

@@ -1,10 +1,32 @@
 const express = require('express');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 const db = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Configuracion Ethereal Email (Servidor de pruebas gratuito para desarrollo)
+let transporter = null;
+
+nodemailer.createTestAccount().then(testAccount => {
+    transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+            user: testAccount.user,
+            pass: testAccount.pass
+        }
+    });
+    console.log('\n📧 Servidor de correo LISTO (Ethereal Email para pruebas)');
+    console.log(`   Usuario: ${testAccount.user}`);
+    console.log(`   Para VER los correos enviados entra a: https://ethereal.email/login`);
+    console.log(`   Usuario: ${testAccount.user} | Contraseña: ${testAccount.pass}\n`);
+}).catch(err => {
+    console.error('Error configurando email:', err);
+});
 
 // API: Auth
 app.post('/api/auth/login', (req, res) => {
@@ -184,6 +206,111 @@ app.get('/api/ventas/historial', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
+});
+
+// API: Envio de Factura por Correo
+app.post('/api/facturas/enviar-correo', async (req, res) => {
+    const { correo_cliente, nombre_cliente, id_venta, total_neto, detalles, nombre_local, metodo_pago } = req.body;
+    
+    if (!transporter) {
+        return res.status(503).json({ error: 'Servidor de correo no disponible todavía, intenta en unos segundos.' });
+    }
+
+    const detallesHtml = detalles.map(d => `
+        <tr>
+            <td style="padding:8px;border-bottom:1px solid #eee;">${d.nombre_producto}</td>
+            <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${d.cantidad}</td>
+            <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${Number(d.precio_unitario).toLocaleString('es-CO')}</td>
+            <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${Number(d.subtotal).toLocaleString('es-CO')}</td>
+        </tr>
+    `).join('');
+
+    const cufe = `FE-${id_venta}-${Date.now().toString(36).toUpperCase()}`;
+
+    const htmlBody = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width"></head>
+    <body style="font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:20px;">
+      <div style="max-width:600px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.1);">
+        
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#264653,#2A9D8F);padding:2rem;text-align:center;">
+          <h1 style="color:white;margin:0;font-size:1.5rem;">🧾 Factura Electrónica</h1>
+          <p style="color:rgba(255,255,255,0.8);margin:0.5rem 0 0;">Documento Autorizado - Simulación DIAN</p>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:2rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid #eee;">
+            <div>
+              <strong style="font-size:1.1rem;color:#264653;">${nombre_local}</strong><br/>
+              <span style="color:#777;font-size:0.9rem;">NIT: 900.123.456-7</span>
+            </div>
+            <div style="text-align:right;">
+              <strong style="color:#2A9D8F;font-size:1.1rem;">No. FE-${id_venta.toString().padStart(6,'0')}</strong><br/>
+              <span style="color:#777;font-size:0.9rem;">${new Date().toLocaleDateString('es-CO')}</span>
+            </div>
+          </div>
+
+          <div style="background:#f9f9f9;border-radius:8px;padding:1rem;margin-bottom:1.5rem;">
+            <strong>Adquiriente:</strong> ${nombre_cliente}<br/>
+            <strong>Medio de Pago:</strong> ${metodo_pago}
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#264653;color:white;">
+                <th style="padding:10px;text-align:left;">Producto</th>
+                <th style="padding:10px;text-align:center;">Cant.</th>
+                <th style="padding:10px;text-align:right;">Precio</th>
+                <th style="padding:10px;text-align:right;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>${detallesHtml}</tbody>
+          </table>
+
+          <div style="text-align:right;margin-top:1.5rem;padding-top:1rem;border-top:2px solid #eee;">
+            <div style="font-size:1.4rem;font-weight:bold;color:#264653;">
+              TOTAL: $${Number(total_neto).toLocaleString('es-CO')}
+            </div>
+          </div>
+
+          <div style="margin-top:2rem;padding:1rem;background:#e8f8f7;border-radius:8px;font-size:0.8rem;color:#555;">
+            <strong>CUFE:</strong> ${cufe}<br/>
+            <em>Este documento es una simulación de factura electrónica. Para producción real, conectar al servicio de la DIAN.</em>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background:#f0f0f0;padding:1rem;text-align:center;color:#999;font-size:0.8rem;">
+          ✦ Desarrollado por <strong style="color:#2A9D8F;">Andrés Cuesta</strong> · Sistema Integral de Ventas ✦
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+    try {
+        const info = await transporter.sendMail({
+            from: `"${nombre_local} - Sistema POS" <pos@sistemaven​tas.com>`,
+            to: correo_cliente,
+            subject: `Factura Electrónica No. FE-${id_venta.toString().padStart(6,'0')} - ${nombre_local}`,
+            html: htmlBody,
+        });
+
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        console.log(`\n📧 Factura enviada a ${correo_cliente}`);
+        console.log(`   👁️  Ver en Ethereal: ${previewUrl}\n`);
+
+        res.json({ 
+            success: true, 
+            mensaje: 'Factura enviada exitosamente.',
+            preview_url: previewUrl  // Retornamos URL para que el frontend la muestre
+        });
+    } catch (err) {
+        console.error('Error enviando correo:', err);
+        res.status(500).json({ error: 'No se pudo enviar el correo.' });
+    }
 });
 
 // API: Ventas
