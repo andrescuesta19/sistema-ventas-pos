@@ -1,33 +1,14 @@
-const sqlite3 = require('sqlite3').verbose();
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const dbPath = path.resolve(__dirname, 'pos_database.sqlite');
-const isNewDb = !fs.existsSync(dbPath);
+const connectionString = 'postgresql://neondb_owner:npg_2MvedAqOpKf9@ep-billowing-flower-atimh18c-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-        
-        if (isNewDb) {
-            console.log('Initializing new database...');
-            const schemaStr = fs.readFileSync(path.resolve(__dirname, 'schema.sql'), 'utf8');
-            const seedStr = fs.readFileSync(path.resolve(__dirname, 'seed.sql'), 'utf8');
-            
-            db.serialize(() => {
-                db.exec(schemaStr, (err) => {
-                    if (err) console.error('Error executing schema', err.message);
-                    else console.log('Schema created successfully');
-                });
-                db.exec(seedStr, (err) => {
-                    if (err) console.error('Error executing seed', err.message);
-                    else console.log('Seed data inserted successfully');
-                });
-            });
-        }
-    }
+const pool = new Pool({
+  connectionString: connectionString,
 });
 
-module.exports = db;
+pool.on('error', (err, client) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
+
+module.exports = pool;

@@ -1,22 +1,22 @@
 CREATE TABLE IF NOT EXISTS locales (
-    id_local INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_local SERIAL PRIMARY KEY,
     nombre_local VARCHAR(100) NOT NULL,
     direccion VARCHAR(200)
 );
 
 CREATE TABLE IF NOT EXISTS usuarios (
-    id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_usuario SERIAL PRIMARY KEY,
     id_local INTEGER,
     nombre VARCHAR(100) NOT NULL,
     correo VARCHAR(100) UNIQUE NOT NULL,
     contrasena_hash VARCHAR(255) NOT NULL,
     rol VARCHAR(20) NOT NULL CHECK(rol IN ('Administrador', 'Supervisor', 'Cajero')),
-    estado BOOLEAN DEFAULT 1,
+    estado BOOLEAN DEFAULT true,
     FOREIGN KEY (id_local) REFERENCES locales(id_local)
 );
 
 CREATE TABLE IF NOT EXISTS clientes (
-    id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_cliente SERIAL PRIMARY KEY,
     documento_identidad VARCHAR(20) UNIQUE NOT NULL,
     nombre_razon_social VARCHAR(150) NOT NULL,
     telefono VARCHAR(20),
@@ -25,13 +25,13 @@ CREATE TABLE IF NOT EXISTS clientes (
 );
 
 CREATE TABLE IF NOT EXISTS categorias (
-    id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_categoria SERIAL PRIMARY KEY,
     nombre_categoria VARCHAR(100) NOT NULL
 );
 
 -- PRODUCTOS AHORA PERTENECEN A UN LOCAL (SaaS) E INCLUYEN STOCK E IMAGEN
 CREATE TABLE IF NOT EXISTS productos (
-    id_producto INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_producto SERIAL PRIMARY KEY,
     id_local INTEGER NOT NULL,
     codigo_barras VARCHAR(50) NOT NULL,
     nombre_producto VARCHAR(150) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS productos (
     precio_venta DECIMAL(10,2) NOT NULL,
     stock_actual INTEGER NOT NULL DEFAULT 0,
     stock_minimo INTEGER NOT NULL DEFAULT 5,
-    aplica_iva BOOLEAN DEFAULT 1,
+    aplica_iva BOOLEAN DEFAULT true,
     porcentaje_iva DECIMAL(4,2) DEFAULT 19.00,
     FOREIGN KEY (id_local) REFERENCES locales(id_local),
     FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria),
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS productos (
 );
 
 CREATE TABLE IF NOT EXISTS turnos_caja (
-    id_turno INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_turno SERIAL PRIMARY KEY,
     id_usuario INTEGER,
     id_local INTEGER,
     fecha_apertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS turnos_caja (
 );
 
 CREATE TABLE IF NOT EXISTS ventas (
-    id_venta INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_venta SERIAL PRIMARY KEY,
     id_usuario INTEGER,
     id_local INTEGER,
     id_cliente INTEGER,
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS ventas (
 );
 
 CREATE TABLE IF NOT EXISTS detalle_ventas (
-    id_detalle INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_detalle SERIAL PRIMARY KEY,
     id_venta INTEGER,
     id_producto INTEGER,
     cantidad INTEGER NOT NULL,
