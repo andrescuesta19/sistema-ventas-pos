@@ -7,26 +7,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configuracion Ethereal Email (Servidor de pruebas gratuito para desarrollo)
-let transporter = null;
-
-nodemailer.createTestAccount().then(testAccount => {
-    transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-            user: testAccount.user,
-            pass: testAccount.pass
-        }
-    });
-    console.log('\n📧 Servidor de correo LISTO (Ethereal Email para pruebas)');
-    console.log(`   Usuario: ${testAccount.user}`);
-    console.log(`   Para VER los correos enviados entra a: https://ethereal.email/login`);
-    console.log(`   Usuario: ${testAccount.user} | Contraseña: ${testAccount.pass}\n`);
-}).catch(err => {
-    console.error('Error configurando email:', err);
+// Configuracion Gmail Email
+let transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+        user: 'andrescuesta112@gmail.com',
+        pass: 'jrhx flul kowu sqzo'
+    }
 });
+
+console.log('\n📧 Servidor de correo LISTO (Conectado a Gmail)');
+console.log(`   Cuenta emisora: andrescuesta112@gmail.com\n`);
 
 // API: Auth
 app.post('/api/auth/login', (req, res) => {
@@ -292,20 +285,17 @@ app.post('/api/facturas/enviar-correo', async (req, res) => {
 
     try {
         const info = await transporter.sendMail({
-            from: `"${nombre_local} - Sistema POS" <pos@sistemaven​tas.com>`,
+            from: `"${nombre_local} - Sistema POS" <andrescuesta112@gmail.com>`,
             to: correo_cliente,
             subject: `Factura Electrónica No. FE-${id_venta.toString().padStart(6,'0')} - ${nombre_local}`,
             html: htmlBody,
         });
 
-        const previewUrl = nodemailer.getTestMessageUrl(info);
-        console.log(`\n📧 Factura enviada a ${correo_cliente}`);
-        console.log(`   👁️  Ver en Ethereal: ${previewUrl}\n`);
+        console.log(`\n📧 Factura enviada REALMENTE a ${correo_cliente}\n`);
 
         res.json({ 
             success: true, 
-            mensaje: 'Factura enviada exitosamente.',
-            preview_url: previewUrl  // Retornamos URL para que el frontend la muestre
+            mensaje: 'Factura enviada exitosamente.'
         });
     } catch (err) {
         console.error('Error enviando correo:', err);

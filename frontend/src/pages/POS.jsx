@@ -177,11 +177,7 @@ const POS = ({ user }) => {
             })
           });
           const emailData = await emailRes.json();
-          if (emailData.preview_url) {
-            // Guardamos la URL de vista previa para mostrarla al cajero
-            reciboData.preview_url = emailData.preview_url;
-            setUltimoRecibo({...reciboData});
-          }
+          // Real email sent, no preview URL needed
         } catch (err) {
           console.warn('No se pudo enviar el correo:', err);
         }
@@ -404,16 +400,6 @@ const POS = ({ user }) => {
                 {tipoDocumento === 'DIAN_Enviado' && (
                   <div style={{ margin: '0 auto 1rem', padding: '1rem', background: '#e8f8f7', borderRadius: '10px', maxWidth: '400px' }}>
                     <p style={{ color: '#2A9D8F', fontWeight: 600, marginBottom: '0.3rem' }}>✅ Factura enviada al correo: {datosCliente.correo}</p>
-                    {ultimoRecibo?.preview_url && (
-                      <a 
-                        href={ultimoRecibo.preview_url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        style={{ color: '#264653', fontSize: '0.85rem', textDecoration: 'underline' }}
-                      >
-                        👁️ Ver cómo le llegó la factura al cliente →
-                      </a>
-                    )}
                   </div>
                 )}
                 
