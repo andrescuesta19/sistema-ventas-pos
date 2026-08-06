@@ -1,6 +1,6 @@
 import { API_URL } from '../config';
 import { useState, useEffect, useRef } from 'react';
-import { Search, UserPlus, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart } from 'lucide-react';
+import { Search, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart, Tag, Percent, DollarSign } from 'lucide-react';
 
 const POS = ({ user }) => {
   const [turno, setTurno] = useState(null);
@@ -12,7 +12,8 @@ const POS = ({ user }) => {
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [efectivoRecibido, setEfectivoRecibido] = useState('');
   const [ventaCompletada, setVentaCompletada] = useState(false);
-  
+  const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(0);
+
   const searchInputRef = useRef(null);
 
   const [tipoDocumento, setTipoDocumento] = useState('Local'); // 'Local' = POS, 'DIAN_Enviado' = Electrónica
@@ -21,7 +22,7 @@ const POS = ({ user }) => {
     nombre_razon_social: '',
     correo: ''
   });
-  
+
   const [printFormat, setPrintFormat] = useState(null);
   const [ultimoRecibo, setUltimoRecibo] = useState(null);
 
@@ -62,18 +63,21 @@ const POS = ({ user }) => {
       const existe = prev.find(p => p.id_producto === producto.id_producto);
       if (existe) {
         if (existe.cantidad >= producto.stock_actual) {
-            alert('No hay suficiente stock físico para agregar más unidades.');
-            return prev;
+          alert('No hay suficiente stock físico para agregar más unidades.');
+          return prev;
         }
+        const nuevaCant = existe.cantidad + 1;
+        const descMonto = Math.round((nuevaCant * producto.precio_venta) * (existe.porcentajeDescuento || descuentoGlobalPct) / 100);
         return prev.map(p => p.id_producto === producto.id_producto 
-          ? { ...p, cantidad: p.cantidad + 1, subtotal: (p.cantidad + 1) * p.precio_venta } 
+          ? { ...p, cantidad: nuevaCant, descuento: descMonto, subtotal: (nuevaCant * producto.precio_venta) - descMonto } 
           : p);
       }
       if (producto.stock_actual <= 0) {
         alert('Este producto no tiene stock disponible.');
         return prev;
       }
-      return [...prev, { ...producto, cantidad: 1, descuento: 0, subtotal: producto.precio_venta }];
+      const descMonto = Math.round(producto.precio_venta * (descuentoGlobalPct / 100));
+      return [...prev, { ...producto, cantidad: 1, descuento: descMonto, porcentajeDescuento: descuentoGlobalPct, subtotal: producto.precio_venta - descMonto }];
     });
     setQuery('');
     setProductos(todosProductos);
@@ -85,18 +89,79 @@ const POS = ({ user }) => {
         const nuevaCantidad = Math.max(0, p.cantidad + delta);
         if (nuevaCantidad === 0) return null;
         if (nuevaCantidad > p.stock_actual) {
-            alert('No hay más stock físico de este producto.');
-            return p;
+          alert('No hay más stock físico de este producto.');
+          return p;
         }
-        return { ...p, cantidad: nuevaCantidad, subtotal: (nuevaCantidad * p.precio_venta) - p.descuento };
+        const descMonto = Math.round((nuevaCantidad * p.precio_venta) * (p.porcentajeDescuento || 0) / 100);
+        return { ...p, cantidad: nuevaCantidad, descuento: descMonto, subtotal: (nuevaCantidad * p.precio_venta) - descMonto };
       }
       return p;
     }).filter(Boolean));
   };
 
+  const aplicarDescuentoGlobal = (pct) => {
+    setDescuentoGlobalPct(pct);
+    setCarrito(prev => prev.map(p => {
+      const bruto = p.cantidad * p.precio_venta;
+      const descMonto = Math.round(bruto * (pct / 100));
+      return {
+        ...p,
+        porcentajeDescuento: pct,
+        descuento: descMonto,
+        subtotal: bruto - descMonto
+      };
+    }));
+  };
+
+  const aplicarDescuentoItem = (id_producto, pct) => {
+    setCarrito(prev => prev.map(p => {
+      if (p.id_producto === id_producto) {
+        const bruto = p.cantidad * p.precio_venta;
+        const descMonto = Math.round(bruto * (pct / 100));
+        return {
+          ...p,
+          porcentajeDescuento: pct,
+          descuento: descMonto,
+          subtotal: bruto - descMonto
+        };
+      }
+      return p;
+    }));
+  };
+
+  // Precios incluyen IVA:
+  // totalItem = cantidad * precio_venta - descuento
+  // baseItem = totalItem / (1 + %iva/100)
+  // ivaItem = totalItem - baseItem
+  const totales = carrito.reduce((acc, item) => {
+    const bruto = item.cantidad * item.precio_venta;
+    const desc = item.descuento || 0;
+    const totalItem = Math.max(0, bruto - desc);
+
+    const pctIva = item.aplica_iva ? (item.porcentaje_iva || 19) : 0;
+    const baseItem = pctIva > 0 ? (totalItem / (1 + pctIva / 100)) : totalItem;
+    const ivaItem = totalItem - baseItem;
+
+    return {
+      subtotal: acc.subtotal + baseItem,
+      descuento: acc.descuento + desc,
+      impuestos: acc.impuestos + ivaItem,
+      total: acc.total + totalItem
+    };
+  }, { subtotal: 0, descuento: 0, impuestos: 0, total: 0 });
+
+  const rec = parseFloat(efectivoRecibido || 0);
+  const cambioCalculado = (metodoPago === 'Efectivo' && rec >= totales.total) ? (rec - totales.total) : 0;
+
   const procesarVenta = async (e) => {
     e.preventDefault();
     if (!turno) return alert('Debes abrir un turno primero.');
+
+    if (metodoPago === 'Efectivo') {
+      if (!efectivoRecibido || rec < totales.total) {
+        return alert(`El monto de efectivo recibido ($${formatearCOP(rec)}) debe ser igual o mayor al total a pagar ($${formatearCOP(totales.total)}).`);
+      }
+    }
 
     if (tipoDocumento === 'DIAN_Enviado') {
       if (!datosCliente.documento_identidad || !datosCliente.nombre_razon_social || !datosCliente.correo) {
@@ -121,9 +186,9 @@ const POS = ({ user }) => {
       id_local: user.id_local,
       id_cliente: id_cliente,
       id_turno: turno.id_turno,
-      subtotal: totales.subtotal,
+      subtotal: Math.round(totales.subtotal),
       descuento_total: totales.descuento,
-      impuestos: totales.impuestos,
+      impuestos: Math.round(totales.impuestos),
       total_neto: totales.total,
       metodo_pago: metodoPago,
       estado_factura: tipoDocumento,
@@ -152,14 +217,17 @@ const POS = ({ user }) => {
         cliente: id_cliente === 1 ? { nombre_razon_social: 'Consumidor Final', documento_identidad: '22222222' } : datosCliente,
         detalles: carrito,
         totales: totales,
-        tipo: tipoDocumento
+        tipo: tipoDocumento,
+        metodoPago: metodoPago,
+        efectivoRecibido: metodoPago === 'Efectivo' ? rec : totales.total,
+        cambio: cambioCalculado
       };
       setUltimoRecibo(reciboData);
 
-      // Si es Factura Electronica, enviar correo real
+      // Si es Factura Electrónica, enviar correo real
       if (tipoDocumento === 'DIAN_Enviado' && datosCliente.correo) {
         try {
-          const emailRes = await fetch(`${API_URL}/api/facturas/enviar-correo`, {
+          await fetch(`${API_URL}/api/facturas/enviar-correo`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -177,8 +245,6 @@ const POS = ({ user }) => {
               metodo_pago: metodoPago
             })
           });
-          const emailData = await emailRes.json();
-          // Real email sent, no preview URL needed
         } catch (err) {
           console.warn('No se pudo enviar el correo:', err);
         }
@@ -198,72 +264,78 @@ const POS = ({ user }) => {
     setTipoDocumento('Local');
     setDatosCliente({ documento_identidad: '', nombre_razon_social: '', correo: '' });
     setEfectivoRecibido('');
+    setDescuentoGlobalPct(0);
   };
 
   const formatearCOP = (valor) => {
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor);
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor || 0);
   };
 
-  const totales = carrito.reduce((acc, item) => {
-    const iva = item.aplica_iva ? (item.subtotal * (item.porcentaje_iva / 100)) : 0;
-    return {
-      subtotal: acc.subtotal + item.subtotal,
-      descuento: acc.descuento + item.descuento,
-      impuestos: acc.impuestos + iva,
-      total: acc.total + item.subtotal + iva
-    };
-  }, { subtotal: 0, descuento: 0, impuestos: 0, total: 0 });
-
   if (!turno) {
-    return <div className="page-content"><h1>Punto de Venta</h1><div className="card"><h3>No hay turno abierto. Ve al Dashboard para abrir caja.</h3></div></div>;
+    return (
+      <div className="page-content">
+        <h1>Punto de Venta (POS)</h1>
+        <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+          <h3>No hay un turno de caja abierto actualmente.</h3>
+          <p style={{ color: 'var(--text-light)', marginTop: '0.5rem' }}>Abre la caja en el Dashboard para comenzar a vender.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="page-content" style={{ display: 'flex', gap: '2rem', height: '100%', padding: '1rem' }}>
+    <div className="page-content" style={{ display: 'flex', gap: '1.5rem', height: '100%', padding: '1rem' }}>
       
-      {/* Columna Izquierda: Buscador y Grilla */}
+      {/* Columna Izquierda: Buscador y Grilla de Productos */}
       <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div className="card" style={{ padding: '1rem' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={20} style={{ position: 'absolute', top: '10px', left: '10px', color: 'var(--text-light)' }} />
+            <Search size={20} style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-light)' }} />
             <input 
               ref={searchInputRef}
               type="text" 
-              placeholder="Buscar producto..." 
+              placeholder="Buscar producto por nombre o código de barras..." 
               value={query}
               onChange={handleSearchChange}
-              style={{ width: '100%', paddingLeft: '2.5rem', fontSize: '1.1rem' }}
+              style={{ width: '100%', paddingLeft: '2.8rem', fontSize: '1.1rem', padding: '0.75rem 2.8rem' }}
             />
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="grid-3" style={{ paddingRight: '0.5rem' }}>
+          <div className="grid-3" style={{ paddingRight: '0.5rem', gap: '1rem' }}>
             {productos.map(p => (
               <div 
                 key={p.id_producto} 
                 className="card" 
                 style={{ 
                   cursor: 'pointer', 
-                  transition: 'transform 0.1s', 
-                  border: p.stock_actual <= 0 ? '1px solid var(--accent-color)' : '1px solid transparent',
-                  opacity: p.stock_actual <= 0 ? 0.6 : 1
+                  transition: 'transform 0.15s, box-shadow 0.15s', 
+                  border: p.stock_actual <= 0 ? '1px solid #EF4444' : '1px solid #E2E8F0',
+                  opacity: p.stock_actual <= 0 ? 0.6 : 1,
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justify: 'space-between'
                 }}
                 onClick={() => agregarAlCarrito(p)}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.02)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div style={{ height: '120px', backgroundColor: '#f0f0f0', borderRadius: '8px', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                <div style={{ height: '110px', backgroundColor: '#F8FAFC', borderRadius: '8px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.imagen_url ? (
                     <img src={p.imagen_url} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
                   ) : (
                     <span style={{ fontSize: '2rem' }}>📱</span>
                   )}
                 </div>
-                <h4 style={{ marginBottom: '0.5rem', height: '40px', overflow: 'hidden' }}>{p.nombre_producto}</h4>
-                <div className="flex-between">
-                  <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>{formatearCOP(p.precio_venta)}</span>
-                  <span style={{ fontSize: '0.8rem', color: p.stock_actual > p.stock_minimo ? 'var(--text-light)' : 'var(--accent-color)' }}>
+                <h4 style={{ marginBottom: '0.4rem', fontSize: '0.95rem', height: '38px', overflow: 'hidden' }}>{p.nombre_producto}</h4>
+                <div className="flex-between" style={{ alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#264653' }}>{formatearCOP(p.precio_venta)}</span>
+                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#2A9D8F', fontWeight: 600 }}>IVA Incluido</span>
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '12px', backgroundColor: p.stock_actual > p.stock_minimo ? '#E6F4F1' : '#FEE2E2', color: p.stock_actual > p.stock_minimo ? '#2A9D8F' : '#EF4444' }}>
                     Stock: {p.stock_actual}
                   </span>
                 </div>
@@ -273,37 +345,71 @@ const POS = ({ user }) => {
         </div>
       </div>
 
-      {/* Columna Derecha: Carrito y Resumen */}
-      <div className="card" style={{ flex: 1.2, display: 'flex', flexDirection: 'column', padding: '1.5rem' }}>
-        <h3 style={{ marginBottom: '1rem', color: 'var(--secondary-color)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-          Carrito de Compras
-        </h3>
+      {/* Columna Derecha: Carrito, Descuentos y Resumen */}
+      <div className="card" style={{ flex: 1.2, display: 'flex', flexDirection: 'column', padding: '1.25rem', border: '1px solid #E2E8F0' }}>
+        <div className="flex-between" style={{ marginBottom: '0.75rem', borderBottom: '2px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+          <h3 style={{ margin: 0, color: '#264653', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ShoppingCart size={20} color="#2A9D8F" /> Carrito de Compras
+          </h3>
+          <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>{carrito.reduce((a, b) => a + b.cantidad, 0)} ítems</span>
+        </div>
         
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '1rem' }}>
+        {/* Lista de Productos en el Carrito */}
+        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '0.75rem', paddingRight: '0.25rem' }}>
           {carrito.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-light)' }}>
-              <ShoppingCart size={48} style={{ opacity: 0.2, margin: '0 auto 1rem auto' }} />
-              <p>Toca un producto para agregarlo al carrito.</p>
+            <div style={{ padding: '3rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+              <ShoppingCart size={48} style={{ opacity: 0.3, margin: '0 auto 1rem auto' }} />
+              <p style={{ margin: 0 }}>Toca un producto para agregarlo al carrito de venta.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {carrito.map(item => (
-                <div key={item.id_producto} style={{ padding: '0.75rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                  <div className="flex-between" style={{ marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 600 }}>{item.nombre_producto}</span>
-                    <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>{formatearCOP(item.subtotal)}</span>
+                <div key={item.id_producto} style={{ padding: '0.75rem', border: '1px solid #E2E8F0', borderRadius: '8px', backgroundColor: '#FAFAFA' }}>
+                  <div className="flex-between" style={{ marginBottom: '0.4rem' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1E293B' }}>{item.nombre_producto}</span>
+                    <span style={{ fontWeight: 700, color: '#264653' }}>{formatearCOP(item.subtotal)}</span>
                   </div>
-                  <div className="flex-between">
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>{formatearCOP(item.precio_venta)} c/u</span>
-                    <div className="flex-row" style={{ gap: '0.5rem' }}>
-                      <button style={{ padding: '0.3rem', borderRadius: '4px', backgroundColor: '#f0f0f0' }} onClick={() => actualizarCantidad(item.id_producto, -1)}>
-                        {item.cantidad === 1 ? <Trash2 size={14} color="var(--accent-color)" /> : <Minus size={14} />}
-                      </button>
-                      <span style={{ fontWeight: 600, width: '20px', textAlign: 'center' }}>{item.cantidad}</span>
-                      <button style={{ padding: '0.3rem', borderRadius: '4px', backgroundColor: '#f0f0f0' }} onClick={() => actualizarCantidad(item.id_producto, 1)}>
-                        <Plus size={14} />
-                      </button>
+
+                  <div className="flex-between" style={{ alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', color: '#64748B' }}>{formatearCOP(item.precio_venta)} c/u (c/IVA)</span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {/* Control de Cantidad */}
+                      <div className="flex-row" style={{ gap: '0.3rem', backgroundColor: 'white', padding: '0.2rem', borderRadius: '6px', border: '1px solid #CBD5E1' }}>
+                        <button style={{ padding: '0.25rem', borderRadius: '4px', border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => actualizarCantidad(item.id_producto, -1)}>
+                          {item.cantidad === 1 ? <Trash2 size={14} color="#EF4444" /> : <Minus size={14} />}
+                        </button>
+                        <span style={{ fontWeight: 600, width: '22px', textAlign: 'center', fontSize: '0.9rem' }}>{item.cantidad}</span>
+                        <button style={{ padding: '0.25rem', borderRadius: '4px', border: 'none', background: 'none', cursor: 'pointer' }} onClick={() => actualizarCantidad(item.id_producto, 1)}>
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Selector de Descuento por Ítem */}
+                  <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', paddingTop: '0.4rem', borderTop: '1px dashed #E2E8F0' }}>
+                    <Tag size={12} color="#64748B" />
+                    <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Desc:</span>
+                    {[0, 5, 10, 15].map(pct => (
+                      <button 
+                        key={pct}
+                        type="button" 
+                        onClick={() => aplicarDescuentoItem(item.id_producto, pct)}
+                        style={{
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: '4px',
+                          border: item.porcentajeDescuento === pct ? '1px solid #2A9D8F' : '1px solid #CBD5E1',
+                          backgroundColor: item.porcentajeDescuento === pct ? '#E6F4F1' : 'white',
+                          color: item.porcentajeDescuento === pct ? '#2A9D8F' : '#64748B',
+                          fontSize: '0.7rem',
+                          fontWeight: item.porcentajeDescuento === pct ? 700 : 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -311,110 +417,201 @@ const POS = ({ user }) => {
           )}
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <div className="flex-between" style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-            <span style={{ color: 'var(--text-light)' }}>Subtotal</span>
+        {/* Sección de Descuento Global rápido */}
+        {carrito.length > 0 && (
+          <div style={{ marginBottom: '0.75rem', padding: '0.6rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <div className="flex-between" style={{ marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Percent size={14} color="#2A9D8F" /> Descuento Global a la Venta:
+              </span>
+              {descuentoGlobalPct > 0 && <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2A9D8F' }}>{descuentoGlobalPct}% OFF</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '0.3rem' }}>
+              {[0, 5, 10, 15, 20].map(pct => (
+                <button 
+                  key={pct}
+                  type="button"
+                  onClick={() => aplicarDescuentoGlobal(pct)}
+                  style={{
+                    flex: 1,
+                    padding: '0.3rem',
+                    borderRadius: '6px',
+                    border: descuentoGlobalPct === pct ? '1px solid #264653' : '1px solid #CBD5E1',
+                    backgroundColor: descuentoGlobalPct === pct ? '#264653' : 'white',
+                    color: descuentoGlobalPct === pct ? 'white' : '#334155',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {pct === 0 ? 'Sin desc.' : `${pct}%`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Resumen de Totales con Precio IVA Incluido */}
+        <div style={{ marginBottom: '1rem', backgroundColor: '#F8FAFC', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+          <div className="flex-between" style={{ marginBottom: '0.4rem', fontSize: '0.85rem' }}>
+            <span style={{ color: '#64748B' }}>Subtotal (sin IVA):</span>
             <span>{formatearCOP(totales.subtotal)}</span>
           </div>
-          <div className="flex-between" style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-            <span style={{ color: 'var(--text-light)' }}>Impuestos (IVA)</span>
+          {totales.descuento > 0 && (
+            <div className="flex-between" style={{ marginBottom: '0.4rem', fontSize: '0.85rem', color: '#2A9D8F', fontWeight: 600 }}>
+              <span>Descuento aplicado:</span>
+              <span>-{formatearCOP(totales.descuento)}</span>
+            </div>
+          )}
+          <div className="flex-between" style={{ marginBottom: '0.4rem', fontSize: '0.85rem' }}>
+            <span style={{ color: '#64748B' }}>Impuestos (IVA 19% Incluido):</span>
             <span>{formatearCOP(totales.impuestos)}</span>
           </div>
-          <div className="flex-between" style={{ borderTop: '2px dashed var(--border-color)', paddingTop: '1rem' }}>
-            <span style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--secondary-color)' }}>Total a Pagar</span>
-            <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>{formatearCOP(totales.total)}</span>
+          <div className="flex-between" style={{ borderTop: '2px dashed #CBD5E1', paddingTop: '0.6rem', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#264653' }}>Total a Cobrar</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#2A9D8F' }}>{formatearCOP(totales.total)}</span>
           </div>
         </div>
 
         <button 
           className="btn-primary" 
-          style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}
+          style={{ width: '100%', padding: '0.9rem', fontSize: '1.1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', backgroundColor: '#264653' }}
           disabled={carrito.length === 0}
-          onClick={() => setShowPagoModal(true)}
+          onClick={() => {
+            setEfectivoRecibido(totales.total.toString());
+            setShowPagoModal(true);
+          }}
         >
-          <CreditCard size={24} /> Cobrar
+          <CreditCard size={22} /> Cobrar {formatearCOP(totales.total)}
         </button>
       </div>
 
-      {/* Modal de Pago / Tique */}
+      {/* Modal de Cobro, Efectivo Recibido y Cambio */}
       {showPagoModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
+          <div className="modal-content" style={{ maxWidth: '580px', borderRadius: '16px' }}>
             {!ventaCompletada ? (
               <form onSubmit={procesarVenta}>
                 <div className="modal-header">
-                  <h2>Opciones de Facturación</h2>
+                  <h2>Procesar Cobro</h2>
                   <button type="button" className="close-btn" onClick={() => setShowPagoModal(false)}>×</button>
                 </div>
                 
-                <div className="grid-2" style={{ gap: '1rem', marginBottom: '1.5rem' }}>
-                  <div style={{ textAlign: 'center', padding: '1.5rem', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '1rem', color: 'var(--text-light)' }}>Total a cobrar</div>
-                    <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--primary-color)' }}>{formatearCOP(totales.total)}</div>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Método de Pago</label>
-                    <select value={metodoPago} onChange={e => setMetodoPago(e.target.value)} style={{ width: '100%', padding: '0.75rem' }}>
-                      <option value="Efectivo">Efectivo</option>
-                      <option value="Tarjeta">Tarjeta (Datafono)</option>
-                      <option value="Transferencia">Transferencia Bancaria</option>
-                    </select>
-                    {metodoPago === 'Efectivo' && (
-                      <div style={{ marginTop: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Efectivo Recibido</label>
-                        <input type="number" step="1" value={efectivoRecibido} onChange={e => setEfectivoRecibido(e.target.value)} style={{ width: '100%', padding: '0.75rem' }} required />
-                        {efectivoRecibido && parseFloat(efectivoRecibido) >= totales.total && (
-                          <div style={{ marginTop: '0.5rem', color: 'var(--primary-color)', fontWeight: 600 }}>Cambio: {formatearCOP(parseFloat(efectivoRecibido) - totales.total)}</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div style={{ backgroundColor: '#E6F4F1', borderRadius: '12px', padding: '1.25rem', textAlign: 'center', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#264653', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total de la Venta (IVA Incluido)</div>
+                  <div style={{ fontSize: '2.6rem', fontWeight: 800, color: '#2A9D8F' }}>{formatearCOP(totales.total)}</div>
                 </div>
 
-                <div style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                  <h4 style={{ marginBottom: '1rem' }}>Tipo de Documento</h4>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <button type="button" className={tipoDocumento === 'Local' ? 'btn-primary' : 'btn-secondary'} style={{ flex: 1, padding: '0.5rem' }} onClick={() => setTipoDocumento('Local')}>Recibo POS (Tirilla)</button>
-                    <button type="button" className={tipoDocumento === 'DIAN_Enviado' ? 'btn-primary' : 'btn-secondary'} style={{ flex: 1, padding: '0.5rem' }} onClick={() => setTipoDocumento('DIAN_Enviado')}>Factura Electrónica (DIAN)</button>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#1E293B' }}>Método de Pago</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => (
+                      <button 
+                        key={m}
+                        type="button"
+                        className={metodoPago === m ? 'btn-primary' : 'btn-secondary'}
+                        style={{ flex: 1, padding: '0.6rem', borderRadius: '8px', fontSize: '0.9rem', backgroundColor: metodoPago === m ? '#264653' : '' }}
+                        onClick={() => setMetodoPago(m)}
+                      >
+                        {m}
+                      </button>
+                    ))}
                   </div>
 
-                  {tipoDocumento === 'DIAN_Enviado' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <input type="text" placeholder="NIT / Cédula" value={datosCliente.documento_identidad} onChange={e => setDatosCliente({...datosCliente, documento_identidad: e.target.value})} style={{ padding: '0.75rem' }} required />
-                      <input type="text" placeholder="Razón Social / Nombre" value={datosCliente.nombre_razon_social} onChange={e => setDatosCliente({...datosCliente, nombre_razon_social: e.target.value})} style={{ padding: '0.75rem' }} required />
-                      <input type="email" placeholder="Correo Electrónico (Para enviar factura)" value={datosCliente.correo} onChange={e => setDatosCliente({...datosCliente, correo: e.target.value})} style={{ padding: '0.75rem' }} required />
+                  {/* Sección de Calculadora de Cambio en Efectivo */}
+                  {metodoPago === 'Efectivo' && (
+                    <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #CBD5E1' }}>
+                      <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600, color: '#334155', fontSize: '0.9rem' }}>
+                        💵 Dinero Recibido del Cliente ($):
+                      </label>
+                      <input 
+                        type="number" 
+                        step="100" 
+                        value={efectivoRecibido} 
+                        onChange={e => setEfectivoRecibido(e.target.value)} 
+                        placeholder="Ej. 50000"
+                        style={{ width: '100%', padding: '0.75rem', fontSize: '1.2rem', fontWeight: 700, borderRadius: '8px', border: '2px solid #264653' }} 
+                        required 
+                      />
+
+                      {/* Botones de Monedas y Billetes Rápidos */}
+                      <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                        <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '6px' }} onClick={() => setEfectivoRecibido(totales.total.toString())}>Pago Exacto</button>
+                        <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '6px' }} onClick={() => setEfectivoRecibido('20000')}>$20.000</button>
+                        <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '6px' }} onClick={() => setEfectivoRecibido('50000')}>$50.000</button>
+                        <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '6px' }} onClick={() => setEfectivoRecibido('100000')}>$100.000</button>
+                      </div>
+
+                      {/* Cálculo en tiempo real del Cambio a Devolver */}
+                      {efectivoRecibido && (
+                        <div style={{ marginTop: '0.8rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: rec >= totales.total ? '#E6F4F1' : '#FEE2E2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600, color: rec >= totales.total ? '#264653' : '#EF4444' }}>
+                            {rec >= totales.total ? '🔄 Cambio a Devolver:' : '⚠️ Falta Dinero:'}
+                          </span>
+                          <span style={{ fontSize: '1.3rem', fontWeight: 800, color: rec >= totales.total ? '#2A9D8F' : '#EF4444' }}>
+                            {formatearCOP(Math.abs(rec - totales.total))}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <button type="button" className="btn-secondary" style={{ flex: 1, padding: '1rem' }} onClick={() => setShowPagoModal(false)}>Cancelar</button>
-                  <button type="submit" className="btn-primary" style={{ flex: 1, padding: '1rem' }}>Confirmar y {tipoDocumento === 'DIAN_Enviado' ? 'Emitir Factura' : 'Cobrar'}</button>
+                {/* Tipo de Documento: Tirilla POS o Factura Electrónica */}
+                <div style={{ marginBottom: '1.25rem', padding: '1rem', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#FAFAFA' }}>
+                  <h4 style={{ margin: '0 0 0.6rem 0', fontSize: '0.95rem' }}>Tipo de Comprobante</h4>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    <button type="button" className={tipoDocumento === 'Local' ? 'btn-primary' : 'btn-secondary'} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', backgroundColor: tipoDocumento === 'Local' ? '#264653' : '' }} onClick={() => setTipoDocumento('Local')}>Recibo POS (Tirilla)</button>
+                    <button type="button" className={tipoDocumento === 'DIAN_Enviado' ? 'btn-primary' : 'btn-secondary'} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', fontSize: '0.85rem', backgroundColor: tipoDocumento === 'DIAN_Enviado' ? '#264653' : '' }} onClick={() => setTipoDocumento('DIAN_Enviado')}>Factura Electrónica (DIAN)</button>
+                  </div>
+
+                  {tipoDocumento === 'DIAN_Enviado' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <input type="text" placeholder="NIT / Cédula del Cliente" value={datosCliente.documento_identidad} onChange={e => setDatosCliente({...datosCliente, documento_identidad: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
+                      <input type="text" placeholder="Razón Social / Nombre" value={datosCliente.nombre_razon_social} onChange={e => setDatosCliente({...datosCliente, nombre_razon_social: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
+                      <input type="email" placeholder="Correo Electrónico (Para envío automático)" value={datosCliente.correo} onChange={e => setDatosCliente({...datosCliente, correo: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button type="button" className="btn-secondary" style={{ flex: 1, padding: '0.85rem', borderRadius: '8px' }} onClick={() => setShowPagoModal(false)}>Cancelar</button>
+                  <button type="submit" className="btn-primary" style={{ flex: 1.5, padding: '0.85rem', borderRadius: '8px', backgroundColor: '#2A9D8F', fontSize: '1rem' }}>
+                    Confirmar y {tipoDocumento === 'DIAN_Enviado' ? 'Emitir Factura' : 'Registrar Venta'}
+                  </button>
                 </div>
               </form>
             ) : (
-              <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-                <CheckCircle size={64} color="var(--primary-color)" style={{ margin: '0 auto 1rem auto' }} />
-                <h2 style={{ color: 'var(--secondary-color)', marginBottom: '0.5rem' }}>
-                  {tipoDocumento === 'DIAN_Enviado' ? '¡Factura Electrónica Emitida!' : '¡Venta Exitosa!'}
+              <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+                <CheckCircle size={64} color="#2A9D8F" style={{ margin: '0 auto 1rem auto' }} />
+                <h2 style={{ color: '#264653', marginBottom: '0.5rem' }}>
+                  {tipoDocumento === 'DIAN_Enviado' ? '¡Factura Electrónica Emitida!' : '¡Venta Registrada con Éxito!'}
                 </h2>
+                
+                {metodoPago === 'Efectivo' && cambioCalculado >= 0 && (
+                  <div style={{ margin: '1rem auto', padding: '1rem', backgroundColor: '#E6F4F1', borderRadius: '12px', maxWidth: '380px' }}>
+                    <div style={{ fontSize: '0.85rem', color: '#264653' }}>Cambio entregado al cliente:</div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#2A9D8F' }}>{formatearCOP(cambioCalculado)}</div>
+                  </div>
+                )}
+
                 {tipoDocumento === 'DIAN_Enviado' && (
-                  <div style={{ margin: '0 auto 1rem', padding: '1rem', background: '#e8f8f7', borderRadius: '10px', maxWidth: '400px' }}>
-                    <p style={{ color: '#2A9D8F', fontWeight: 600, marginBottom: '0.3rem' }}>✅ Factura enviada al correo: {datosCliente.correo}</p>
+                  <div style={{ margin: '0 auto 1rem', padding: '0.75rem', background: '#E6F4F1', borderRadius: '8px', maxWidth: '400px' }}>
+                    <p style={{ color: '#2A9D8F', fontWeight: 600, margin: 0, fontSize: '0.9rem' }}>✅ Factura enviada al correo: {datosCliente.correo}</p>
                   </div>
                 )}
                 
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
                   {tipoDocumento === 'Local' && (
-                    <button className="btn-secondary" style={{ flex: 1, padding: '1rem' }} onClick={() => { setPrintFormat('tirilla'); setTimeout(() => window.print(), 100); }}>Imprimir Tirilla POS</button>
+                    <button className="btn-secondary" style={{ flex: 1, padding: '0.85rem', borderRadius: '8px' }} onClick={() => { setPrintFormat('tirilla'); setTimeout(() => window.print(), 100); }}>Imprimir Tirilla POS</button>
                   )}
                   {tipoDocumento === 'DIAN_Enviado' && (
                     <>
-                      <button className="btn-secondary" style={{ flex: 1, padding: '1rem' }} onClick={() => { setPrintFormat('carta'); setTimeout(() => window.print(), 100); }}>Imprimir Formato Carta</button>
-                      <button className="btn-secondary" style={{ flex: 1, padding: '1rem' }} onClick={() => { setPrintFormat('tirilla'); setTimeout(() => window.print(), 100); }}>Imprimir Tirilla DIAN</button>
+                      <button className="btn-secondary" style={{ flex: 1, padding: '0.85rem', borderRadius: '8px' }} onClick={() => { setPrintFormat('carta'); setTimeout(() => window.print(), 100); }}>Imprimir Carta</button>
+                      <button className="btn-secondary" style={{ flex: 1, padding: '0.85rem', borderRadius: '8px' }} onClick={() => { setPrintFormat('tirilla'); setTimeout(() => window.print(), 100); }}>Imprimir Tirilla</button>
                     </>
                   )}
-                  <button className="btn-primary" style={{ flex: 1, padding: '1rem' }} onClick={nuevaVenta}>Siguiente Venta</button>
+                  <button className="btn-primary" style={{ flex: 1, padding: '0.85rem', borderRadius: '8px', backgroundColor: '#264653' }} onClick={nuevaVenta}>Siguiente Venta</button>
                 </div>
               </div>
             )}
@@ -422,11 +619,11 @@ const POS = ({ user }) => {
         </div>
       )}
 
-      {/* Área de Impresión Oculta (solo visible en modo @media print) */}
+      {/* Área de Impresión Oculta (para la Tirilla y Factura) */}
       {ultimoRecibo && printFormat && (
         <div className={`print-container print-${printFormat}`}>
           {printFormat === 'tirilla' ? (
-            <div style={{ textAlign: 'center' }}>
+            <div style={{ textAlign: 'center', fontFamily: 'monospace' }}>
               <h2 style={{ fontSize: '1.2rem', marginBottom: '5px' }}>{user.nombre_local}</h2>
               <p>NIT: 900.123.456-7</p>
               <p>================================</p>
@@ -452,21 +649,22 @@ const POS = ({ user }) => {
                 </tbody>
               </table>
               <p>================================</p>
-              <p style={{ textAlign: 'right' }}>SUBTOTAL: {formatearCOP(ultimoRecibo.totales.subtotal)}</p>
-              <p style={{ textAlign: 'right' }}>IVA: {formatearCOP(ultimoRecibo.totales.impuestos)}</p>
+              <p style={{ textAlign: 'right' }}>SUBTOTAL (sin IVA): {formatearCOP(ultimoRecibo.totales.subtotal)}</p>
+              {ultimoRecibo.totales.descuento > 0 && (
+                <p style={{ textAlign: 'right' }}>DESCUENTO: -{formatearCOP(ultimoRecibo.totales.descuento)}</p>
+              )}
+              <p style={{ textAlign: 'right' }}>IVA 19% INCLUIDO: {formatearCOP(ultimoRecibo.totales.impuestos)}</p>
               <p style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.2rem' }}>TOTAL: {formatearCOP(ultimoRecibo.totales.total)}</p>
               <p>================================</p>
-              {ultimoRecibo.tipo === 'DIAN_Enviado' && (
+              <p style={{ textAlign: 'left' }}>MEDIO DE PAGO: {ultimoRecibo.metodoPago}</p>
+              {ultimoRecibo.metodoPago === 'Efectivo' && (
                 <>
-                  <p style={{ fontSize: '10px', wordBreak: 'break-all', marginTop: '10px' }}>
-                    CUFE: 8f3d...9a21 (Simulado DIAN)
-                  </p>
-                  <div style={{ border: '1px solid black', width: '80px', height: '80px', margin: '10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    [QR DIAN]
-                  </div>
+                  <p style={{ textAlign: 'left' }}>EFECTIVO RECIBIDO: {formatearCOP(ultimoRecibo.efectivoRecibido)}</p>
+                  <p style={{ textAlign: 'left', fontWeight: 'bold' }}>CAMBIO / DEVOLUCIÓN: {formatearCOP(ultimoRecibo.cambio)}</p>
                 </>
               )}
-              <p style={{ marginTop: '20px' }}>¡Gracias por su compra!</p>
+              <p>================================</p>
+              <p style={{ marginTop: '15px' }}>¡Gracias por su compra!</p>
             </div>
           ) : (
             <div style={{ padding: '2rem', border: '1px solid #ccc' }}>
@@ -489,7 +687,7 @@ const POS = ({ user }) => {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p>Fecha de Expedición: {ultimoRecibo.fecha.toLocaleDateString()}</p>
-                  <p>Medio de Pago: {metodoPago}</p>
+                  <p>Medio de Pago: {ultimoRecibo.metodoPago}</p>
                 </div>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2rem' }}>
@@ -497,47 +695,49 @@ const POS = ({ user }) => {
                   <tr style={{ backgroundColor: '#eee' }}>
                     <th style={{ padding: '10px', border: '1px solid #ccc' }}>Cant.</th>
                     <th style={{ padding: '10px', border: '1px solid #ccc' }}>Descripción</th>
-                    <th style={{ padding: '10px', border: '1px solid #ccc' }}>Vr. Unitario</th>
-                    <th style={{ padding: '10px', border: '1px solid #ccc' }}>IVA</th>
+                    <th style={{ padding: '10px', border: '1px solid #ccc' }}>Vr. Unitario (c/IVA)</th>
+                    <th style={{ padding: '10px', border: '1px solid #ccc' }}>Descuento</th>
                     <th style={{ padding: '10px', border: '1px solid #ccc' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ultimoRecibo.detalles.map(d => {
-                    const iva = d.aplica_iva ? (d.subtotal * (d.porcentaje_iva / 100)) : 0;
-                    return (
-                      <tr key={d.id_producto}>
-                        <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'center' }}>{d.cantidad}</td>
-                        <td style={{ padding: '10px', border: '1px solid #ccc' }}>{d.nombre_producto}</td>
-                        <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(d.precio_venta)}</td>
-                        <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(iva)}</td>
-                        <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(d.subtotal + iva)}</td>
-                      </tr>
-                    );
-                  })}
+                  {ultimoRecibo.detalles.map(d => (
+                    <tr key={d.id_producto}>
+                      <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'center' }}>{d.cantidad}</td>
+                      <td style={{ padding: '10px', border: '1px solid #ccc' }}>{d.nombre_producto}</td>
+                      <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(d.precio_venta)}</td>
+                      <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(d.descuento || 0)}</td>
+                      <td style={{ padding: '10px', border: '1px solid #ccc', textAlign: 'right' }}>{formatearCOP(d.subtotal)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2rem' }}>
-                <div style={{ width: '300px' }}>
+                <div style={{ width: '320px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span>Subtotal:</span><span>{formatearCOP(ultimoRecibo.totales.subtotal)}</span>
+                    <span>Subtotal (sin IVA):</span><span>{formatearCOP(ultimoRecibo.totales.subtotal)}</span>
                   </div>
+                  {ultimoRecibo.totales.descuento > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', color: '#2A9D8F' }}>
+                      <span>Descuento Total:</span><span>-{formatearCOP(ultimoRecibo.totales.descuento)}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                    <span>Impuestos (IVA):</span><span>{formatearCOP(ultimoRecibo.totales.impuestos)}</span>
+                    <span>IVA 19% Incluido:</span><span>{formatearCOP(ultimoRecibo.totales.impuestos)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #000', paddingTop: '10px', fontSize: '1.2rem', fontWeight: 'bold' }}>
                     <span>TOTAL:</span><span>{formatearCOP(ultimoRecibo.totales.total)}</span>
                   </div>
-                </div>
-              </div>
-              <div style={{ marginTop: '4rem', display: 'flex', gap: '2rem' }}>
-                <div style={{ border: '1px solid black', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  [QR DIAN]
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#555' }}>
-                  <p><strong>CUFE:</strong> 8f3d1b33989c3b7a5a8e0f6c2d1b8c9a3d4e5f6g7h8i9j0</p>
-                  <p>Documento Oficial Autorizado por la DIAN.</p>
-                  <p>Software POS / Sistema Integral de Ventas.</p>
+                  {ultimoRecibo.metodoPago === 'Efectivo' && (
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px dashed #ccc', fontSize: '0.9rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Recibido:</span><span>{formatearCOP(ultimoRecibo.efectivoRecibido)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>Cambio:</span><span>{formatearCOP(ultimoRecibo.cambio)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
