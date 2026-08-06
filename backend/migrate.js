@@ -1,7 +1,13 @@
+require('dotenv').config();
 const fs = require('fs');
 const { Client } = require('pg');
 
-const connectionString = 'postgresql://neondb_owner:npg_2MvedAqOpKf9@ep-billowing-flower-atimh18c-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.error('❌ ERROR: DATABASE_URL no está configurada en el archivo .env');
+  process.exit(1);
+}
 
 const client = new Client({
   connectionString: connectionString,

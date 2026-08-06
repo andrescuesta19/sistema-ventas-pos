@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect, useRef } from 'react';
 import { Search, UserPlus, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart } from 'lucide-react';
 
@@ -31,13 +32,13 @@ const POS = ({ user }) => {
   }, []);
 
   const fetchTurno = async () => {
-    const res = await fetch(`http://localhost:3000/api/turnos/estado?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
     const data = await res.json();
     setTurno(data.turno_abierto ? data.turno : null);
   };
 
   const fetchAllProductos = async () => {
-    const res = await fetch(`http://localhost:3000/api/productos?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/productos?id_local=${user.id_local}`);
     const data = await res.json();
     setTodosProductos(data);
     setProductos(data);
@@ -106,7 +107,7 @@ const POS = ({ user }) => {
     let id_cliente = 1; // Consumidor final
 
     if (tipoDocumento === 'DIAN_Enviado') {
-      const resCli = await fetch('http://localhost:3000/api/clientes/crear', {
+      const resCli = await fetch(`${API_URL}/api/clientes/crear`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datosCliente)
@@ -135,7 +136,7 @@ const POS = ({ user }) => {
       }))
     };
 
-    const res = await fetch('http://localhost:3000/api/ventas/procesar', {
+    const res = await fetch(`${API_URL}/api/ventas/procesar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -158,7 +159,7 @@ const POS = ({ user }) => {
       // Si es Factura Electronica, enviar correo real
       if (tipoDocumento === 'DIAN_Enviado' && datosCliente.correo) {
         try {
-          const emailRes = await fetch('http://localhost:3000/api/facturas/enviar-correo', {
+          const emailRes = await fetch(`${API_URL}/api/facturas/enviar-correo`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

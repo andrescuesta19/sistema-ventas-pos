@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Store, User, Mail, Lock, MapPin } from 'lucide-react';
@@ -19,7 +20,7 @@ const Registro = ({ onRegister }) => {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:3000/api/auth/registro', {
+      const res = await fetch(`${API_URL}/api/auth/registro`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -29,7 +30,7 @@ const Registro = ({ onRegister }) => {
       if (!res.ok) throw new Error(data.error || 'Error al registrar el negocio');
 
       // Auto login after registration
-      const loginRes = await fetch('http://localhost:3000/api/auth/login', {
+      const loginRes = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ correo: formData.correo, contrasena: formData.contrasena })

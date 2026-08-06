@@ -1,25 +1,27 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const bcrypt = require('bcryptjs');
 const db = require('./db');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configuracion Gmail Email
+// Configuracion Gmail Email desde variables de entorno (.env)
 let transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
     auth: {
-        user: 'andrescuesta112@gmail.com',
-        pass: 'jrhx flul kowu sqzo'
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 });
 
 console.log('\n📧 Servidor de correo LISTO (Conectado a Gmail)');
-console.log(`   Cuenta emisora: andrescuesta112@gmail.com\n`);
+console.log(`   Cuenta emisora: ${process.env.EMAIL_USER || 'No configurada en .env'}\n`);
 
 // API: Auth
 app.post('/api/auth/login', async (req, res) => {
@@ -33,9 +35,23 @@ app.post('/api/auth/login', async (req, res) => {
         `, [correo]);
         
         const row = rows[0];
-        if (!row || row.contrasena_hash !== contrasena) {
+        if (!row) {
             return res.status(401).json({ error: 'Credenciales inválidas' });
         }
+
+        // Verificación segura con Bcrypt
+        let esValida = false;
+        if (row.contrasena_hash.startsWith('$2a$') || row.contrasena_hash.startsWith('$2b$')) {
+            esValida = await bcrypt.compare(contrasena, row.contrasena_hash);
+        } else {
+            // Compatibilidad de respaldo si se usa texto plano legacy
+            esValida = (row.contrasena_hash === contrasena);
+        }
+
+        if (!esValida) {
+            return res.status(401).json({ error: 'Credenciales inválidas' });
+        }
+
         res.json({ id_usuario: row.id_usuario, nombre: row.nombre, rol: row.rol, id_local: row.id_local, nombre_local: row.nombre_local });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -48,6 +64,9 @@ app.post('/api/auth/registro', async (req, res) => {
         const { nombre_local, direccion, nombre, correo, contrasena } = req.body;
         await client.query('BEGIN');
         
+        // Hashing de contraseña con bcrypt (cost factor 10)
+        const hashContrasena = await bcrypt.hash(contrasena, 10);
+
         const resLocal = await client.query(
             `INSERT INTO locales (nombre_local, direccion) VALUES ($1, $2) RETURNING id_local`, 
             [nombre_local, direccion]
@@ -56,7 +75,7 @@ app.post('/api/auth/registro', async (req, res) => {
         
         await client.query(
             `INSERT INTO usuarios (id_local, nombre, correo, contrasena_hash, rol) VALUES ($1, $2, $3, $4, 'Administrador')`,
-            [idLocal, nombre, correo, contrasena]
+            [idLocal, nombre, correo, hashContrasena]
         );
         
         await client.query('COMMIT');
@@ -322,7 +341,7 @@ app.post('/api/facturas/enviar-correo', async (req, res) => {
         </html>`;
 
         await transporter.sendMail({
-            from: `"${nombre_local} - Sistema POS" <andrescuesta112@gmail.com>`,
+            from: `"${nombre_local} - Sistema POS" <${process.env.EMAIL_USER || 'andrescuesta112@gmail.com'}>`,
             to: correo_cliente,
             subject: `Factura Electrónica No. FE-${id_venta.toString().padStart(6,'0')} - ${nombre_local}`,
             html: htmlBody,
@@ -381,7 +400,7 @@ app.post('/api/ventas/procesar', async (req, res) => {
     }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Backend server running on http://localhost:${PORT}`);
 });

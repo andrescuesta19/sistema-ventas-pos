@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Receipt } from 'lucide-react';
 
@@ -9,7 +10,7 @@ const Historial = ({ user }) => {
   }, []);
 
   const fetchHistorial = async () => {
-    const res = await fetch(`http://localhost:3000/api/ventas/historial?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
     const data = await res.json();
     setVentas(data);
   };

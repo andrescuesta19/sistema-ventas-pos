@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Package, FileText } from 'lucide-react';
 
@@ -12,11 +13,11 @@ const CierreCaja = ({ user, onLogout }) => {
   }, []);
 
   const fetchTurno = async () => {
-    const res = await fetch(`http://localhost:3000/api/turnos/estado?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
     const data = await res.json();
     if (data.turno_abierto) {
       // Fetch report for the open shift
-      const resRep = await fetch(`http://localhost:3000/api/turnos/reporte?id_turno=${data.turno.id_turno}`);
+      const resRep = await fetch(`${API_URL}/api/turnos/reporte?id_turno=${data.turno.id_turno}`);
       const repData = await resRep.json();
       setReporte(repData);
       
@@ -42,7 +43,7 @@ const CierreCaja = ({ user, onLogout }) => {
         monto_cierre_calculado: turno.monto_teorico
       };
 
-      const res = await fetch('http://localhost:3000/api/turnos/cerrar', {
+      const res = await fetch(`${API_URL}/api/turnos/cerrar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

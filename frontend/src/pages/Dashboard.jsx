@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { AlertTriangle, DollarSign, Wallet } from 'lucide-react';
 
@@ -13,20 +14,20 @@ const Dashboard = ({ user }) => {
   }, []);
 
   const fetchTurno = async () => {
-    const res = await fetch(`http://localhost:3000/api/turnos/estado?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
     const data = await res.json();
     setTurno(data.turno_abierto ? data.turno : null);
   };
 
   const fetchAlertas = async () => {
-    const res = await fetch(`http://localhost:3000/api/productos/alertas?id_local=${user.id_local}`);
+    const res = await fetch(`${API_URL}/api/productos/alertas?id_local=${user.id_local}`);
     const data = await res.json();
     setAlertas(data);
   };
 
   const abrirTurno = async (e) => {
     e.preventDefault();
-    const res = await fetch('http://localhost:3000/api/turnos/abrir', {
+    const res = await fetch(`${API_URL}/api/turnos/abrir`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id_usuario: user.id_usuario, id_local: user.id_local, monto_apertura: parseFloat(montoApertura) })

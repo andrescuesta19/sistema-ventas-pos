@@ -1,12 +1,36 @@
 {
-  "name": "frontend",
+  "name": "sistema-ventas-pos",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "electron.cjs",
+  "author": "Andrés Cuesta",
+  "description": "Sistema Integral de Ventas - Punto de Venta POS",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && ELECTRON_DEV=true electron .\"",
+    "electron:build": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "com.andrescuesta.pos",
+    "productName": "Sistema de Ventas POS",
+    "files": [
+      "dist/**/*",
+      "electron.cjs",
+      "preload.cjs"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.business",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    }
   },
   "dependencies": {
     "@capacitor/cli": "^8.4.2",
@@ -19,6 +43,10 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.0"
+    "concurrently": "^9.1.2",
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^5.0.0",
+    "wait-on": "^8.0.2"
   }
 }

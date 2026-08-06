@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState } from 'react';
 
 const Login = ({ onLogin }) => {
@@ -24,7 +25,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:3000/api/auth/login', {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ correo, contrasena }),

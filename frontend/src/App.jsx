@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingCart, LayoutDashboard, LogOut, Package, Store, ClipboardList, Users, FileText } from 'lucide-react';
@@ -18,7 +19,7 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser }) => {
 
   const openRelevoModal = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/usuarios/local?id_local=${user.id_local}`);
+      const res = await fetch(`${API_URL}/api/usuarios/local?id_local=${user.id_local}`);
       const data = await res.json();
       setUsuariosLocal(data);
       setShowRelevo(true);

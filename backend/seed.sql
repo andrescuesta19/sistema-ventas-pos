@@ -3,9 +3,9 @@ INSERT INTO locales (nombre_local, direccion) VALUES
 ('TechShop Norte', 'Avenida 50 # 15-45');
 
 INSERT INTO usuarios (id_local, nombre, correo, contrasena_hash, rol) VALUES 
-(1, 'Administrador Centro', 'admin@istore.com', 'hash_seguro_123', 'Administrador'),
-(1, 'Cajero Centro', 'cajero@istore.com', 'hash_seguro_456', 'Cajero'),
-(2, 'Administrador Norte', 'admin@techshop.com', 'hash_seguro_789', 'Administrador');
+(1, 'Administrador Centro', 'admin@istore.com', '$2b$10$ua74QqXcbTE9vUByInCASeLdwV2i8ZRxEE501gHq9D9B6yBUTLEI2', 'Administrador'),
+(1, 'Cajero Centro', 'cajero@istore.com', '$2b$10$RjrD60yKBImfKgSzYl6I8unKWeRBngxdqqNjwgr6RLnttbBXdXnWi', 'Cajero'),
+(2, 'Administrador Norte', 'admin@techshop.com', '$2b$10$ua74QqXcbTE9vUByInCASeLdwV2i8ZRxEE501gHq9D9B6yBUTLEI2', 'Administrador');
 
 INSERT INTO clientes (documento_identidad, nombre_razon_social, telefono, correo, puntos_acumulados) VALUES 
 ('22222222', 'Consumidor Final', '0000000', 'anonimo@pos.com', 0),
