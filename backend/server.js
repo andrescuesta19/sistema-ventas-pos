@@ -1050,16 +1050,16 @@ app.get('/api/buscar', requireAuth, requireAprobado, async (req, res) => {
 
         // Ventas recientes (últimos 90 días) que coincidan
         const ventas = await db.query(
-            `SELECT v.id_venta, v.fecha, v.total_neto, c.nombre_razon_social
+            `SELECT v.id_venta, v.fecha_venta AS fecha, v.total_neto, c.nombre_razon_social
              FROM ventas v
              LEFT JOIN clientes c ON v.id_cliente = c.id_cliente
              WHERE v.id_local = $1
-               AND v.fecha >= NOW() - INTERVAL '90 days'
+               AND v.fecha_venta >= NOW() - INTERVAL '90 days'
                AND (
                  CAST(v.id_venta AS TEXT) LIKE $2
                  OR c.nombre_razon_social ILIKE $2
                )
-             ORDER BY v.fecha DESC
+             ORDER BY v.fecha_venta DESC
              LIMIT 10`,
             [localId, term]
         );
