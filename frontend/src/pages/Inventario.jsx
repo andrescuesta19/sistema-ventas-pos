@@ -1,4 +1,5 @@
 import { API_URL } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 
@@ -20,8 +21,7 @@ const Inventario = ({ user }) => {
   }, []);
 
   const fetchProductos = async () => {
-    const res = await fetch(`${API_URL}/api/productos?id_local=${user.id_local}`);
-    const data = await res.json();
+    const data = await apiGet(`${API_URL}/api/productos?id_local=${user.id_local}`);
     setProductos(data);
   };
 
@@ -42,11 +42,7 @@ const Inventario = ({ user }) => {
       stock_minimo: parseInt(formData.stock_minimo)
     };
 
-    const res = await fetch(`${API_URL}/api/productos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await apiPost(`${API_URL}/api/productos`, payload);
 
     if (res.ok) {
       setShowModal(false);
@@ -62,7 +58,7 @@ const Inventario = ({ user }) => {
 
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      await fetch(`${API_URL}/api/productos/${id}`, { method: 'DELETE' });
+      await apiDelete(`${API_URL}/api/productos/${id}`);
       fetchProductos();
     }
   };

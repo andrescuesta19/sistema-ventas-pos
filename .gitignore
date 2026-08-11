@@ -20,6 +20,8 @@ dist/
 build/
 out/
 .vite/
+frontend/release/
+backend/frontend-version.json
 
 # System / OS files
 .DS_Store

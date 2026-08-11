@@ -1,6 +1,8 @@
 import { API_URL } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect, useRef } from 'react';
-import { Search, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart, Tag, Percent, DollarSign } from 'lucide-react';
+import { Search, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart, Tag, Percent, DollarSign, User, X, ChevronDown, UserPlus } from 'lucide-react';
+import { formatearFechaHoraCO, formatearFechaCO } from '../utils/dateCO';
 
 const POS = ({ user }) => {
   const [turno, setTurno] = useState(null);
@@ -23,6 +25,22 @@ const POS = ({ user }) => {
     correo: ''
   });
 
+  // ── Selección de cliente (independiente del tipo de documento) ──
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [clientes, setClientes] = useState([]);
+  const [cargandoClientes, setCargandoClientes] = useState(false);
+  const [showNuevoCliente, setShowNuevoCliente] = useState(false);
+  const [nuevoCliente, setNuevoCliente] = useState({
+    documento_identidad: '',
+    nombre_razon_social: '',
+    telefono: '',
+    correo: ''
+  });
+  const [creandoCliente, setCreandoCliente] = useState(false);
+  const clienteDropdownRef = useRef(null);
+
   const [printFormat, setPrintFormat] = useState(null);
   const [ultimoRecibo, setUltimoRecibo] = useState(null);
 
@@ -32,15 +50,113 @@ const POS = ({ user }) => {
     searchInputRef.current?.focus();
   }, []);
 
+  // Búsqueda de clientes con debounce de 250ms
+  useEffect(() => {
+    if (!showClienteDropdown) return;
+    const t = setTimeout(async () => {
+      try {
+        setCargandoClientes(true);
+        const data = await apiGet(`${API_URL}/api/clientes?q=${encodeURIComponent(busquedaCliente)}`);
+        // Filtrar Consumidor Final (id=1) — es solo el estado por defecto
+        setClientes(Array.isArray(data) ? data.filter(c => c.id_cliente !== 1) : []);
+      } catch (err) {
+        console.error('Error buscando clientes:', err);
+        setClientes([]);
+      } finally {
+        setCargandoClientes(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [busquedaCliente, showClienteDropdown]);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    if (!showClienteDropdown) return;
+    const handleClickOutside = (e) => {
+      if (clienteDropdownRef.current && !clienteDropdownRef.current.contains(e.target)) {
+        setShowClienteDropdown(false);
+        setShowNuevoCliente(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showClienteDropdown]);
+
+  // Si hay cliente seleccionado y se elige DIAN, autocompletar datosCliente
+  useEffect(() => {
+    if (clienteSeleccionado && tipoDocumento === 'DIAN_Enviado') {
+      setDatosCliente({
+        documento_identidad: clienteSeleccionado.documento_identidad || '',
+        nombre_razon_social: clienteSeleccionado.nombre_razon_social || '',
+        correo: clienteSeleccionado.correo || ''
+      });
+    }
+  }, [clienteSeleccionado, tipoDocumento]);
+
+  const seleccionarCliente = (cliente) => {
+    setClienteSeleccionado(cliente);
+    setShowClienteDropdown(false);
+    setBusquedaCliente('');
+    // Si está en DIAN, autocompletar datos
+    if (tipoDocumento === 'DIAN_Enviado') {
+      setDatosCliente({
+        documento_identidad: cliente.documento_identidad || '',
+        nombre_razon_social: cliente.nombre_razon_social || '',
+        correo: cliente.correo || ''
+      });
+    }
+  };
+
+  const limpiarCliente = () => {
+    setClienteSeleccionado(null);
+    setDatosCliente({ documento_identidad: '', nombre_razon_social: '', correo: '' });
+  };
+
+  const handleCrearCliente = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!nuevoCliente.documento_identidad || !nuevoCliente.nombre_razon_social) {
+      return alert('Documento y Nombre son obligatorios para crear un cliente.');
+    }
+    try {
+      setCreandoCliente(true);
+      const data = await apiPost(`${API_URL}/api/clientes/crear`, nuevoCliente);
+      if (data.success) {
+        const clienteNuevo = {
+          id_cliente: data.id_cliente,
+          documento_identidad: nuevoCliente.documento_identidad,
+          nombre_razon_social: nuevoCliente.nombre_razon_social,
+          telefono: nuevoCliente.telefono,
+          correo: nuevoCliente.correo,
+          puntos_acumulados: 0
+        };
+        seleccionarCliente(clienteNuevo);
+        setShowNuevoCliente(false);
+        setNuevoCliente({ documento_identidad: '', nombre_razon_social: '', telefono: '', correo: '' });
+      } else {
+        alert(data.error || 'No se pudo crear el cliente.');
+      }
+    } catch (err) {
+      console.error('Error creando cliente:', err);
+      alert('Error de red al crear el cliente.');
+    } finally {
+      setCreandoCliente(false);
+    }
+  };
+
+  const getIniciales = (nombre) => {
+    if (!nombre) return '?';
+    const parts = nombre.trim().split(/\s+/);
+    return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+  };
+
   const fetchTurno = async () => {
-    const res = await fetch(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
-    const data = await res.json();
+    const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
     setTurno(data.turno_abierto ? data.turno : null);
   };
 
   const fetchAllProductos = async () => {
-    const res = await fetch(`${API_URL}/api/productos?id_local=${user.id_local}`);
-    const data = await res.json();
+    const data = await apiGet(`${API_URL}/api/productos?id_local=${user.id_local}`);
     setTodosProductos(data);
     setProductos(data);
   };
@@ -59,17 +175,21 @@ const POS = ({ user }) => {
   };
 
   const agregarAlCarrito = (producto) => {
+    // Stock disponible = stock_actual - lo que ya está en el carrito
+    const enCarrito = carrito.find(p => p.id_producto === producto.id_producto)?.cantidad || 0;
+    const stockDisponible = producto.stock_actual - enCarrito;
+
     setCarrito(prev => {
       const existe = prev.find(p => p.id_producto === producto.id_producto);
       if (existe) {
-        if (existe.cantidad >= producto.stock_actual) {
-          alert('No hay suficiente stock físico para agregar más unidades.');
+        if (stockDisponible <= 0) {
+          alert('No hay más stock disponible para agregar.');
           return prev;
         }
         const nuevaCant = existe.cantidad + 1;
         const descMonto = Math.round((nuevaCant * producto.precio_venta) * (existe.porcentajeDescuento || descuentoGlobalPct) / 100);
-        return prev.map(p => p.id_producto === producto.id_producto 
-          ? { ...p, cantidad: nuevaCant, descuento: descMonto, subtotal: (nuevaCant * producto.precio_venta) - descMonto } 
+        return prev.map(p => p.id_producto === producto.id_producto
+          ? { ...p, cantidad: nuevaCant, descuento: descMonto, subtotal: (nuevaCant * producto.precio_venta) - descMonto }
           : p);
       }
       if (producto.stock_actual <= 0) {
@@ -169,15 +289,20 @@ const POS = ({ user }) => {
       }
     }
 
-    let id_cliente = 1; // Consumidor final
+    // Resolver id_cliente: si hay cliente seleccionado, usar su id.
+    // Si no hay, usar 1 (Consumidor Final).
+    let id_cliente = clienteSeleccionado?.id_cliente || 1;
 
-    if (tipoDocumento === 'DIAN_Enviado') {
-      const resCli = await fetch(`${API_URL}/api/clientes/crear`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(datosCliente)
-      });
-      const dataCli = await resCli.json();
+    // v1.5.4: envolver todo en try/catch (apiPost lanza Error si !res.ok)
+    try {
+
+    // Si es DIAN y el cliente no estaba en la lista, crear/buscar uno nuevo
+    // (caso: usuario escribió datos directamente sin seleccionar del dropdown)
+    if (tipoDocumento === 'DIAN_Enviado' && id_cliente === 1) {
+      // v1.5.4: apiPost ya devuelve el JSON parseado, no un Response.
+      // Antes hacía `await resCli.json()` y eso era un TypeError que rompía
+      // toda la app al cobrar una factura electrónica con cliente nuevo.
+      const dataCli = await apiPost(`${API_URL}/api/clientes/crear`, datosCliente);
       if (dataCli.success) id_cliente = dataCli.id_cliente;
     }
 
@@ -201,59 +326,76 @@ const POS = ({ user }) => {
       }))
     };
 
-    const res = await fetch(`${API_URL}/api/ventas/procesar`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    // v1.5.4: apiPost ya devuelve el JSON parseado. Antes hacía `res.ok` y
+    // `res.json()` sobre el JSON, lo cual era un TypeError que rompía la app
+    // después de cada venta cobrada.
+    const ventaData = await apiPost(`${API_URL}/api/ventas/procesar`, payload);
+    const idVentaReal = ventaData.id_venta;
 
-    if (res.ok) {
-      const ventaData = await res.json();
-      const idVentaReal = ventaData.id_venta;
+    // ── Actualizar stock local inmediatamente (antes del reload) ──
+    setTodosProductos(prev => prev.map(p => {
+      const det = payload.detalles.find(d => d.id_producto === p.id_producto);
+      if (det) return { ...p, stock_actual: Math.max(0, p.stock_actual - det.cantidad) };
+      return p;
+    }));
+    setProductos(prev => prev.map(p => {
+      const det = payload.detalles.find(d => d.id_producto === p.id_producto);
+      if (det) return { ...p, stock_actual: Math.max(0, p.stock_actual - det.cantidad) };
+      return p;
+    }));
 
-      const reciboData = {
-        id_venta: idVentaReal,
-        fecha: new Date(),
-        cliente: id_cliente === 1 ? { nombre_razon_social: 'Consumidor Final', documento_identidad: '22222222' } : datosCliente,
-        detalles: carrito,
-        totales: totales,
-        tipo: tipoDocumento,
-        metodoPago: metodoPago,
-        efectivoRecibido: metodoPago === 'Efectivo' ? rec : totales.total,
-        cambio: cambioCalculado
-      };
-      setUltimoRecibo(reciboData);
+    const reciboData = {
+      id_venta: idVentaReal,
+      fecha: new Date(),
+      cliente: clienteSeleccionado
+        ? {
+            nombre_razon_social: clienteSeleccionado.nombre_razon_social,
+            documento_identidad: clienteSeleccionado.documento_identidad,
+            correo: clienteSeleccionado.correo || datosCliente.correo || ''
+          }
+        : (id_cliente === 1
+            ? { nombre_razon_social: 'Consumidor Final', documento_identidad: '22222222', correo: '' }
+            : datosCliente),
+      detalles: carrito,
+      totales: totales,
+      tipo: tipoDocumento,
+      metodoPago: metodoPago,
+      efectivoRecibido: metodoPago === 'Efectivo' ? rec : totales.total,
+      cambio: cambioCalculado
+    };
+    setUltimoRecibo(reciboData);
 
-      // Si es Factura Electrónica, enviar correo real
-      if (tipoDocumento === 'DIAN_Enviado' && datosCliente.correo) {
-        try {
-          await fetch(`${API_URL}/api/facturas/enviar-correo`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              correo_cliente: datosCliente.correo,
-              nombre_cliente: datosCliente.nombre_razon_social,
-              id_venta: idVentaReal,
-              total_neto: totales.total,
-              detalles: carrito.map(c => ({
-                nombre_producto: c.nombre_producto,
-                cantidad: c.cantidad,
-                precio_unitario: c.precio_venta,
-                subtotal: c.subtotal
-              })),
-              nombre_local: user.nombre_local || 'Sistema Integral de Ventas',
-              metodo_pago: metodoPago
-            })
-          });
-        } catch (err) {
-          console.warn('No se pudo enviar el correo:', err);
-        }
+    // Si es Factura Electrónica, enviar correo real
+    if (tipoDocumento === 'DIAN_Enviado' && datosCliente.correo) {
+      try {
+        await apiPost(`${API_URL}/api/facturas/enviar-correo`, {
+          correo_cliente: datosCliente.correo,
+          nombre_cliente: datosCliente.nombre_razon_social,
+          id_venta: idVentaReal,
+          total_neto: totales.total,
+          detalles: carrito.map(c => ({
+            nombre_producto: c.nombre_producto,
+            cantidad: c.cantidad,
+            precio_unitario: c.precio_venta,
+            subtotal: c.subtotal
+          })),
+          nombre_local: user.nombre_local || 'Sistema Integral de Ventas',
+          metodo_pago: metodoPago
+        });
+      } catch (err) {
+        console.warn('No se pudo enviar el correo:', err);
       }
+    }
 
-      setVentaCompletada(true);
-      fetchAllProductos();
-    } else {
-      alert('Error procesando la venta');
+    setVentaCompletada(true);
+    // Refrescar desde servidor para sincronizar stock real
+    setTimeout(() => fetchAllProductos(), 1500);
+    } catch (err) {
+      // v1.5.4: apiPost lanza Error con mensaje del backend si !res.ok
+      alert(`Error procesando la venta: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setShowPagoModal(false);
+      setProcesandoVenta(false);
     }
   };
 
@@ -263,6 +405,11 @@ const POS = ({ user }) => {
     setShowPagoModal(false);
     setTipoDocumento('Local');
     setDatosCliente({ documento_identidad: '', nombre_razon_social: '', correo: '' });
+    setClienteSeleccionado(null);
+    setShowClienteDropdown(false);
+    setBusquedaCliente('');
+    setShowNuevoCliente(false);
+    setNuevoCliente({ documento_identidad: '', nombre_razon_social: '', telefono: '', correo: '' });
     setEfectivoRecibido('');
     setDescuentoGlobalPct(0);
   };
@@ -557,6 +704,212 @@ const POS = ({ user }) => {
                   )}
                 </div>
 
+                {/* Selector de Cliente — siempre visible */}
+                <div ref={clienteDropdownRef} style={{ marginBottom: '1.25rem', position: 'relative' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#1E293B' }}>Cliente</label>
+
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Seleccionar cliente"
+                    onClick={() => setShowClienteDropdown(s => !s)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowClienteDropdown(s => !s); } }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.75rem',
+                      borderRadius: '10px',
+                      border: showClienteDropdown ? '2px solid #2A9D8F' : '1px solid #CBD5E1',
+                      backgroundColor: showClienteDropdown ? '#F0FAF8' : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {clienteSeleccionado ? (
+                      <>
+                        <div style={{
+                          width: '40px', height: '40px', borderRadius: '50%',
+                          backgroundColor: '#2A9D8F', color: 'white',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontWeight: 700, fontSize: '0.95rem', flexShrink: 0
+                        }}>
+                          {getIniciales(clienteSeleccionado.nombre_razon_social)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, color: '#1E293B', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {clienteSeleccionado.nombre_razon_social}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                            {clienteSeleccionado.documento_identidad}
+                          </div>
+                        </div>
+                        {clienteSeleccionado.puntos_acumulados > 0 && (
+                          <span style={{
+                            fontSize: '0.75rem', fontWeight: 700,
+                            padding: '0.2rem 0.55rem', borderRadius: '12px',
+                            backgroundColor: '#DCFCE7', color: '#15803D',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            ⭐ {clienteSeleccionado.puntos_acumulados} pts
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          aria-label="Quitar cliente seleccionado"
+                          onClick={(e) => { e.stopPropagation(); limpiarCliente(); }}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            padding: '0.25rem', borderRadius: '4px',
+                            display: 'flex', alignItems: 'center', color: '#EF4444'
+                          }}
+                        >
+                          <X size={18} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{
+                          width: '40px', height: '40px', borderRadius: '50%',
+                          backgroundColor: '#E2E8F0', color: '#64748B',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <User size={20} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, color: '#475569', fontSize: '0.95rem' }}>Consumidor Final</div>
+                          <div style={{ fontSize: '0.78rem', color: '#94A3B8' }}>Click para buscar o crear un cliente</div>
+                        </div>
+                      </>
+                    )}
+                    <ChevronDown size={18} color="#94A3B8" style={{
+                      transform: showClienteDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s'
+                    }} />
+                  </div>
+
+                  {/* Dropdown de búsqueda */}
+                  {showClienteDropdown && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0,
+                      marginTop: '0.4rem', backgroundColor: 'white',
+                      border: '1px solid #E2E8F0', borderRadius: '10px',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.12)', zIndex: 50,
+                      overflow: 'hidden'
+                    }}>
+                      {/* Buscador */}
+                      <div style={{ padding: '0.6rem', borderBottom: '1px solid #E2E8F0', position: 'relative' }}>
+                        <Search size={16} style={{ position: 'absolute', top: '50%', left: '1.1rem', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Buscar por nombre o documento..."
+                          value={busquedaCliente}
+                          onChange={(e) => setBusquedaCliente(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%', padding: '0.5rem 0.6rem 0.5rem 2.2rem',
+                            border: '1px solid #CBD5E1', borderRadius: '6px',
+                            fontSize: '0.9rem', outline: 'none'
+                          }}
+                        />
+                      </div>
+
+                      {/* Lista de resultados o formulario de nuevo cliente */}
+                      {!showNuevoCliente ? (
+                        <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                          {cargandoClientes ? (
+                            <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.85rem' }}>
+                              Buscando...
+                            </div>
+                          ) : clientes.length === 0 ? (
+                            <div style={{ padding: '1.25rem', textAlign: 'center', color: '#94A3B8', fontSize: '0.85rem' }}>
+                              {busquedaCliente ? 'No se encontraron clientes con ese criterio.' : 'No hay clientes registrados.'}
+                            </div>
+                          ) : (
+                            clientes.map(c => (
+                              <div
+                                key={c.id_cliente}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => seleccionarCliente(c)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') seleccionarCliente(c); }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.65rem',
+                                  padding: '0.6rem 0.75rem', cursor: 'pointer',
+                                  borderBottom: '1px solid #F1F5F9',
+                                  transition: 'background 0.1s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F8FAFC'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                              >
+                                <div style={{
+                                  width: '32px', height: '32px', borderRadius: '50%',
+                                  backgroundColor: '#264653', color: 'white',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontWeight: 700, fontSize: '0.8rem', flexShrink: 0
+                                }}>
+                                  {getIniciales(c.nombre_razon_social)}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 600, color: '#1E293B', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {c.nombre_razon_social}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{c.documento_identidad}</div>
+                                </div>
+                                {c.puntos_acumulados > 0 && (
+                                  <span style={{
+                                    fontSize: '0.7rem', fontWeight: 700,
+                                    padding: '0.15rem 0.45rem', borderRadius: '10px',
+                                    backgroundColor: '#DCFCE7', color: '#15803D',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    {c.puntos_acumulados} pts
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          )}
+
+                          {/* Botón Nuevo Cliente */}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); setShowNuevoCliente(true); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') setShowNuevoCliente(true); }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '0.5rem',
+                              padding: '0.7rem 0.75rem', cursor: 'pointer',
+                              border: '2px dashed #2A9D8F', borderRadius: '6px',
+                              margin: '0.5rem', color: '#2A9D8F', fontWeight: 600, fontSize: '0.85rem',
+                              backgroundColor: '#F0FAF8'
+                            }}
+                          >
+                            <UserPlus size={16} /> + Nuevo cliente
+                          </div>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleCrearCliente} onClick={(e) => e.stopPropagation()} style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <div style={{ fontWeight: 700, color: '#264653', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <UserPlus size={16} /> Crear cliente nuevo
+                          </div>
+                          <input type="text" placeholder="Documento *" value={nuevoCliente.documento_identidad} onChange={e => setNuevoCliente({...nuevoCliente, documento_identidad: e.target.value})} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }} required />
+                          <input type="text" placeholder="Nombre / Razón Social *" value={nuevoCliente.nombre_razon_social} onChange={e => setNuevoCliente({...nuevoCliente, nombre_razon_social: e.target.value})} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }} required />
+                          <input type="text" placeholder="Teléfono (opcional)" value={nuevoCliente.telefono} onChange={e => setNuevoCliente({...nuevoCliente, telefono: e.target.value})} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }} />
+                          <input type="email" placeholder="Correo (opcional)" value={nuevoCliente.correo} onChange={e => setNuevoCliente({...nuevoCliente, correo: e.target.value})} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.85rem' }} />
+                          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.25rem' }}>
+                            <button type="button" onClick={() => setShowNuevoCliente(false)} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #CBD5E1', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>Cancelar</button>
+                            <button type="submit" disabled={creandoCliente} style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: 'none', background: '#2A9D8F', color: 'white', cursor: creandoCliente ? 'wait' : 'pointer', fontWeight: 600, fontSize: '0.85rem' }}>
+                              {creandoCliente ? 'Creando...' : 'Crear y seleccionar'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Tipo de Documento: Tirilla POS o Factura Electrónica */}
                 <div style={{ marginBottom: '1.25rem', padding: '1rem', border: '1px solid #E2E8F0', borderRadius: '10px', backgroundColor: '#FAFAFA' }}>
                   <h4 style={{ margin: '0 0 0.6rem 0', fontSize: '0.95rem' }}>Tipo de Comprobante</h4>
@@ -570,6 +923,11 @@ const POS = ({ user }) => {
                       <input type="text" placeholder="NIT / Cédula del Cliente" value={datosCliente.documento_identidad} onChange={e => setDatosCliente({...datosCliente, documento_identidad: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
                       <input type="text" placeholder="Razón Social / Nombre" value={datosCliente.nombre_razon_social} onChange={e => setDatosCliente({...datosCliente, nombre_razon_social: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
                       <input type="email" placeholder="Correo Electrónico (Para envío automático)" value={datosCliente.correo} onChange={e => setDatosCliente({...datosCliente, correo: e.target.value})} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid #CBD5E1' }} required />
+                      {clienteSeleccionado && (
+                        <div style={{ fontSize: '0.75rem', color: '#2A9D8F', backgroundColor: '#E6F4F1', padding: '0.4rem 0.6rem', borderRadius: '6px' }}>
+                          ✓ Autocompletado desde cliente seleccionado. Edita si necesitas actualizar algún dato.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -628,7 +986,7 @@ const POS = ({ user }) => {
               <p>NIT: 900.123.456-7</p>
               <p>================================</p>
               <p>FACTURA DE VENTA {ultimoRecibo.tipo === 'DIAN_Enviado' ? 'ELECTRÓNICA' : 'POS'} NO. {ultimoRecibo.id_venta}</p>
-              <p>FECHA: {ultimoRecibo.fecha.toLocaleString()}</p>
+              <p>FECHA: {formatearFechaHoraCO(ultimoRecibo.fecha)}</p>
               <p>CLIENTE: {ultimoRecibo.cliente.nombre_razon_social}</p>
               <p>CC/NIT: {ultimoRecibo.cliente.documento_identidad}</p>
               <p>================================</p>
@@ -686,7 +1044,7 @@ const POS = ({ user }) => {
                   <p>Correo: {ultimoRecibo.cliente.correo}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p>Fecha de Expedición: {ultimoRecibo.fecha.toLocaleDateString()}</p>
+                  <p>Fecha de Expedición: {formatearFechaCO(ultimoRecibo.fecha)}</p>
                   <p>Medio de Pago: {ultimoRecibo.metodoPago}</p>
                 </div>
               </div>

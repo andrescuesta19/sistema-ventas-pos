@@ -1,6 +1,8 @@
 import { API_URL } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect } from 'react';
 import { FileText, Printer, Mail, CheckCircle, AlertTriangle } from 'lucide-react';
+import { formatearFechaHoraCO } from '../utils/dateCO';
 
 const Facturas = ({ user }) => {
   const [facturas, setFacturas] = useState([]);
@@ -11,8 +13,7 @@ const Facturas = ({ user }) => {
   }, []);
 
   const fetchFacturas = async () => {
-    const res = await fetch(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
-    const data = await res.json();
+    const data = await apiGet(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
     setFacturas(data);
   };
 
@@ -21,8 +22,10 @@ const Facturas = ({ user }) => {
   };
 
   const facturasFiltradas = facturas.filter(f => {
-    if (filtro === 'DIAN') return f.estado_factura.includes('DIAN');
-    if (filtro === 'POS') return f.estado_factura === 'Local';
+    // Normalizamos por si llegan ventas legacy sin estado_factura (NULL en DB)
+    const estado = f.estado_factura || 'Local';
+    if (filtro === 'DIAN') return estado.includes('DIAN');
+    if (filtro === 'POS') return estado === 'Local';
     return true;
   });
 
@@ -53,19 +56,22 @@ const Facturas = ({ user }) => {
             </tr>
           </thead>
           <tbody>
-            {facturasFiltradas.map(f => (
+            {facturasFiltradas.map(f => {
+              // Normalizamos por si llegan ventas legacy con estado_factura NULL
+              const estadoFactura = f.estado_factura || 'Local';
+              return (
               <tr key={f.id_venta} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '1rem', fontWeight: 500 }}>
-                  {f.estado_factura.includes('DIAN') ? `FE-${f.id_venta.toString().padStart(6, '0')}` : `POS-${f.id_venta.toString().padStart(6, '0')}`}
+                  {estadoFactura.includes('DIAN') ? `FE-${f.id_venta.toString().padStart(6, '0')}` : `POS-${f.id_venta.toString().padStart(6, '0')}`}
                 </td>
-                <td style={{ padding: '1rem' }}>{new Date(f.fecha_venta).toLocaleString()}</td>
+                <td style={{ padding: '1rem' }}>{formatearFechaHoraCO(f.fecha_venta)}</td>
                 <td style={{ padding: '1rem', color: 'var(--text-light)' }}>{f.cliente}</td>
                 <td style={{ padding: '1rem' }}>
-                  {f.estado_factura === 'DIAN_Enviado' ? (
+                  {estadoFactura === 'DIAN_Enviado' ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary-color)', fontSize: '0.9rem', fontWeight: 600 }}>
                       <CheckCircle size={16} /> Aceptada
                     </span>
-                  ) : f.estado_factura === 'DIAN_Error' ? (
+                  ) : estadoFactura === 'DIAN_Error' ? (
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-color)', fontSize: '0.9rem', fontWeight: 600 }}>
                       <AlertTriangle size={16} /> Rechazada
                     </span>
@@ -81,7 +87,7 @@ const Facturas = ({ user }) => {
                     <button className="btn-secondary" style={{ padding: '0.4rem' }} title="Imprimir" onClick={() => window.print()}>
                       <Printer size={16} />
                     </button>
-                    {f.estado_factura.includes('DIAN') && (
+                    {estadoFactura.includes('DIAN') && (
                       <button className="btn-secondary" style={{ padding: '0.4rem', color: 'var(--primary-color)' }} title="Reenviar por Correo" onClick={() => alert('Factura enviada por correo al cliente.')}>
                         <Mail size={16} />
                       </button>
@@ -89,7 +95,8 @@ const Facturas = ({ user }) => {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {facturasFiltradas.length === 0 && (
               <tr>
                 <td colSpan="6" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-light)' }}>

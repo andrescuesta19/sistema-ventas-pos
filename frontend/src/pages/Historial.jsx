@@ -1,6 +1,8 @@
 import { API_URL } from '../config';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect } from 'react';
 import { Receipt } from 'lucide-react';
+import { formatearFechaHoraCO } from '../utils/dateCO';
 
 const Historial = ({ user }) => {
   const [ventas, setVentas] = useState([]);
@@ -10,8 +12,7 @@ const Historial = ({ user }) => {
   }, []);
 
   const fetchHistorial = async () => {
-    const res = await fetch(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
-    const data = await res.json();
+    const data = await apiGet(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
     setVentas(data);
   };
 
@@ -41,7 +42,7 @@ const Historial = ({ user }) => {
             {ventas.map(v => (
               <tr key={v.id_venta} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '1rem', color: 'var(--text-light)', fontWeight: 500 }}>#{v.id_venta.toString().padStart(6, '0')}</td>
-                <td style={{ padding: '1rem' }}>{new Date(v.fecha_venta).toLocaleString()}</td>
+                <td style={{ padding: '1rem' }}>{formatearFechaHoraCO(v.fecha_venta)}</td>
                 <td style={{ padding: '1rem' }}>{v.cajero}</td>
                 <td style={{ padding: '1rem' }}>
                   <span style={{ 
