@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { Shield, Check, X, LogOut, RefreshCw, Store, Users,
-  TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck
+  TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck, Eye, EyeOff
 } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -20,6 +20,7 @@ const SuperAdmin = () => {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [feedback, setFeedback] = useState({}); // { idUsuario: 'aprobando' }
+  const [showPwd, setShowPwd] = useState(false); // v1.5.5: mostrar/ocultar contraseña
 
   // Recuperar sesión del super-admin
   useEffect(() => {
@@ -191,20 +192,31 @@ const SuperAdmin = () => {
             </div>
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Contraseña</label>
-              <input
-                type="password"
-                value={loginForm.contrasena}
-                onChange={e => setLoginForm({ ...loginForm, contrasena: e.target.value })}
-                required
-                placeholder="••••••••"
-                style={{
-                  width: '100%', padding: '0.75rem 0.9rem',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1.5px solid rgba(126, 217, 87, 0.15)',
-                  borderRadius: '10px', color: '#fff', fontSize: '0.95rem',
-                  fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  value={loginForm.contrasena}
+                  onChange={e => setLoginForm({ ...loginForm, contrasena: e.target.value })}
+                  required
+                  placeholder="SuperPOS2024!Admin"
+                  style={{
+                    width: '100%', padding: '0.75rem 2.6rem 0.75rem 0.9rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1.5px solid rgba(126, 217, 87, 0.15)',
+                    borderRadius: '10px', color: '#fff', fontSize: '0.95rem',
+                    fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <button type="button" onClick={() => setShowPwd(v => !v)}
+                  style={{
+                    position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.5)', padding: '0.4rem',
+                  }}
+                  title={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <button
               type="submit"

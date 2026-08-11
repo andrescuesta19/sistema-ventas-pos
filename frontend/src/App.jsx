@@ -34,7 +34,6 @@ import SuperAdmin from './pages/SuperAdmin';
 import Proveedores from './pages/Proveedores';
 import Caja from './pages/Caja';
 import Nomina from './pages/Nomina';
-import HelpButton from './components/HelpButton';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -100,18 +99,32 @@ class ErrorBoundary extends React.Component {
               {String(this.state.error?.message || this.state.error)}
             </pre>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              background: '#7ed957', color: '#0a1a0e',
-              border: 'none', padding: '0.75rem 1.5rem',
-              borderRadius: 10, fontSize: '0.95rem',
-              fontWeight: 700, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Recargar la app
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#7ed957', color: '#0a1a0e',
+                border: 'none', padding: '0.75rem 1.5rem',
+                borderRadius: 10, fontSize: '0.95rem',
+                fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Recargar la app
+            </button>
+            <button
+              onClick={() => { try { localStorage.clear(); } catch {} window.location.href = '/login'; }}
+              style={{
+                background: 'transparent', color: '#7ed957',
+                border: '1px solid #7ed957', padding: '0.75rem 1.5rem',
+                borderRadius: 10, fontSize: '0.95rem',
+                fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Volver al inicio
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -474,7 +487,8 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
         {children}
       </div>
 
-      <HelpButton />
+      {/* v1.5.5: HelpButton removido — confundía a usuarios (parecía un botón
+          de "super admin"). El contacto está en el menú Acerca de del header. */}
       <UpdateNotification />
 
       {/* v1.5.4: modal de relevo eliminado (código muerto). Logout ahora vive en el header. */}
