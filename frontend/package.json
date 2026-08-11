@@ -8,7 +8,7 @@
   "description": "Sistema Integral de Ventas - Punto de Venta POS",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/sync-version.cjs",
+    "prebuild": "node scripts/sync-version.cjs && node scripts/auto-commit.cjs",
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && ELECTRON_DEV=true electron .\"",
