@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HelpCircle, X, MessageSquare, Phone, Mail, CheckCircle2, Send } from 'lucide-react';
 import { API_URL } from '../config';
+import { apiPost } from '../api';
 
 const HelpButton = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,18 +17,14 @@ const HelpButton = () => {
     
     try {
       // Intentar enviar mensaje de soporte al backend
-      await fetch(`${API_URL}/api/facturas/enviar-correo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          correo_cliente: 'andrescuesta112@gmail.com',
-          nombre_cliente: nombreContacto || 'Usuario POS',
-          id_venta: 'SOPORTE-' + Date.now().toString().slice(-4),
-          total_neto: 0,
-          detalles: [{ nombre_producto: 'Consulta de Soporte Técnico', cantidad: 1, precio_unitario: 0, subtotal: 0 }],
-          nombre_local: 'Mensaje de Soporte POS',
-          metodo_pago: `Mensaje: ${mensaje}`
-        })
+      await apiPost(`${API_URL}/api/facturas/enviar-correo`, {
+        correo_cliente: 'andrescuesta112@gmail.com',
+        nombre_cliente: nombreContacto || 'Usuario POS',
+        id_venta: 'SOPORTE-' + Date.now().toString().slice(-4),
+        total_neto: 0,
+        detalles: [{ nombre_producto: 'Consulta de Soporte Técnico', cantidad: 1, precio_unitario: 0, subtotal: 0 }],
+        nombre_local: 'Mensaje de Soporte POS',
+        metodo_pago: `Mensaje: ${mensaje}`
       });
       setEnviadoExito(true);
       setTimeout(() => {

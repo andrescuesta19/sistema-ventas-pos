@@ -1,13 +1,16 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "POS System Backend - Sistema Integral de Ventas",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "migrate": "node migrate.js",
+    "reset": "ALLOW_DB_RESET=yes-i-know-what-im-doing node scripts/reset-db.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Andrés Cuesta",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -15,8 +18,9 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
+    "jsonwebtoken": "^9.0.3",
     "nodemailer": "^9.0.3",
-    "pg": "^8.22.0",
-    "sqlite3": "^6.0.1"
+    "pg": "^8.22.0"
   }
 }
