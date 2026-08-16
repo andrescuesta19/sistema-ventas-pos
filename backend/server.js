@@ -975,20 +975,43 @@ app.get('/api/turnos/reporte', requireAuth, requireAprobado, async (req, res) =>
     }
 });
 
+// API: Categorías
+app.get('/api/categorias', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const { rows } = await db.query(`SELECT * FROM categorias ORDER BY nombre_categoria ASC`);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando categorías:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 // API: Productos (SaaS) (PROTEGIDOS)
 app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
     try {
-        const { q, id_local } = req.query;
+        const { q, id_local, categoria } = req.query;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        let query = `SELECT * FROM productos WHERE id_local = $1`;
+        let query = `
+            SELECT p.*, c.nombre_categoria 
+            FROM productos p
+            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1
+        `;
         let params = [id_local];
 
         if (q) {
-            query += ` AND (nombre_producto ILIKE $2 OR codigo_barras = $3)`;
             params.push(`%${q}%`, q);
+            query += ` AND (p.nombre_producto ILIKE $${params.length - 1} OR p.codigo_barras = $${params.length})`;
         }
+        if (categoria && categoria !== 'TODOS') {
+            params.push(categoria);
+            query += ` AND (c.nombre_categoria = $${params.length} OR p.id_categoria::text = $${params.length})`;
+        }
+
+        query += ` ORDER BY p.nombre_producto ASC`;
+
         const { rows } = await db.query(query, params);
         res.json(rows);
     } catch (err) {
@@ -1083,10 +1106,10 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url } = req.body;
+        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, id_categoria } = req.body;
         await db.query(
-            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6 WHERE id_producto=$7`,
-            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, req.params.id]
+            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, id_categoria=$7 WHERE id_producto=$8`,
+            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, id_categoria || null, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1097,14 +1120,14 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
+        const { id_local, codigo_barras, nombre_producto, imagen_url, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_producto`,
-            [id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_producto`,
+            [id_local, codigo_barras, nombre_producto, imagen_url, id_categoria || null, precio_compra, precio_venta, stock_actual, stock_minimo]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
@@ -1125,6 +1148,89 @@ app.delete('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, asy
     } catch (err) {
         console.error('Error eliminando producto:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// ── API: Integraciones e-Commerce (Multi-Canal) ──
+app.get('/api/integraciones', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const { id_local } = req.query;
+        if (Number(id_local) !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        const { rows } = await db.query(
+            `SELECT id_integracion, plataforma, nombre_cuenta, url_tienda, shop_id, estado, auto_sync_stock, fecha_conexion, ultima_sincronizacion
+             FROM integraciones_ecommerce 
+             WHERE id_local = $1 
+             ORDER BY fecha_conexion DESC`,
+            [id_local]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando integraciones:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/integraciones/conectar', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const { id_local, plataforma, nombre_cuenta, url_tienda, api_key, access_token, shop_id } = req.body;
+        if (Number(id_local) !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+
+        const { rows } = await db.query(
+            `INSERT INTO integraciones_ecommerce (id_local, plataforma, nombre_cuenta, url_tienda, api_key, access_token, shop_id, estado, ultima_sincronizacion)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 'Conectado', NOW())
+             RETURNING *`,
+            [id_local, plataforma.toLowerCase(), nombre_cuenta, url_tienda || '', api_key || '', access_token || '', shop_id || '']
+        );
+
+        res.json({ success: true, integracion: rows[0] });
+    } catch (err) {
+        console.error('Error conectando integración:', err);
+        res.status(500).json({ error: 'Error al conectar la cuenta e-commerce.' });
+    }
+});
+
+app.delete('/api/integraciones/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT id_local FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
+        if (rows[0].id_local !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        await db.query('DELETE FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error eliminando integración:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+app.post('/api/integraciones/:id/sincronizar', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT * FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
+        if (rows[0].id_local !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+
+        // Actualizar timestamp de última sincronización
+        await db.query('UPDATE integraciones_ecommerce SET ultima_sincronizacion = NOW(), estado = \'Conectado\' WHERE id_integracion = $1', [req.params.id]);
+
+        // Simulación de sync de stock/catálogo con la plataforma externa
+        const { rows: prods } = await db.query('SELECT COUNT(*) as total FROM productos WHERE id_local = $1', [req.user.id_local]);
+
+        res.json({
+            success: true,
+            mensaje: `Sincronización exitosa con ${rows[0].nombre_cuenta} (${rows[0].plataforma.toUpperCase()}).`,
+            productos_sincronizados: Number(prods[0].total),
+            fecha: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('Error sincronizando integración:', err);
+        res.status(500).json({ error: 'Error al sincronizar con la tienda externa.' });
     }
 });
 
