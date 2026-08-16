@@ -15,6 +15,8 @@ const POS = ({ user }) => {
   const [efectivoRecibido, setEfectivoRecibido] = useState('');
   const [ventaCompletada, setVentaCompletada] = useState(false);
   const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(0);
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('TODOS');
 
   const searchInputRef = useRef(null);
 
@@ -47,8 +49,18 @@ const POS = ({ user }) => {
   useEffect(() => {
     fetchTurno();
     fetchAllProductos();
+    fetchCategorias();
     searchInputRef.current?.focus();
   }, []);
+
+  const fetchCategorias = async () => {
+    try {
+      const data = await apiGet(`${API_URL}/api/categorias`);
+      setCategorias(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error cargando categorías:', err);
+    }
+  };
 
   // Búsqueda de clientes con debounce de 250ms
   useEffect(() => {
@@ -161,18 +173,31 @@ const POS = ({ user }) => {
     setProductos(data);
   };
 
+  const filtrarProductos = (q, cat, listaBase = todosProductos) => {
+    let filtrados = listaBase;
+    if (cat && cat !== 'TODOS') {
+      filtrados = filtrados.filter(p => p.nombre_categoria === cat || String(p.id_categoria) === String(cat));
+    }
+    if (q && q.trim()) {
+      const qLower = q.toLowerCase().trim();
+      filtrados = filtrados.filter(p =>
+        p.nombre_producto.toLowerCase().includes(qLower) || p.codigo_barras.toLowerCase().includes(qLower)
+      );
+    }
+    setProductos(filtrados);
+  };
+
   const handleSearchChange = (e) => {
     const q = e.target.value;
     setQuery(q);
-    if (!q) {
-      setProductos(todosProductos);
-    } else {
-      const qLower = q.toLowerCase();
-      setProductos(todosProductos.filter(p => 
-        p.nombre_producto.toLowerCase().includes(qLower) || p.codigo_barras.toLowerCase().includes(qLower)
-      ));
-    }
+    filtrarProductos(q, categoriaSeleccionada);
   };
+
+  const handleCategoriaChange = (cat) => {
+    setCategoriaSeleccionada(cat);
+    filtrarProductos(query, cat);
+  };
+
 
   const agregarAlCarrito = (producto) => {
     // Stock disponible = stock_actual - lo que ya está en el carrito
@@ -435,7 +460,8 @@ const POS = ({ user }) => {
       
       {/* Columna Izquierda: Buscador y Grilla de Productos */}
       <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div className="card" style={{ padding: '1rem' }}>
+        {/* Barra de Búsqueda y Selector de Categoría (Estilo Karrot POS) */}
+        <div className="card" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <div style={{ position: 'relative' }}>
             <Search size={20} style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-light)' }} />
             <input 
@@ -444,52 +470,126 @@ const POS = ({ user }) => {
               placeholder="Buscar producto por nombre o código de barras..." 
               value={query}
               onChange={handleSearchChange}
-              style={{ width: '100%', paddingLeft: '2.8rem', fontSize: '1.1rem', padding: '0.75rem 2.8rem' }}
+              style={{ width: '100%', paddingLeft: '2.8rem', fontSize: '1.05rem', padding: '0.75rem 2.8rem' }}
             />
           </div>
-        </div>
 
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="grid-3" style={{ paddingRight: '0.5rem', gap: '1rem' }}>
-            {productos.map(p => (
-              <div 
-                key={p.id_producto} 
-                className="card" 
-                style={{ 
-                  cursor: 'pointer', 
-                  transition: 'transform 0.15s, box-shadow 0.15s', 
-                  border: p.stock_actual <= 0 ? '1px solid #EF4444' : '1px solid #E2E8F0',
-                  opacity: p.stock_actual <= 0 ? 0.6 : 1,
-                  padding: '1rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justify: 'space-between'
+          {/* Categorías filtro pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.2rem' }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap', marginRight: '0.25rem' }}>Categorías:</span>
+            <button
+              type="button"
+              onClick={() => handleCategoriaChange('TODOS')}
+              style={{
+                padding: '0.35rem 0.85rem',
+                borderRadius: '20px',
+                border: categoriaSeleccionada === 'TODOS' ? '1px solid var(--primary-color)' : '1px solid #E2E8F0',
+                backgroundColor: categoriaSeleccionada === 'TODOS' ? 'rgba(42, 157, 143, 0.12)' : '#F8FAFC',
+                color: categoriaSeleccionada === 'TODOS' ? 'var(--primary-color)' : '#64748B',
+                fontWeight: categoriaSeleccionada === 'TODOS' ? 700 : 500,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              TODOS
+            </button>
+            {categorias.map(cat => (
+              <button
+                key={cat.id_categoria}
+                type="button"
+                onClick={() => handleCategoriaChange(cat.nombre_categoria)}
+                style={{
+                  padding: '0.35rem 0.85rem',
+                  borderRadius: '20px',
+                  border: categoriaSeleccionada === cat.nombre_categoria ? '1px solid var(--primary-color)' : '1px solid #E2E8F0',
+                  backgroundColor: categoriaSeleccionada === cat.nombre_categoria ? 'rgba(42, 157, 143, 0.12)' : '#F8FAFC',
+                  color: categoriaSeleccionada === cat.nombre_categoria ? 'var(--primary-color)' : '#64748B',
+                  fontWeight: categoriaSeleccionada === cat.nombre_categoria ? 700 : 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease'
                 }}
-                onClick={() => agregarAlCarrito(p)}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div style={{ height: '110px', backgroundColor: '#F8FAFC', borderRadius: '8px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  {p.imagen_url ? (
-                    <img src={p.imagen_url} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
-                  ) : (
-                    <span style={{ fontSize: '2rem' }}>📱</span>
-                  )}
-                </div>
-                <h4 style={{ marginBottom: '0.4rem', fontSize: '0.95rem', height: '38px', overflow: 'hidden' }}>{p.nombre_producto}</h4>
-                <div className="flex-between" style={{ alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#264653' }}>{formatearCOP(p.precio_venta)}</span>
-                    <span style={{ display: 'block', fontSize: '0.7rem', color: '#2A9D8F', fontWeight: 600 }}>IVA Incluido</span>
-                  </div>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '12px', backgroundColor: p.stock_actual > p.stock_minimo ? '#E6F4F1' : '#FEE2E2', color: p.stock_actual > p.stock_minimo ? '#2A9D8F' : '#EF4444' }}>
-                    Stock: {p.stock_actual}
-                  </span>
-                </div>
-              </div>
+                {cat.nombre_categoria}
+              </button>
             ))}
           </div>
         </div>
+
+        {/* Grilla de Productos */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {productos.length === 0 ? (
+            <div className="card" style={{ padding: '3rem 1rem', textAlign: 'center', color: '#94A3B8' }}>
+              <Package size={48} style={{ opacity: 0.3, margin: '0 auto 1rem auto' }} />
+              <p style={{ margin: 0, fontSize: '1rem', fontWeight: 500 }}>No se encontraron productos para esta categoría o búsqueda.</p>
+            </div>
+          ) : (
+            <div className="grid-3" style={{ paddingRight: '0.5rem', gap: '1rem' }}>
+              {productos.map(p => (
+                <div 
+                  key={p.id_producto} 
+                  className="card" 
+                  style={{ 
+                    cursor: 'pointer', 
+                    transition: 'transform 0.15s, box-shadow 0.15s', 
+                    border: p.stock_actual <= 0 ? '1px solid #EF4444' : '1px solid #E2E8F0',
+                    opacity: p.stock_actual <= 0 ? 0.6 : 1,
+                    padding: '0.9rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    position: 'relative'
+                  }}
+                  onClick={() => agregarAlCarrito(p)}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <div style={{ height: '115px', backgroundColor: '#F8FAFC', borderRadius: '8px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: '1px solid #F1F5F9' }}>
+                    {p.imagen_url ? (
+                      <img 
+                        src={p.imagen_url} 
+                        alt={p.nombre_producto} 
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.4rem' }}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          e.target.parentNode.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;color:#94A3B8;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg><span style="font-size:0.7rem;margin-top:0.2rem;">Sin Imagen</span></div>`;
+                        }}
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#94A3B8' }}>
+                        <Package size={36} strokeWidth={1.8} />
+                        <span style={{ fontSize: '0.7rem', marginTop: '0.2rem', color: '#94A3B8' }}>Sin Imagen</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {p.nombre_categoria && (
+                    <span style={{ fontSize: '0.7rem', color: '#2A9D8F', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.2rem' }}>
+                      {p.nombre_categoria}
+                    </span>
+                  )}
+                  
+                  <h4 style={{ marginBottom: '0.4rem', fontSize: '0.92rem', height: '36px', overflow: 'hidden', lineHeight: '1.2' }}>{p.nombre_producto}</h4>
+                  
+                  <div className="flex-between" style={{ alignItems: 'center', marginTop: '0.25rem' }}>
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#264653' }}>{formatearCOP(p.precio_venta)}</span>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: '#2A9D8F', fontWeight: 600 }}>IVA Incluido</span>
+                    </div>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '12px', backgroundColor: p.stock_actual > p.stock_minimo ? '#E6F4F1' : '#FEE2E2', color: p.stock_actual > p.stock_minimo ? '#2A9D8F' : '#EF4444' }}>
+                      Stock: {p.stock_actual}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* Columna Derecha: Carrito, Descuentos y Resumen */}
