@@ -193,9 +193,6 @@ const SuperAdmin = () => {
             </h1>
             <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.9rem', margin: '0.4rem 0 0' }}>
               Acceso restringido. Solo para el dueño de la plataforma.
-              <div style={{ fontSize: '0.78rem', color: 'rgba(126, 217, 87, 0.8)', marginTop: '0.5rem', fontFamily: 'monospace' }}>
-                super@posmaster.com / SuperPOS2024!Admin
-              </div>
             </p>
           </div>
 
