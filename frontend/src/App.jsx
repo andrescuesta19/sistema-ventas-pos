@@ -19,7 +19,7 @@ import {
   UserCircle2,
   Store,
   FileSpreadsheet,
-  Headset
+  Headphones
 } from 'lucide-react';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
@@ -181,7 +181,7 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
     { to: '/proveedores', icon: Building2, label: 'Proveedores' },
     { to: '/historial', icon: FileText, label: 'Reportes' },
     { to: '/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
-    { to: '/atencion-cliente', icon: Headset, label: 'Atención al Cliente' },
+    { to: '/atencion-cliente', icon: Headphones, label: 'Atención al Cliente' },
     { to: '/facturas', icon: Receipt, label: 'Facturas DIAN' },
     { to: '/nomina', icon: UserCircle2, label: 'Nómina' },
     { to: '/caja', icon: Wallet, label: 'Caja y Bancos' },
