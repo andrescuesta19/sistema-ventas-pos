@@ -4,7 +4,7 @@ import { apiGet, apiPut } from '../api';
 import {
   Settings, User, Store, Save, AlertCircle, CheckCircle2,
   Eye, EyeOff, Lock, Phone, MapPin, Hash, Mail, Building2,
-  UserCog, Camera, X as XIcon
+  UserCog, Camera, X as XIcon, FileCheck2, Upload, ShieldCheck
 } from 'lucide-react';
 
 const Configuracion = ({ user }) => {
@@ -30,10 +30,74 @@ const Configuracion = ({ user }) => {
   // Versión de la app (dinámica, viene del backend)
   const [appVersion, setAppVersion] = useState('…');
 
+  // Facturación DIAN — v1.9.1
+  const [dianForm, setDianForm] = useState({
+    nit: '', razon_social: '', direccion: '', ciudad: '', departamento: '',
+    telefono: '', correo: '', resolucion_numero: '', resolucion_fecha: '',
+    resolucion_desde: '', resolucion_hasta: '', prefijo: 'FE',
+    certificado_password: '', certificado_path: '', habilitado: false
+  });
+  const [dianMsg, setDianMsg] = useState(null);
+
   useEffect(() => {
     cargarDatos();
     cargarVersion();
+    cargarDian();
   }, []);
+
+  const cargarDian = async () => {
+    try {
+      const d = await apiGet(`${API_URL}/api/dian/configuracion`);
+      if (d && Object.keys(d).length) {
+        setDianForm({
+          nit: d.nit || '', razon_social: d.razon_social || '', direccion: d.direccion || '',
+          ciudad: d.ciudad || '', departamento: d.departamento || '', telefono: d.telefono || '',
+          correo: d.correo || '', resolucion_numero: d.resolucion_numero || '',
+          resolucion_fecha: d.resolucion_fecha ? d.resolucion_fecha.slice(0, 10) : '',
+          resolucion_desde: d.resolucion_desde || '', resolucion_hasta: d.resolucion_hasta || '',
+          prefijo: d.prefijo || 'FE', certificado_password: '', certificado_path: d.certificado_path || '',
+          habilitado: !!d.habilitado
+        });
+      }
+    } catch (err) { console.error('Error cargando DIAN:', err); }
+  };
+
+  const guardarDian = async () => {
+    setDianMsg(null);
+    try {
+      const body = { ...dianForm };
+      if (!body.certificado_password) delete body.certificado_password;
+      await apiPut(`${API_URL}/api/dian/configuracion`, body);
+      setDianMsg({ ok: true, text: 'Configuración DIAN guardada correctamente.' });
+    } catch (err) {
+      setDianMsg({ ok: false, text: err.message || 'Error guardando configuración DIAN.' });
+    }
+  };
+
+  const subirCertificado = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDianMsg(null);
+    try {
+      const token = localStorage.getItem('pos_token') || sessionStorage.getItem('pos_token');
+      const fd = new FormData();
+      fd.append('certificado', file);
+      const res = await fetch(`${API_URL}/api/dian/certificado`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: fd
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDianMsg({ ok: true, text: 'Certificado subido correctamente.' });
+        setDianForm({ ...dianForm, certificado_path: 'subido' });
+      } else {
+        setDianMsg({ ok: false, text: data.error || 'Error subiendo certificado.' });
+      }
+    } catch {
+      setDianMsg({ ok: false, text: 'Error de conexión al subir el certificado.' });
+    }
+  };
 
   const cargarVersion = async () => {
     try {
@@ -206,6 +270,7 @@ const Configuracion = ({ user }) => {
         <button style={tabStyle(tab === 'mi-cuenta')} onClick={() => setTab('mi-cuenta')}><User size={15} /> Mi Cuenta</button>
         <button style={tabStyle(tab === 'mi-local')} onClick={() => setTab('mi-local')}><Store size={15} /> Mi Local</button>
         <button style={tabStyle(tab === 'sistema')} onClick={() => setTab('sistema')}><Settings size={15} /> Sistema</button>
+        <button style={tabStyle(tab === 'dian')} onClick={() => setTab('dian')}><FileCheck2 size={15} /> Facturación DIAN</button>
       </div>
 
       {/* MI CUENTA */}
@@ -367,6 +432,147 @@ const Configuracion = ({ user }) => {
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-app)', borderRadius: 8 }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Desarrollado por</span>
               <strong style={{ fontSize: '0.88rem' }}>Andrés Cuesta</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FACTURACIÓN ELECTRÓNICA DIAN — v1.9.1 */}
+      {tab === 'dian' && (
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+            <FileCheck2 size={20} color="var(--green-primary)" />
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Facturación Electrónica DIAN</h2>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 1.25rem', lineHeight: 1.6 }}>
+            Configura tu empresa como facturador electrónico. El sistema genera el XML UBL 2.1, lo firma con tu
+            certificado digital y lo deja listo para enviar a la DIAN.
+          </p>
+
+          {dianMsg && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', borderRadius: 8, marginBottom: '1rem', fontSize: '0.88rem', background: dianMsg.ok ? 'rgba(45, 212, 109, 0.1)' : 'rgba(239, 68, 68, 0.1)', border: '1px solid ' + (dianMsg.ok ? 'rgba(45, 212, 109, 0.3)' : 'rgba(239, 68, 68, 0.3)'), color: dianMsg.ok ? 'var(--green-primary)' : '#dc2626' }}>
+              {dianMsg.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              {dianMsg.text}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gap: '1.5rem' }}>
+            {/* Datos del facturador */}
+            <div>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.85rem', color: 'var(--text-primary)' }}>1. Datos del facturador</h3>
+              <div style={{ display: 'grid', gap: '0.85rem' }}>
+                <div className="grid-2">
+                  <div>
+                    <label>NIT *</label>
+                    <input value={dianForm.nit} onChange={e => setDianForm({ ...dianForm, nit: e.target.value })} placeholder="900000000" />
+                  </div>
+                  <div>
+                    <label>Razón social *</label>
+                    <input value={dianForm.razon_social} onChange={e => setDianForm({ ...dianForm, razon_social: e.target.value })} placeholder="Mi Empresa SAS" />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div>
+                    <label>Dirección</label>
+                    <input value={dianForm.direccion} onChange={e => setDianForm({ ...dianForm, direccion: e.target.value })} />
+                  </div>
+                  <div className="grid-2">
+                    <div>
+                      <label>Ciudad</label>
+                      <input value={dianForm.ciudad} onChange={e => setDianForm({ ...dianForm, ciudad: e.target.value })} />
+                    </div>
+                    <div>
+                      <label>Depto.</label>
+                      <input value={dianForm.departamento} onChange={e => setDianForm({ ...dianForm, departamento: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div>
+                    <label>Teléfono</label>
+                    <input value={dianForm.telefono} onChange={e => setDianForm({ ...dianForm, telefono: e.target.value })} />
+                  </div>
+                  <div>
+                    <label>Correo</label>
+                    <input type="email" value={dianForm.correo} onChange={e => setDianForm({ ...dianForm, correo: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Resolución */}
+            <div>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.85rem', color: 'var(--text-primary)' }}>2. Resolución de numeración</h3>
+              <div style={{ display: 'grid', gap: '0.85rem' }}>
+                <div className="grid-2">
+                  <div>
+                    <label>Número de resolución</label>
+                    <input value={dianForm.resolucion_numero} onChange={e => setDianForm({ ...dianForm, resolucion_numero: e.target.value })} placeholder="18764000000001" />
+                  </div>
+                  <div>
+                    <label>Fecha de resolución</label>
+                    <input type="date" value={dianForm.resolucion_fecha} onChange={e => setDianForm({ ...dianForm, resolucion_fecha: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div>
+                    <label>Rango desde</label>
+                    <input value={dianForm.resolucion_desde} onChange={e => setDianForm({ ...dianForm, resolucion_desde: e.target.value })} placeholder="1" />
+                  </div>
+                  <div>
+                    <label>Rango hasta</label>
+                    <input value={dianForm.resolucion_hasta} onChange={e => setDianForm({ ...dianForm, resolucion_hasta: e.target.value })} placeholder="1000000" />
+                  </div>
+                </div>
+                <div>
+                  <label>Prefijo (ej: FE)</label>
+                  <input value={dianForm.prefijo} onChange={e => setDianForm({ ...dianForm, prefijo: e.target.value })} placeholder="FE" style={{ maxWidth: 120 }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Certificado digital */}
+            <div>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.85rem', color: 'var(--text-primary)' }}>3. Certificado digital (.p12)</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', margin: '0 0 0.85rem', lineHeight: 1.5 }}>
+                El certificado de firma electrónica lo emiten entidades autorizadas (GSE, Certicámara, Thomas Greg & Sons).
+                Debes estar habilitado como facturador electrónico ante la DIAN para obtenerlo.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label>Contraseña del certificado</label>
+                  <input type="password" value={dianForm.certificado_password} onChange={e => setDianForm({ ...dianForm, certificado_password: e.target.value })} placeholder="Contraseña del .p12" />
+                </div>
+                <div>
+                  <label>Archivo .p12</label>
+                  <input type="file" accept=".p12,.pfx" onChange={subirCertificado} style={{ fontSize: '0.85rem' }} />
+                </div>
+              </div>
+              {dianForm.certificado_path && (
+                <p style={{ fontSize: '0.82rem', color: 'var(--green-primary)', margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <ShieldCheck size={14} /> Certificado subido correctamente.
+                </p>
+              )}
+            </div>
+
+            {/* Habilitar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.85rem 1rem', background: 'var(--bg-app)', borderRadius: 8 }}>
+              <input
+                type="checkbox"
+                checked={dianForm.habilitado}
+                onChange={e => setDianForm({ ...dianForm, habilitado: e.target.checked })}
+                style={{ width: 18, height: 18 }}
+              />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Habilitar facturación electrónica</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Al activarlo, las ventas podrán emitirse como factura electrónica DIAN.</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={guardarDian} className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Save size={15} /> Guardar configuración
+              </button>
             </div>
           </div>
         </div>

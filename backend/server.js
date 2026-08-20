@@ -10,6 +10,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const db = require('./db');
+const dian = require('./dian'); // v1.9.1: facturación electrónica DIAN
 
 const app = express();
 
@@ -1545,6 +1546,186 @@ app.post('/api/facturas/enviar-correo', requireAuth, requireAprobado, async (req
     } catch (err) {
         console.error('Error enviando correo:', err);
         res.status(500).json({ error: 'No se pudo enviar el correo.' });
+    }
+});
+
+// =======================================================
+// FACTURACIÓN ELECTRÓNICA DIAN (v1.9.1)
+// =======================================================
+(async () => {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS configuracion_dian (
+                id_local INTEGER PRIMARY KEY REFERENCES locales(id_local) ON DELETE CASCADE,
+                nit VARCHAR(20),
+                razon_social VARCHAR(200),
+                direccion VARCHAR(200),
+                ciudad VARCHAR(100),
+                departamento VARCHAR(100),
+                telefono VARCHAR(50),
+                correo VARCHAR(150),
+                resolucion_numero VARCHAR(30),
+                resolucion_fecha DATE,
+                resolucion_desde VARCHAR(20),
+                resolucion_hasta VARCHAR(20),
+                prefijo VARCHAR(10) DEFAULT 'FE',
+                consecutivo INTEGER DEFAULT 1,
+                certificado_path TEXT,
+                certificado_password TEXT,
+                habilitado BOOLEAN DEFAULT false,
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        console.error('Error creando tabla configuracion_dian:', e.message);
+    }
+})();
+
+// GET /api/dian/configuracion — configuración del facturador
+app.get('/api/dian/configuracion', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { rows } = await db.query('SELECT * FROM configuracion_dian WHERE id_local = $1', [idLocal]);
+        const cfg = rows[0] || {};
+        // No exponer la contraseña del certificado
+        if (cfg.certificado_password) cfg.certificado_password = '';
+        res.json(cfg);
+    } catch (err) {
+        console.error('Error leyendo configuración DIAN:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// PUT /api/dian/configuracion — guardar configuración del facturador
+app.put('/api/dian/configuracion', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { nit, razon_social, direccion, ciudad, departamento, telefono, correo,
+                resolucion_numero, resolucion_fecha, resolucion_desde, resolucion_hasta,
+                prefijo, certificado_password, habilitado } = req.body;
+        await db.query(`
+            INSERT INTO configuracion_dian (id_local, nit, razon_social, direccion, ciudad, departamento,
+                telefono, correo, resolucion_numero, resolucion_fecha, resolucion_desde, resolucion_hasta,
+                prefijo, certificado_password, habilitado, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11,$12,$13,$14,$15,NOW())
+            ON CONFLICT (id_local) DO UPDATE SET
+                nit=$2, razon_social=$3, direccion=$4, ciudad=$5, departamento=$6,
+                telefono=$7, correo=$8, resolucion_numero=$9, resolucion_fecha=$10::date,
+                resolucion_desde=$11, resolucion_hasta=$12, prefijo=$13,
+                certificado_password=COALESCE($14, certificado_password),
+                habilitado=$15, updated_at=NOW()
+        `, [idLocal, nit?.trim() || null, razon_social?.trim() || null, direccion?.trim() || null,
+             ciudad?.trim() || null, departamento?.trim() || null, telefono?.trim() || null,
+             correo?.trim() || null, resolucion_numero?.trim() || null, resolucion_fecha || null,
+             resolucion_desde?.trim() || null, resolucion_hasta?.trim() || null,
+             prefijo?.trim() || 'FE', certificado_password || null, !!habilitado]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error guardando configuración DIAN:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/dian/certificado — subir certificado digital .p12
+app.post('/api/dian/certificado', requireAuth, requireAprobado, requireAdmin, multer({ storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, 'certificados');
+        fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => cb(null, `local_${req.user.id_local}.p12`)
+}), limits: { fileSize: 5 * 1024 * 1024 } }).single('certificado'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Se requiere el archivo del certificado.' });
+        const idLocal = Number(req.user.id_local);
+        await db.query(
+            `UPDATE configuracion_dian SET certificado_path = $1, updated_at = NOW() WHERE id_local = $2`,
+            [req.file.path, idLocal]
+        );
+        res.json({ success: true, mensaje: 'Certificado subido correctamente.' });
+    } catch (err) {
+        console.error('Error subiendo certificado:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/dian/emitir/:idVenta — generar XML, firmar y marcar como enviada
+app.post('/api/dian/emitir/:idVenta', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idVenta = Number(req.params.idVenta);
+
+        const cfgR = await db.query('SELECT * FROM configuracion_dian WHERE id_local = $1', [idLocal]);
+        const cfg = cfgR.rows[0];
+        if (!cfg || !cfg.habilitado) {
+            return res.status(400).json({ error: 'Primero configura y habilita la facturación electrónica en Configuración > Facturación DIAN.' });
+        }
+        if (!cfg.certificado_path || !fs.existsSync(cfg.certificado_path)) {
+            return res.status(400).json({ error: 'No hay certificado digital subido. Sube tu certificado .p12.' });
+        }
+
+        const ventaR = await db.query(
+            `SELECT v.*, c.nombre_razon_social, c.documento_identidad, c.correo AS cliente_correo
+             FROM ventas v LEFT JOIN clientes c ON v.id_cliente = c.id_cliente
+             WHERE v.id_venta = $1 AND v.id_local = $2`,
+            [idVenta, idLocal]
+        );
+        if (ventaR.rows.length === 0) return res.status(404).json({ error: 'Venta no encontrada.' });
+        const venta = ventaR.rows[0];
+
+        const itemsR = await db.query(
+            `SELECT dv.*, p.nombre_producto, p.codigo_producto
+             FROM detalle_ventas dv LEFT JOIN productos p ON dv.id_producto = p.id_producto
+             WHERE dv.id_venta = $1`,
+            [idVenta]
+        );
+
+        // Consecutivo de la resolución
+        const consecutivo = `${cfg.prefijo || 'FE'}-${String(cfg.consecutivo || 1).padStart(6, '0')}`;
+        await db.query('UPDATE configuracion_dian SET consecutivo = consecutivo + 1 WHERE id_local = $1', [idLocal]);
+
+        // CUFE (Código Único de Facturación Electrónica) — hash SHA-384
+        const cufeData = `${cfg.nit}|${venta.fecha_venta.toISOString().slice(0,10)}|${consecutivo}|${venta.total_neto}|${venta.impuestos}|${venta.subtotal}`;
+        const cufe = crypto.createHash('sha384').update(cufeData).digest('hex').toUpperCase();
+
+        const xml = dian.generarXMLFactura({
+            config: cfg,
+            venta: { ...venta, cufe },
+            cliente: { nombre_razon_social: venta.nombre_razon_social, documento_identidad: venta.documento_identidad },
+            items: itemsR.rows,
+            consecutivo
+        });
+
+        // Firmar con el certificado
+        let xmlFirmado;
+        try {
+            xmlFirmado = dian.firmarXML(xml, cfg.certificado_path, cfg.certificado_password);
+        } catch (e) {
+            return res.status(400).json({ error: 'No se pudo firmar el XML: ' + e.message });
+        }
+
+        // Guardar el XML firmado
+        const dir = path.join(__dirname, 'facturas_xml');
+        fs.mkdirSync(dir, { recursive: true });
+        const archivoXml = path.join(dir, `FE-${idVenta}.xml`);
+        fs.writeFileSync(archivoXml, xmlFirmado);
+
+        // Actualizar estado de la venta
+        await db.query(
+            `UPDATE ventas SET estado_factura = 'DIAN_Enviado', cufe = $1 WHERE id_venta = $2`,
+            [cufe, idVenta]
+        );
+
+        res.json({
+            success: true,
+            mensaje: 'Factura electrónica generada y firmada. XML guardado.',
+            consecutivo,
+            cufe,
+            xml_path: archivoXml
+        });
+    } catch (err) {
+        console.error('Error emitiendo factura electrónica:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
