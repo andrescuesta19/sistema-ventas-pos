@@ -2403,18 +2403,20 @@ app.get('/api/empleados', requireAuth, requireAprobado, async (req, res) => {
 app.post('/api/empleados', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
         const idLocal = Number(req.user.id_local);
-        const { nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, notas } = req.body;
+        const { nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, notas, banco, tipo_cuenta, cuenta_bancaria, periodicidad_pago } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ error: 'El nombre del empleado es obligatorio.' });
         }
         const r = await db.query(
-            `INSERT INTO empleados (id_local, nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, notas)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::date, CURRENT_DATE), $11)
+            `INSERT INTO empleados (id_local, nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, notas, banco, tipo_cuenta, cuenta_bancaria, periodicidad_pago)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::date, CURRENT_DATE), $11, $12, $13, $14, $15)
              RETURNING *`,
             [idLocal, nombre.trim(), documento_identidad?.trim() || null, telefono?.trim() || null,
              correo?.trim() || null, direccion?.trim() || null, cargo?.trim() || null,
              parseFloat(salario_base) || 0, tipo_contrato?.trim() || 'Indefinido',
-             fecha_ingreso || null, notas?.trim() || null]
+             fecha_ingreso || null, notas?.trim() || null,
+             banco?.trim() || null, tipo_cuenta?.trim() || 'Ahorros',
+             cuenta_bancaria?.trim() || null, periodicidad_pago?.trim() || 'Mensual']
         );
         res.json({ success: true, empleado: r.rows[0] });
     } catch (err) {
@@ -2427,7 +2429,7 @@ app.put('/api/empleados/:id', requireAuth, requireAprobado, requireAdmin, async 
     try {
         const idLocal = Number(req.user.id_local);
         const idEmp = Number(req.params.id);
-        const { nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, fecha_salida, estado, notas } = req.body;
+        const { nombre, documento_identidad, telefono, correo, direccion, cargo, salario_base, tipo_contrato, fecha_ingreso, fecha_salida, estado, notas, banco, tipo_cuenta, cuenta_bancaria, periodicidad_pago } = req.body;
         const r = await db.query(
             `UPDATE empleados SET
                 nombre = COALESCE($1, nombre),
@@ -2438,13 +2440,15 @@ app.put('/api/empleados/:id', requireAuth, requireAprobado, requireAdmin, async 
                 fecha_salida = $10::date,
                 estado = COALESCE($11, estado),
                 notas = $12,
+                banco = $13, tipo_cuenta = $14, cuenta_bancaria = $15, periodicidad_pago = $16,
                 updated_at = NOW()
-             WHERE id_empleado = $13 AND id_local = $14
+             WHERE id_empleado = $17 AND id_local = $18
              RETURNING *`,
             [nombre?.trim() || null, documento_identidad?.trim() || null, telefono?.trim() || null,
              correo?.trim() || null, direccion?.trim() || null, cargo?.trim() || null,
              parseFloat(salario_base) || null, tipo_contrato?.trim() || null,
              fecha_ingreso || null, fecha_salida || null, estado, notas?.trim() || null,
+             banco?.trim() || null, tipo_cuenta?.trim() || null, cuenta_bancaria?.trim() || null, periodicidad_pago?.trim() || null,
              idEmp, idLocal]
         );
         if (r.rows.length === 0) return res.status(404).json({ error: 'Empleado no encontrado.' });
@@ -2463,6 +2467,116 @@ app.delete('/api/empleados/:id', requireAuth, requireAprobado, requireAdmin, asy
         res.json({ success: true });
     } catch (err) {
         console.error('Error eliminando empleado:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =======================================================
+// NÓMINA — PAGOS (v1.9.0)
+// =======================================================
+
+// GET /api/nomina/configuracion — cuenta bancaria del negocio
+app.get('/api/nomina/configuracion', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { rows } = await db.query('SELECT * FROM configuracion_pago WHERE id_local = $1', [idLocal]);
+        res.json(rows[0] || {});
+    } catch (err) {
+        console.error('Error leyendo configuración de pago:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// PUT /api/nomina/configuracion — guardar cuenta bancaria del negocio
+app.put('/api/nomina/configuracion', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { banco, tipo_cuenta, numero_cuenta, titular } = req.body;
+        await db.query(`
+            INSERT INTO configuracion_pago (id_local, banco, tipo_cuenta, numero_cuenta, titular, updated_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            ON CONFLICT (id_local)
+            DO UPDATE SET banco=$2, tipo_cuenta=$3, numero_cuenta=$4, titular=$5, updated_at=NOW()
+        `, [idLocal, banco?.trim() || null, tipo_cuenta?.trim() || 'Ahorros', numero_cuenta?.trim() || null, titular?.trim() || null]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error guardando configuración de pago:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// GET /api/nomina/pagos?periodo= — listar pagos de nómina
+app.get('/api/nomina/pagos', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { periodo } = req.query;
+        const params = [idLocal];
+        let sql = `SELECT p.*, e.nombre AS empleado_nombre, e.banco, e.tipo_cuenta, e.cuenta_bancaria
+                   FROM pagos_nomina p
+                   LEFT JOIN empleados e ON p.id_empleado = e.id_empleado
+                   WHERE p.id_local = $1`;
+        if (periodo) { params.push(periodo); sql += ` AND p.periodo = $${params.length}`; }
+        sql += ' ORDER BY p.created_at DESC';
+        const { rows } = await db.query(sql, params);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando pagos de nómina:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/nomina/pagos — registrar pago de nómina (uno o varios empleados)
+app.post('/api/nomina/pagos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { periodo, empleados, metodo_pago, notas } = req.body;
+        if (!periodo || !Array.isArray(empleados) || empleados.length === 0) {
+            return res.status(400).json({ error: 'Se requiere periodo y al menos un empleado.' });
+        }
+        const creados = [];
+        for (const emp of empleados) {
+            const r = await db.query(
+                `INSERT INTO pagos_nomina (id_local, id_empleado, periodo, monto, metodo_pago, estado, notas)
+                 VALUES ($1, $2, $3, $4, $5, 'Pendiente', $6) RETURNING *`,
+                [idLocal, emp.id_empleado, periodo, parseFloat(emp.monto) || 0, metodo_pago || 'Transferencia', notas?.trim() || null]
+            );
+            creados.push(r.rows[0]);
+        }
+        res.json({ success: true, pagos: creados });
+    } catch (err) {
+        console.error('Error creando pagos de nómina:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// PUT /api/nomina/pagos/:id — marcar pago como Pagado / Pendiente
+app.put('/api/nomina/pagos/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idPago = Number(req.params.id);
+        const { estado, fecha_pago } = req.body;
+        const r = await db.query(
+            `UPDATE pagos_nomina SET estado = COALESCE($1, estado), fecha_pago = COALESCE($2::timestamp, fecha_pago)
+             WHERE id_pago = $3 AND id_local = $4 RETURNING *`,
+            [estado || null, fecha_pago || null, idPago, idLocal]
+        );
+        if (r.rows.length === 0) return res.status(404).json({ error: 'Pago no encontrado.' });
+        res.json({ success: true, pago: r.rows[0] });
+    } catch (err) {
+        console.error('Error actualizando pago de nómina:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/nomina/pagos/:id — eliminar pago
+app.delete('/api/nomina/pagos/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idPago = Number(req.params.id);
+        await db.query('DELETE FROM pagos_nomina WHERE id_pago = $1 AND id_local = $2', [idPago, idLocal]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error eliminando pago de nómina:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
