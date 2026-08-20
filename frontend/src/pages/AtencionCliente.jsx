@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { API_URL } from '../config';
-import { Headset, Send, Mail, Phone, Clock, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
+import { Headphones, Send, Mail, Phone, Clock, CheckCircle2, AlertCircle, MessageSquare } from 'lucide-react';
 
 const AtencionCliente = ({ user }) => {
   const token = localStorage.getItem('pos_token') || sessionStorage.getItem('pos_token');
@@ -35,7 +35,7 @@ const AtencionCliente = ({ user }) => {
   return (
     <div style={{ padding: '2rem', maxWidth: 900, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <Headset size={26} color="var(--green-primary)" />
+        <Headphones size={26} color="var(--green-primary)" />
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Atención al Cliente</h1>
           <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0', fontSize: '0.9rem' }}>
