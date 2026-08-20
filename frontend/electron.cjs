@@ -508,6 +508,12 @@ async function installUpdateManually() {
   await execFileAsync('osascript', ['-e', appleScript]);
 
   console.log('🚀 Relanzando la app...');
+  // app.exit(0) NO dispara before-quit, así que el backend hijo quedaría vivo
+  // ocupando el puerto 3000. Lo matamos explícitamente antes de relanzar.
+  if (backendProcess) {
+    try { backendProcess.kill('SIGKILL'); } catch {}
+    backendProcess = null;
+  }
   app.relaunch();
   app.exit(0);
 }
