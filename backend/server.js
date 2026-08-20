@@ -5,10 +5,37 @@ const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const crypto = require('crypto'); // v1.5.4: para generarCodigo() criptográficamente seguro
+const crypto = require('crypto'); // v1.5.4: para generarCodigo() criptografico
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const db = require('./db');
 
 const app = express();
+
+// === Servir imágenes de productos ===
+const uploadsDir = path.join(__dirname, 'uploads', 'productos');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// === Configuración de multer para imágenes ===
+const storageProductos = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadsDir),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `producto_${req.params.id}_${Date.now()}${ext}`);
+    }
+});
+const uploadProducto = multer({
+    storage: storageProductos,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) cb(null, true);
+        else cb(new Error('Solo se permiten imágenes JPG, PNG o WebP.'));
+    }
+});
 
 // === A3-fix: CORS con whitelist ===
 // Solo permitimos orígenes conocidos. En producción el frontend siempre
@@ -47,14 +74,22 @@ const loginLimiter = rateLimit({
 });
 
 // === A2-fix: JWT ===
-const JWT_SECRET = process.env.JWT_SECRET || (() => {
-    // Generar uno nuevo si no existe (solo en primer arranque)
-    const crypto = require('crypto');
+// v1.5.6: JWT_SECRET es OBLIGATORIO en producción.
+// Antes había un fallback que generaba un secreto aleatorio por sesión: en prod eso
+// invalidaba todos los tokens al reiniciar y enmascaraba una mala configuración.
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ JWT_SECRET no está configurado. Abortando en producción.');
+        console.error('   Genera uno con: openssl rand -hex 64');
+        process.exit(1);
+    }
+    // Solo en desarrollo: generar uno aleatorio para esta sesión.
     const secret = crypto.randomBytes(64).toString('hex');
-    console.warn('⚠️  JWT_SECRET no está configurado. Usando uno aleatorio para esta sesión.');
+    console.warn('⚠️  JWT_SECRET no está configurado. Usando uno aleatorio para esta sesión (solo dev).');
     console.warn('   Los tokens se invalidarán al reiniciar. Configura JWT_SECRET en .env para producción.');
-    return secret;
-})();
+    JWT_SECRET = secret;
+}
 const JWT_EXPIRES_IN = '8h'; // turno de trabajo + margen
 
 function signToken(payload) {
@@ -114,6 +149,29 @@ function requireAdmin(req, res, next) {
         return res.status(403).json({ error: 'Se requiere rol de Administrador.' });
     }
     next();
+}
+
+// === v1.5.6: Error de negocio controlado ===
+// Permite distinguir errores "operacionales" (mensajes seguros de mostrar al usuario)
+// de errores internos (que deben quedar en logs y devolver mensaje genérico).
+class AppError extends Error {
+    constructor(message, status = 400) {
+        super(message);
+        this.status = status;
+        this.isOperational = true;
+    }
+}
+
+// === v1.5.6: Escape HTML para interpolaciones en emails ===
+// Evita XSS por HTML injection cuando un dato del usuario (nombre, producto, etc.)
+// se inserta dentro del cuerpo HTML de un correo.
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // =====================================================
@@ -596,7 +654,7 @@ app.post('/api/auth/reenviar-codigo', registroLimiter, async (req, res) => {
                     subject: 'Nuevo código de verificación - Sistema de Ventas POS',
                     html: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
-                            <h2 style="color:#264653;">Hola ${u.nombre},</h2>
+                            <h2 style="color:#264653;">Hola ${escapeHtml(u.nombre)},</h2>
                             <p>Tu nuevo código de verificación es:</p>
                             <div style="background:#264653;color:white;font-size:2rem;letter-spacing:0.5rem;padding:1.5rem;text-align:center;border-radius:8px;margin:1.5rem 0;font-weight:700;">
                                 ${codigo}
@@ -655,7 +713,7 @@ app.post('/api/auth/solicitar-reset-password', rateLimit({
                     subject: 'Recuperación de contraseña - Sistema de Ventas POS',
                     html: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
-                            <h2 style="color:#264653;">Hola ${u.nombre},</h2>
+                            <h2 style="color:#264653;">Hola ${escapeHtml(u.nombre)},</h2>
                             <p>Recibimos una solicitud para restablecer tu contraseña. Tu código de verificación es:</p>
                             <div style="background:#264653;color:white;font-size:2rem;letter-spacing:0.5rem;padding:1.5rem;text-align:center;border-radius:8px;margin:1.5rem 0;font-weight:700;">
                                 ${codigo}
@@ -975,43 +1033,20 @@ app.get('/api/turnos/reporte', requireAuth, requireAprobado, async (req, res) =>
     }
 });
 
-// API: Categorías
-app.get('/api/categorias', requireAuth, requireAprobado, async (req, res) => {
-    try {
-        const { rows } = await db.query(`SELECT * FROM categorias ORDER BY nombre_categoria ASC`);
-        res.json(rows);
-    } catch (err) {
-        console.error('Error listando categorías:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
 // API: Productos (SaaS) (PROTEGIDOS)
 app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
     try {
-        const { q, id_local, categoria } = req.query;
+        const { q, id_local } = req.query;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        let query = `
-            SELECT p.*, c.nombre_categoria 
-            FROM productos p
-            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1
-        `;
+        let query = `SELECT * FROM productos WHERE id_local = $1`;
         let params = [id_local];
 
         if (q) {
+            query += ` AND (nombre_producto ILIKE $2 OR codigo_barras = $3)`;
             params.push(`%${q}%`, q);
-            query += ` AND (p.nombre_producto ILIKE $${params.length - 1} OR p.codigo_barras = $${params.length})`;
         }
-        if (categoria && categoria !== 'TODOS') {
-            params.push(categoria);
-            query += ` AND (c.nombre_categoria = $${params.length} OR p.id_categoria::text = $${params.length})`;
-        }
-
-        query += ` ORDER BY p.nombre_producto ASC`;
-
         const { rows } = await db.query(query, params);
         res.json(rows);
     } catch (err) {
@@ -1106,10 +1141,10 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, id_categoria } = req.body;
+        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url } = req.body;
         await db.query(
-            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, id_categoria=$7 WHERE id_producto=$8`,
-            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, id_categoria || null, req.params.id]
+            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6 WHERE id_producto=$7`,
+            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1120,14 +1155,14 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, imagen_url, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
+        const { id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_producto`,
-            [id_local, codigo_barras, nombre_producto, imagen_url, id_categoria || null, precio_compra, precio_venta, stock_actual, stock_minimo]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_producto`,
+            [id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
@@ -1148,89 +1183,6 @@ app.delete('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, asy
     } catch (err) {
         console.error('Error eliminando producto:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
-// ── API: Integraciones e-Commerce (Multi-Canal) ──
-app.get('/api/integraciones', requireAuth, requireAprobado, async (req, res) => {
-    try {
-        const { id_local } = req.query;
-        if (Number(id_local) !== req.user.id_local) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-        const { rows } = await db.query(
-            `SELECT id_integracion, plataforma, nombre_cuenta, url_tienda, shop_id, estado, auto_sync_stock, fecha_conexion, ultima_sincronizacion
-             FROM integraciones_ecommerce 
-             WHERE id_local = $1 
-             ORDER BY fecha_conexion DESC`,
-            [id_local]
-        );
-        res.json(rows);
-    } catch (err) {
-        console.error('Error listando integraciones:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
-app.post('/api/integraciones/conectar', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
-    try {
-        const { id_local, plataforma, nombre_cuenta, url_tienda, api_key, access_token, shop_id } = req.body;
-        if (Number(id_local) !== req.user.id_local) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-
-        const { rows } = await db.query(
-            `INSERT INTO integraciones_ecommerce (id_local, plataforma, nombre_cuenta, url_tienda, api_key, access_token, shop_id, estado, ultima_sincronizacion)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'Conectado', NOW())
-             RETURNING *`,
-            [id_local, plataforma.toLowerCase(), nombre_cuenta, url_tienda || '', api_key || '', access_token || '', shop_id || '']
-        );
-
-        res.json({ success: true, integracion: rows[0] });
-    } catch (err) {
-        console.error('Error conectando integración:', err);
-        res.status(500).json({ error: 'Error al conectar la cuenta e-commerce.' });
-    }
-});
-
-app.delete('/api/integraciones/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
-    try {
-        const { rows } = await db.query('SELECT id_local FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
-        if (rows[0].id_local !== req.user.id_local) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-        await db.query('DELETE FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
-        res.json({ success: true });
-    } catch (err) {
-        console.error('Error eliminando integración:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
-    }
-});
-
-app.post('/api/integraciones/:id/sincronizar', requireAuth, requireAprobado, async (req, res) => {
-    try {
-        const { rows } = await db.query('SELECT * FROM integraciones_ecommerce WHERE id_integracion = $1', [req.params.id]);
-        if (rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
-        if (rows[0].id_local !== req.user.id_local) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-
-        // Actualizar timestamp de última sincronización
-        await db.query('UPDATE integraciones_ecommerce SET ultima_sincronizacion = NOW(), estado = \'Conectado\' WHERE id_integracion = $1', [req.params.id]);
-
-        // Simulación de sync de stock/catálogo con la plataforma externa
-        const { rows: prods } = await db.query('SELECT COUNT(*) as total FROM productos WHERE id_local = $1', [req.user.id_local]);
-
-        res.json({
-            success: true,
-            mensaje: `Sincronización exitosa con ${rows[0].nombre_cuenta} (${rows[0].plataforma.toUpperCase()}).`,
-            productos_sincronizados: Number(prods[0].total),
-            fecha: new Date().toISOString()
-        });
-    } catch (err) {
-        console.error('Error sincronizando integración:', err);
-        res.status(500).json({ error: 'Error al sincronizar con la tienda externa.' });
     }
 });
 
@@ -1501,7 +1453,7 @@ app.post('/api/facturas/enviar-correo', requireAuth, requireAprobado, async (req
 
         const detallesHtml = detalles.map(d => `
             <tr>
-                <td style="padding:8px;border-bottom:1px solid #eee;">${d.nombre_producto}</td>
+                <td style="padding:8px;border-bottom:1px solid #eee;">${escapeHtml(d.nombre_producto)}</td>
                 <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${d.cantidad}</td>
                 <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${Number(d.precio_unitario).toLocaleString('es-CO')}</td>
                 <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">$${Number(d.subtotal).toLocaleString('es-CO')}</td>
@@ -1523,7 +1475,7 @@ app.post('/api/facturas/enviar-correo', requireAuth, requireAprobado, async (req
             <div style="padding:2rem;">
               <div style="display:flex;justify-content:space-between;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:2px solid #eee;">
                 <div>
-                  <strong style="font-size:1.1rem;color:#264653;">${nombre_local}</strong><br/>
+                  <strong style="font-size:1.1rem;color:#264653;">${escapeHtml(nombre_local)}</strong><br/>
                   <span style="color:#777;font-size:0.9rem;">NIT: 900.123.456-7</span>
                 </div>
                 <div style="text-align:right;">
@@ -1532,8 +1484,8 @@ app.post('/api/facturas/enviar-correo', requireAuth, requireAprobado, async (req
                 </div>
               </div>
               <div style="background:#f9f9f9;border-radius:8px;padding:1rem;margin-bottom:1.5rem;">
-                <strong>Adquiriente:</strong> ${nombre_cliente}<br/>
-                <strong>Medio de Pago:</strong> ${metodoPagoReal}
+                <strong>Adquiriente:</strong> ${escapeHtml(nombre_cliente)}<br/>
+                <strong>Medio de Pago:</strong> ${escapeHtml(metodoPagoReal)}
               </div>
               <table style="width:100%;border-collapse:collapse;">
                 <thead>
@@ -1564,9 +1516,9 @@ app.post('/api/facturas/enviar-correo', requireAuth, requireAprobado, async (req
         </html>`;
 
         await transporter.sendMail({
-            from: `"${nombre_local} - Sistema POS" <${process.env.EMAIL_USER || 'andrescuesta112@gmail.com'}>`,
+            from: `"${escapeHtml(nombre_local)} - Sistema POS" <${process.env.EMAIL_USER || 'andrescuesta112@gmail.com'}>`,
             to: correo_cliente,
-            subject: `Factura Electrónica No. FE-${id_venta.toString().padStart(6,'0')} - ${nombre_local}`,
+            subject: `Factura Electrónica No. FE-${id_venta.toString().padStart(6,'0')} - ${escapeHtml(nombre_local)}`,
             html: htmlBody,
         });
 
@@ -1627,21 +1579,21 @@ app.post('/api/ventas/procesar', requireAuth, requireAprobado, async (req, res) 
             );
 
             if (prodRes.rows.length === 0) {
-                throw new Error(`Producto ${det.id_producto} no existe.`);
+                throw new AppError(`Producto ${det.id_producto} no existe.`);
             }
             const prod = prodRes.rows[0];
 
             if (prod.id_local !== id_local) {
-                throw new Error(`Producto ${det.id_producto} no pertenece al local.`);
+                throw new AppError(`Producto ${det.id_producto} no pertenece al local.`);
             }
 
             const cantidad = Math.floor(Number(det.cantidad));
             if (cantidad <= 0 || cantidad > 10000) {
-                throw new Error(`Cantidad inválida para producto ${det.id_producto}.`);
+                throw new AppError(`Cantidad inválida para producto ${det.id_producto}.`);
             }
 
             if (prod.stock_actual < cantidad) {
-                throw new Error(`Stock insuficiente para "${prod.nombre_producto}" (disponible: ${prod.stock_actual}, solicitado: ${cantidad}).`);
+                throw new AppError(`Stock insuficiente para "${prod.nombre_producto}" (disponible: ${prod.stock_actual}, solicitado: ${cantidad}).`);
             }
 
             const precioUnitario = Number(prod.precio_venta);
@@ -1711,8 +1663,13 @@ app.post('/api/ventas/procesar', requireAuth, requireAprobado, async (req, res) 
         });
     } catch (err) {
         await client.query('ROLLBACK');
+        // v1.5.6: solo los errores de negocio (AppError) muestran su mensaje.
+        // Los errores internos (BD, etc.) quedan en logs y devuelven mensaje genérico.
+        if (err.isOperational) {
+            return res.status(err.status).json({ error: err.message });
+        }
         console.error('Error procesando venta:', err);
-        res.status(400).json({ error: err.message || 'Error procesando la venta.' });
+        res.status(500).json({ error: 'Error interno del servidor.' });
     } finally {
         client.release();
     }
@@ -2065,7 +2022,7 @@ app.post('/api/admin/reenviar-codigo/:idUsuario', requireAuth, requireAprobado, 
             codigo_asociado: codigo,
             html: `
                 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
-                    <h2 style="color:#264653;">Hola ${u.nombre},</h2>
+                    <h2 style="color:#264653;">Hola ${escapeHtml(u.nombre)},</h2>
                     <p>Tu nuevo código de verificación es:</p>
                     <div style="background:#264653;color:white;font-size:2rem;letter-spacing:0.5rem;padding:1.5rem;text-align:center;border-radius:8px;margin:1.5rem 0;font-weight:700;">
                         ${codigo}
@@ -2491,6 +2448,249 @@ app.delete('/api/empleados/:id', requireAuth, requireAprobado, requireAdmin, asy
         console.error('Error eliminando empleado:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
+});
+
+// =======================================================
+// IMÁGENES DE PRODUCTO
+// =======================================================
+
+// POST /api/productos/:id/imagen — subir o reemplazar imagen
+app.post('/api/productos/:id/imagen', requireAuth, requireAprobado, uploadProducto.single('imagen'), async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+
+        // Construir URL pública
+        const imageUrl = `/uploads/productos/${req.file.filename}`;
+
+        // Eliminar imagen anterior si existe
+        const old = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        if (old.rows[0]?.imagen_url) {
+            const oldPath = path.join(__dirname, old.rows[0].imagen_url);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
+        await db.query('UPDATE productos SET imagen_url=$1 WHERE id_producto=$2 AND id_local=$3', [imageUrl, idProd, idLocal]);
+        res.json({ success: true, imagen_url: imageUrl });
+    } catch (err) {
+        console.error('Error subiendo imagen:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/productos/:id/imagen — eliminar imagen
+app.delete('/api/productos/:id/imagen', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        const r = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        const imgUrl = r.rows[0]?.imagen_url;
+        if (imgUrl) {
+            const fullPath = path.join(__dirname, imgUrl);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
+        await db.query('UPDATE productos SET imagen_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =======================================================
+// E-COMMERCE — INTEGRACIONES
+// =======================================================
+
+// Crear tabla si no existe (se ejecuta una sola vez al arrancar)
+(async () => {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS ecommerce_integraciones (
+                id SERIAL PRIMARY KEY,
+                id_local INTEGER REFERENCES locales(id_local) ON DELETE CASCADE,
+                plataforma VARCHAR(50) NOT NULL,
+                nombre_tienda VARCHAR(200),
+                access_token TEXT,
+                shop_domain VARCHAR(200),
+                activa BOOLEAN DEFAULT true,
+                fecha_conexion TIMESTAMP DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        console.error('Error creando tabla ecommerce_integraciones:', e.message);
+    }
+})();
+
+// GET /api/ecommerce/integraciones — listar integraciones del local
+app.get('/api/ecommerce/integraciones', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { rows } = await db.query(
+            'SELECT id, plataforma, nombre_tienda, shop_domain, activa, fecha_conexion FROM ecommerce_integraciones WHERE id_local=$1 ORDER BY fecha_conexion DESC',
+            [idLocal]
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/ecommerce/shopify/conectar — guardar integración Shopify
+app.post('/api/ecommerce/shopify/conectar', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { shop_domain, access_token, nombre_tienda } = req.body;
+        if (!shop_domain || !access_token) {
+            return res.status(400).json({ error: 'Se requiere shop_domain y access_token.' });
+        }
+        // Normalizar dominio
+        const domain = shop_domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+        // Verificar que la tienda existe antes de guardar
+        const verifyRes = await fetch(`https://${domain}/admin/api/2024-01/shop.json`, {
+            headers: { 'X-Shopify-Access-Token': access_token }
+        });
+        if (!verifyRes.ok) {
+            return res.status(400).json({ error: 'No se pudo verificar la tienda Shopify. Revisa el dominio y el token.' });
+        }
+        const shopData = await verifyRes.json();
+        const tiendaNombre = nombre_tienda || shopData.shop?.name || domain;
+
+        // Upsert
+        await db.query(`
+            INSERT INTO ecommerce_integraciones (id_local, plataforma, nombre_tienda, shop_domain, access_token, activa)
+            VALUES ($1, 'shopify', $2, $3, $4, true)
+            ON CONFLICT (id_local, plataforma, shop_domain)
+            DO UPDATE SET access_token=$4, nombre_tienda=$2, activa=true, fecha_conexion=NOW()
+        `, [idLocal, tiendaNombre, domain, access_token]);
+
+        // Agregar UNIQUE constraint si no existe (manejo en código, no crashea)
+        try {
+            await db.query(`ALTER TABLE ecommerce_integraciones ADD CONSTRAINT uq_local_plat_shop UNIQUE(id_local, plataforma, shop_domain)`);
+        } catch {}
+
+        res.json({ success: true, nombre_tienda: tiendaNombre });
+    } catch (err) {
+        console.error('Error conectando Shopify:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/ecommerce/integraciones/:id — desconectar
+app.delete('/api/ecommerce/integraciones/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const id = Number(req.params.id);
+        await db.query('DELETE FROM ecommerce_integraciones WHERE id=$1 AND id_local=$2', [id, idLocal]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/ecommerce/shopify/sync-productos — publicar productos POS en Shopify
+app.post('/api/ecommerce/shopify/sync-productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { integracion_id } = req.body;
+
+        // Obtener credenciales de la integración
+        const intR = await db.query(
+            'SELECT shop_domain, access_token FROM ecommerce_integraciones WHERE id=$1 AND id_local=$2 AND plataforma=$3',
+            [integracion_id, idLocal, 'shopify']
+        );
+        if (intR.rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
+        const { shop_domain, access_token } = intR.rows[0];
+
+        // Obtener productos del local
+        const prodR = await db.query(
+            `SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.stock_actual, p.imagen_url,
+                    c.nombre_categoria
+             FROM productos p
+             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+             WHERE p.id_local=$1 AND p.stock_actual > 0`,
+            [idLocal]
+        );
+
+        let sincronizados = 0;
+        const errores = [];
+
+        for (const prod of prodR.rows) {
+            try {
+                const shopifyProduct = {
+                    product: {
+                        title: prod.nombre_producto,
+                        product_type: prod.nombre_categoria || 'General',
+                        variants: [{
+                            price: String(prod.precio_venta),
+                            inventory_quantity: prod.stock_actual,
+                            inventory_management: 'shopify'
+                        }]
+                    }
+                };
+
+                const r = await fetch(`https://${shop_domain}/admin/api/2024-01/products.json`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Shopify-Access-Token': access_token
+                    },
+                    body: JSON.stringify(shopifyProduct)
+                });
+
+                if (r.ok) sincronizados++;
+                else errores.push(`${prod.nombre_producto}: ${r.status}`);
+            } catch (e) {
+                errores.push(`${prod.nombre_producto}: ${e.message}`);
+            }
+        }
+
+        res.json({
+            success: true,
+            total: prodR.rows.length,
+            sincronizados,
+            errores
+        });
+    } catch (err) {
+        console.error('Error sincronizando con Shopify:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =====================================================
+// v1.5.6: ERROR HANDLER GLOBAL
+// =====================================================
+// Centraliza el manejo de errores de Express (multer, JSON malformado, CORS,
+// rutas no encontradas, y cualquier error no capturado por los handlers).
+// NUNCA filtra detalles internos (stack traces, SQL, rutas) al cliente.
+app.use((err, req, res, next) => {
+    // Errores de multer (tamaño de archivo, tipo no permitido)
+    if (err instanceof multer.MulterError) {
+        const msg = err.code === 'LIMIT_FILE_SIZE'
+            ? 'El archivo supera el tamaño máximo de 5 MB.'
+            : 'Error subiendo el archivo.';
+        return res.status(400).json({ error: msg });
+    }
+    // Error de multer lanzado por fileFilter (extensión no permitida)
+    if (err && err.message && err.message.includes('Solo se permiten imágenes')) {
+        return res.status(400).json({ error: err.message });
+    }
+    // JSON malformado en el body
+    if (err && err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'JSON inválido en la solicitud.' });
+    }
+    // CORS: el mensaje de origen no permitido es seguro de mostrar
+    if (err && err.message && err.message.startsWith('Origen no permitido')) {
+        return res.status(403).json({ error: err.message });
+    }
+    // Cualquier otro error: log interno detallado + respuesta genérica
+    console.error(`[ErrorHandler] ${req.method} ${req.originalUrl}:`, err);
+    res.status(err.status || 500).json({ error: 'Error interno del servidor.' });
+});
+
+// 404 para rutas no definidas (después de todas las rutas)
+app.use((req, res) => {
+    res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 
 const PORT = process.env.PORT || 3000;

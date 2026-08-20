@@ -530,9 +530,21 @@ app.whenReady().then(async () => {
         mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
       }
 
-      // Watchdog pasivo: si el proceso del backend termina, el listener .on('exit')
-      // lo detecta y lo reinicia automáticamente. No enviamos SIGKILL periódicos.
-
+      // 🔄 HEALTH CHECK PERIÓDICO (watchdog continuo)
+      // Cada 10s verificamos que el backend responda. Si no responde,
+      // y el proceso tampoco existe, lo reiniciamos automáticamente.
+      backendHealthCheckInterval = setInterval(async () => {
+        if (!backendProcess) return; // El watchdog de exit ya está manejando
+        const portOpen = await isPortOpen('127.0.0.1', BACKEND_PORT, 1500);
+        if (!portOpen && backendProcess) {
+          console.warn('⚠ Health check: backend no responde en puerto. Forzando reinicio...');
+          try {
+            backendProcess._killed = true;
+            backendProcess.kill('SIGKILL');
+          } catch {}
+          // El handler de exit lo va a detectar y reiniciar
+        }
+      }, 10000);
 
     } else {
       console.error(`❌ Backend no respondió en ${BACKEND_PORT} después de 25s`);
