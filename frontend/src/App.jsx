@@ -18,7 +18,8 @@ import {
   Wallet,
   UserCircle2,
   Store,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Headset
 } from 'lucide-react';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
@@ -39,6 +40,7 @@ import Nomina from './pages/Nomina';
 import Ecommerce from './pages/Ecommerce';
 import Cotizaciones from './pages/Cotizaciones';
 import Terminos from './pages/Terminos';
+import AtencionCliente from './pages/AtencionCliente';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -179,6 +181,7 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
     { to: '/proveedores', icon: Building2, label: 'Proveedores' },
     { to: '/historial', icon: FileText, label: 'Reportes' },
     { to: '/cotizaciones', icon: FileSpreadsheet, label: 'Cotizaciones' },
+    { to: '/atencion-cliente', icon: Headset, label: 'Atención al Cliente' },
     { to: '/facturas', icon: Receipt, label: 'Facturas DIAN' },
     { to: '/nomina', icon: UserCircle2, label: 'Nómina' },
     { to: '/caja', icon: Wallet, label: 'Caja y Bancos' },
@@ -589,6 +592,7 @@ function App() {
           <Route path="/inventario" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Inventario user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/historial" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Historial user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/cotizaciones" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Cotizaciones user={user} /></AppLayout> : <Navigate to="/login" />} />
+          <Route path="/atencion-cliente" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><AtencionCliente user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/clientes" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Clientes user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/facturas" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Facturas user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/cierre" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><CierreCaja user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/login" />} />
