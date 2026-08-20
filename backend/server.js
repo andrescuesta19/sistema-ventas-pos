@@ -1609,16 +1609,26 @@ app.put('/api/dian/configuracion', requireAuth, requireAprobado, requireAdmin, a
                 prefijo, certificado_password, habilitado, updated_at)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11,$12,$13,$14,$15,NOW())
             ON CONFLICT (id_local) DO UPDATE SET
-                nit=$2, razon_social=$3, direccion=$4, ciudad=$5, departamento=$6,
-                telefono=$7, correo=$8, resolucion_numero=$9, resolucion_fecha=$10::date,
-                resolucion_desde=$11, resolucion_hasta=$12, prefijo=$13,
-                certificado_password=COALESCE($14, certificado_password),
-                habilitado=$15, updated_at=NOW()
+                nit=COALESCE($2, configuracion_dian.nit),
+                razon_social=COALESCE($3, configuracion_dian.razon_social),
+                direccion=COALESCE($4, configuracion_dian.direccion),
+                ciudad=COALESCE($5, configuracion_dian.ciudad),
+                departamento=COALESCE($6, configuracion_dian.departamento),
+                telefono=COALESCE($7, configuracion_dian.telefono),
+                correo=COALESCE($8, configuracion_dian.correo),
+                resolucion_numero=COALESCE($9, configuracion_dian.resolucion_numero),
+                resolucion_fecha=COALESCE($10::date, configuracion_dian.resolucion_fecha),
+                resolucion_desde=COALESCE($11, configuracion_dian.resolucion_desde),
+                resolucion_hasta=COALESCE($12, configuracion_dian.resolucion_hasta),
+                prefijo=COALESCE($13, configuracion_dian.prefijo),
+                certificado_password=COALESCE($14, configuracion_dian.certificado_password),
+                habilitado=COALESCE($15, configuracion_dian.habilitado),
+                updated_at=NOW()
         `, [idLocal, nit?.trim() || null, razon_social?.trim() || null, direccion?.trim() || null,
              ciudad?.trim() || null, departamento?.trim() || null, telefono?.trim() || null,
              correo?.trim() || null, resolucion_numero?.trim() || null, resolucion_fecha || null,
              resolucion_desde?.trim() || null, resolucion_hasta?.trim() || null,
-             prefijo?.trim() || 'FE', certificado_password || null, !!habilitado]);
+             prefijo?.trim() || null, certificado_password || null, habilitado === undefined ? null : !!habilitado]);
         res.json({ success: true });
     } catch (err) {
         console.error('Error guardando configuración DIAN:', err);
@@ -1674,7 +1684,7 @@ app.post('/api/dian/emitir/:idVenta', requireAuth, requireAprobado, requireAdmin
         const venta = ventaR.rows[0];
 
         const itemsR = await db.query(
-            `SELECT dv.*, p.nombre_producto, p.codigo_producto
+            `SELECT dv.*, p.nombre_producto, p.codigo_barras AS codigo_producto
              FROM detalle_ventas dv LEFT JOIN productos p ON dv.id_producto = p.id_producto
              WHERE dv.id_venta = $1`,
             [idVenta]

@@ -171,6 +171,9 @@ ${lineas}
 }
 
 // Firma el XML con el certificado .p12 (firma enveloped XML Signature)
+// Nota: node-forge no incluye un DOM XML, así que la firma se construye
+// con manipulación de strings. Para producción real, la validación final
+// la hace la DIAN al recibir el documento por sus servicios web.
 function firmarXML(xml, p12Path, p12Password) {
     const p12Der = fs.readFileSync(p12Path);
     const p12Asn1 = forge.asn1.fromDer(p12Der.toString('binary'));
@@ -184,66 +187,45 @@ function firmarXML(xml, p12Path, p12Password) {
     const privateKey = keyBag[0].key;
     const cert = certBag[0].cert;
 
-    // Firma enveloped sobre el elemento Invoice
-    const pki = forge.pki;
-    const md = forge.md.sha256.create();
-    const xmlDoc = forge.xml.createDocument(xml);
-    const invoiceEl = xmlDoc.getElementsByTagName('Invoice')[0];
-
-    const signature = forge.xml.createDocument('<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"></ds:Signature>');
-    const sigEl = signature.getElementsByTagName('Signature')[0];
-
-    const signedInfo = forge.xml.createElement('ds:SignedInfo');
-    const canonMethod = forge.xml.createElement('ds:CanonicalizationMethod');
-    canonMethod.setAttribute('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
-    const sigMethod = forge.xml.createElement('ds:SignatureMethod');
-    sigMethod.setAttribute('Algorithm', 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
-    const ref = forge.xml.createElement('ds:Reference');
-    ref.setAttribute('URI', '');
-    const transforms = forge.xml.createElement('ds:Transforms');
-    const t1 = forge.xml.createElement('ds:Transform');
-    t1.setAttribute('Algorithm', 'http://www.w3.org/2000/09/xmldsig#enveloped-signature');
-    const t2 = forge.xml.createElement('ds:Transform');
-    t2.setAttribute('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315');
-    transforms.appendChild(t1);
-    transforms.appendChild(t2);
-    const digestMethod = forge.xml.createElement('ds:DigestMethod');
-    digestMethod.setAttribute('Algorithm', 'http://www.w3.org/2001/04/xmlenc#sha256');
-    const digestValue = forge.xml.createElement('ds:DigestValue');
-    ref.appendChild(transforms);
-    ref.appendChild(digestMethod);
-    ref.appendChild(digestValue);
-    signedInfo.appendChild(canonMethod);
-    signedInfo.appendChild(sigMethod);
-    signedInfo.appendChild(ref);
-
-    const sigValue = forge.xml.createElement('ds:SignatureValue');
-    const keyInfo = forge.xml.createElement('ds:KeyInfo');
-    const x509Data = forge.xml.createElement('ds:X509Data');
-    const x509Cert = forge.xml.createElement('ds:X509Certificate');
-    x509Cert.textContent = forge.util.encode64(cert.getDer().getBytes());
-    x509Data.appendChild(x509Cert);
-    keyInfo.appendChild(x509Data);
-
-    sigEl.appendChild(signedInfo);
-    sigEl.appendChild(sigValue);
-    sigEl.appendChild(keyInfo);
-
-    // Calcular digest sobre el documento sin la firma
+    // 1. Digest del documento sin la firma (enveloped)
     const docWithoutSig = xml.replace(/<ds:Signature[\s\S]*?<\/ds:Signature>/, '');
+    const md = forge.md.sha256.create();
     md.update(docWithoutSig, 'utf8');
-    digestValue.textContent = forge.util.encode64(md.digest().getBytes());
+    const digestValueB64 = forge.util.encode64(md.digest().getBytes());
 
-    // Firmar el SignedInfo
+    // 2. SignedInfo (canonicalización C14N simple sobre el string)
+    const signedInfo = `<ds:SignedInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+  <ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+  <ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+  <ds:Reference URI="">
+    <ds:Transforms>
+      <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+      <ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/>
+    </ds:Transforms>
+    <ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+    <ds:DigestValue>${digestValueB64}</ds:DigestValue>
+  </ds:Reference>
+</ds:SignedInfo>`;
+
+    // 3. Firmar el SignedInfo
     const md2 = forge.md.sha256.create();
-    md2.update(signedInfo.toString(), 'utf8');
+    md2.update(signedInfo, 'utf8');
     const signatureBytes = privateKey.sign(md2);
-    sigValue.textContent = forge.util.encode64(signatureBytes);
+    const signatureValueB64 = forge.util.encode64(signatureBytes);
 
-    // Insertar la firma al final del Invoice
-    const invoiceStr = invoiceEl.toString();
-    const signedXml = xml.replace(invoiceStr, invoiceStr.replace(/<\/Invoice>/, sigEl.toString() + '</Invoice>'));
-    return signedXml;
+    // 4. Ensamblar la firma completa
+    const signatureXml = `<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+${signedInfo}
+  <ds:SignatureValue>${signatureValueB64}</ds:SignatureValue>
+  <ds:KeyInfo>
+    <ds:X509Data>
+      <ds:X509Certificate>${forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes())}</ds:X509Certificate>
+    </ds:X509Data>
+  </ds:KeyInfo>
+</ds:Signature>`;
+
+    // 5. Insertar la firma antes del cierre de Invoice
+    return xml.replace(/<\/Invoice>/, signatureXml + '\n</Invoice>');
 }
 
 module.exports = { generarXMLFactura, firmarXML, escXml };
