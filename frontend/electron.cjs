@@ -1,7 +1,8 @@
 const { app, BrowserWindow, shell, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const os = require('os');
+const { spawn, exec, execFile } = require('child_process');
 const net = require('net');
 
 // ─────────────────────────────────────────────────────────
@@ -186,7 +187,7 @@ if (!process.env.ELECTRON_DEV && !process.env.NODE_ENV) {
     const updater = require('electron-updater');
     autoUpdater = updater.autoUpdater;
     autoUpdater.autoDownload = false; // Pedimos confirmación al usuario
-    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.autoInstallOnAppQuit = false; // v1.7.3: instalación manual (Squirrel.Mac exige firma)
     console.log('✓ Auto-updater cargado');
   } catch (err) {
     console.warn('⚠ electron-updater no disponible:', err.message);
@@ -365,9 +366,14 @@ ipcMain.handle('app:download-update', async () => {
   }
 });
 
-ipcMain.handle('app:install-update', () => {
-  if (!autoUpdater) return;
-  autoUpdater.quitAndInstall();
+ipcMain.handle('app:install-update', async () => {
+  if (!autoUpdater) return { success: false, error: 'updater no disponible' };
+  try {
+    await installUpdateManually();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('app:get-version', () => app.getVersion());
@@ -423,6 +429,86 @@ async function checkForUpdates(userInitiated = false) {
 }
 
 // ─────────────────────────────────────────────────────────
+// UPDATER MANUAL (v1.7.3)
+// Squirrel.Mac (electron-updater) exige firma de código válida (Developer ID).
+// Sin certificado de Apple, la instalación falla con SQRLCodeSignatureErrorDomain.
+// Solución: descargar el ZIP, reemplazar el .app en /Applications y relanzar.
+// ─────────────────────────────────────────────────────────
+const APP_INSTALL_PATH = '/Applications/Sistema de Ventas POS.app';
+
+function findPendingZip() {
+  const pendingDir = path.join(app.getPath('userData'), '..', 'Caches', 'sistema-ventas-pos-updater', 'pending');
+  try {
+    const files = fs.readdirSync(pendingDir).filter(f => f.endsWith('.zip'));
+    if (files.length === 0) return null;
+    // El más reciente
+    files.sort((a, b) => fs.statSync(path.join(pendingDir, b)).mtimeMs - fs.statSync(path.join(pendingDir, a)).mtimeMs);
+    return path.join(pendingDir, files[0]);
+  } catch {
+    return null;
+  }
+}
+
+function execAsync(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout);
+    });
+  });
+}
+
+function execFileAsync(file, args) {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout);
+    });
+  });
+}
+
+async function installUpdateManually() {
+  const zipPath = findPendingZip();
+  if (!zipPath) {
+    throw new Error('No se encontró el ZIP de la actualización descargada.');
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pos-update-'));
+  const newApp = path.join(tmpDir, 'Sistema de Ventas POS.app');
+
+  console.log(`📦 Descomprimiendo ${zipPath}...`);
+  await execAsync(`ditto -x -k "${zipPath}" "${tmpDir}"`);
+  if (!fs.existsSync(newApp)) {
+    throw new Error('El ZIP no contiene la app esperada.');
+  }
+
+  // Preservar el .env real del backend (el ZIP no lo incluye)
+  const envPath = path.join(APP_INSTALL_PATH, 'Contents', 'Resources', 'backend', '.env');
+  const envBackup = path.join(tmpDir, 'env-backup');
+  let hadEnv = false;
+  if (fs.existsSync(envPath)) {
+    fs.copyFileSync(envPath, envBackup);
+    hadEnv = true;
+    console.log('🔐 .env real preservado');
+  }
+
+  console.log('🔁 Reemplazando la app en /Applications (pedirá tu contraseña)...');
+  // execFile evita problemas de quoting con espacios y comillas
+  const shellCmd = `rm -rf '${APP_INSTALL_PATH}' && cp -R '${newApp}' '${APP_INSTALL_PATH}' && chmod -R 755 '${APP_INSTALL_PATH}'`;
+  const appleScript = `do shell script "${shellCmd}" with administrator privileges`;
+  await execFileAsync('osascript', ['-e', appleScript]);
+
+  if (hadEnv) {
+    fs.copyFileSync(envBackup, envPath);
+    console.log('🔐 .env restaurado');
+  }
+
+  console.log('🚀 Relanzando la app...');
+  app.relaunch();
+  app.exit(0);
+}
+
+// ─────────────────────────────────────────────────────────
 // Eventos de auto-updater
 // ─────────────────────────────────────────────────────────
 if (autoUpdater) {
@@ -467,13 +553,18 @@ if (autoUpdater) {
         type: 'info',
         title: 'Actualización lista',
         message: `La versión v${info.version} se descargó correctamente.`,
-        detail: 'La app se reiniciará para instalar la actualización.',
+        detail: 'La app se reiniciará para instalar la actualización. Se pedirá tu contraseña de administrador para reemplazar la aplicación.',
         buttons: ['Reiniciar ahora', 'Al cerrar la app'],
         defaultId: 0,
         cancelId: 1
-      }).then(({ response }) => {
+      }).then(async ({ response }) => {
         if (response === 0) {
-          autoUpdater.quitAndInstall();
+          try {
+            await installUpdateManually();
+          } catch (err) {
+            console.error('❌ Error instalando actualización:', err);
+            dialog.showErrorBox('Error al instalar', err.message);
+          }
         }
       });
       mainWindow.webContents.send('update:downloaded', info);

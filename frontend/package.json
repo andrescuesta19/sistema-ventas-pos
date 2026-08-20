@@ -1,7 +1,7 @@
 {
   "name": "sistema-ventas-pos",
   "private": true,
-  "version": "1.7.2",
+  "version": "1.7.3",
   "type": "module",
   "main": "electron.cjs",
   "author": "Andrés Cuesta",
@@ -47,7 +47,7 @@
       "buildResources": "build"
     },
     "asar": true,
-    "compression": "maximum",
+    "compression": "normal",
     "icon": "build/icon",
     "mac": {
       "category": "public.app-category.business",
