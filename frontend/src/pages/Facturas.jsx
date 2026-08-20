@@ -1,12 +1,14 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect } from 'react';
-import { FileText, Printer, Mail, CheckCircle, AlertTriangle } from 'lucide-react';
+import { FileText, Printer, Mail, CheckCircle, AlertTriangle, Send, Loader2 } from 'lucide-react';
 import { formatearFechaHoraCO } from '../utils/dateCO';
 
 const Facturas = ({ user }) => {
   const [facturas, setFacturas] = useState([]);
   const [filtro, setFiltro] = useState('Todas');
+  const [emitiendo, setEmitiendo] = useState(null);
+  const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     fetchFacturas();
@@ -19,6 +21,21 @@ const Facturas = ({ user }) => {
 
   const formatearCOP = (valor) => {
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor);
+  };
+
+  // v1.9.1: emitir factura electrónica DIAN
+  const emitirDian = async (f) => {
+    setEmitiendo(f.id_venta);
+    setMsg(null);
+    try {
+      const data = await apiPost(`${API_URL}/api/dian/emitir/${f.id_venta}`, {});
+      setMsg({ ok: true, text: `Factura ${data.consecutivo} emitida y firmada. CUFE: ${data.cufe.slice(0, 20)}...` });
+      fetchFacturas();
+    } catch (err) {
+      setMsg({ ok: false, text: err.message || 'Error emitiendo factura electrónica.' });
+    } finally {
+      setEmitiendo(null);
+    }
   };
 
   const facturasFiltradas = facturas.filter(f => {
@@ -42,6 +59,19 @@ const Facturas = ({ user }) => {
           <button className={filtro === 'POS' ? 'btn-primary' : 'btn-secondary'} onClick={() => setFiltro('POS')}>Recibos POS</button>
         </div>
       </div>
+
+      {msg && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', borderRadius: 8,
+          marginBottom: '1rem', fontSize: '0.88rem',
+          background: msg.ok ? 'rgba(45, 212, 109, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid ' + (msg.ok ? 'rgba(45, 212, 109, 0.3)' : 'rgba(239, 68, 68, 0.3)'),
+          color: msg.ok ? 'var(--green-primary)' : '#dc2626'
+        }}>
+          {msg.ok ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+          {msg.text}
+        </div>
+      )}
 
       <div className="card" style={{ padding: '0' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -90,6 +120,18 @@ const Facturas = ({ user }) => {
                     {estadoFactura.includes('DIAN') && (
                       <button className="btn-secondary" style={{ padding: '0.4rem', color: 'var(--primary-color)' }} title="Reenviar por Correo" onClick={() => alert('Factura enviada por correo al cliente.')}>
                         <Mail size={16} />
+                      </button>
+                    )}
+                    {estadoFactura === 'Local' && (
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                        title="Emitir factura electrónica DIAN"
+                        onClick={() => emitirDian(f)}
+                        disabled={emitiendo === f.id_venta}
+                      >
+                        {emitiendo === f.id_venta ? <Loader2 size={14} className="spin" /> : <Send size={14} />}
+                        Emitir DIAN
                       </button>
                     )}
                   </div>
