@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Sun, Moon, Search, ChevronDown, LogOut, User, KeyRound, X } from 'lucide-react';
 import { API_URL } from '../config';
@@ -20,6 +21,10 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
   // sin tener que esperar a recargar la página
   const [liveUser, setLiveUser] = useState(user);
   const searchRef = useRef(null);
+  const searchInputRef = useRef(null);
+  // v1.8.0: posición del dropdown del buscador (portal en body para que flote
+  // sobre el contenido, que tiene overflow-y:auto y recortaba el dropdown)
+  const [searchPos, setSearchPos] = useState(null);
 
   useEffect(() => {
     setLiveUser(user);
@@ -48,6 +53,11 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
     }
     const t = setTimeout(async () => {
       setSearchLoading(true);
+      // Calculamos la posición del input para el dropdown (portal en body)
+      const rect = searchInputRef.current?.getBoundingClientRect();
+      if (rect) {
+        setSearchPos({ top: rect.bottom + 8, left: rect.left, width: Math.max(rect.width, 320) });
+      }
       try {
         const data = await apiGet(`${API_URL}/api/buscar?q=${encodeURIComponent(term)}&id_local=${user?.id_local || ''}`);
         setSearchResults(data);
@@ -154,6 +164,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
       <div style={styles.searchWrap} ref={searchRef}>
         <Search size={16} style={styles.searchIcon} />
         <input
+          ref={searchInputRef}
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -170,8 +181,14 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
           </button>
         )}
 
-        {searchOpen && (
-          <div style={styles.dropdown}>
+        {searchOpen && searchPos && createPortal(
+          <div style={{
+            position: 'fixed', top: searchPos.top, left: searchPos.left,
+            width: searchPos.width, maxHeight: 400, overflowY: 'auto',
+            background: 'var(--bg-card)', border: '1px solid var(--border-soft)',
+            borderRadius: 12, boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+            zIndex: 9999,
+          }}>
             <div style={{
               padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-light)',
               fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-secondary)',
@@ -235,7 +252,8 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
                 )}
               </>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 

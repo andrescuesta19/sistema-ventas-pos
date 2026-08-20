@@ -1,10 +1,12 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Package, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatearFechaHoraCO } from '../utils/dateCO';
 
 const CierreCaja = ({ user, onLogout }) => {
+  const navigate = useNavigate();
   const [turno, setTurno] = useState(null);
   const [montoReal, setMontoReal] = useState('');
   const [cierreCompletado, setCierreCompletado] = useState(false);
@@ -175,8 +177,10 @@ const CierreCaja = ({ user, onLogout }) => {
             <button className="btn-secondary" onClick={() => window.print()} style={{ padding: '1rem 2rem' }}>
               🖨️ Imprimir Reporte
             </button>
-            <button className="btn-primary" onClick={onLogout} style={{ padding: '1rem 2rem' }}>
-              Cerrar Sesión
+            {/* v1.8.0: cerrar la caja NO debe cerrar la sesión. El logout solo
+                se hace desde el menú lateral o el header. */}
+            <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ padding: '1rem 2rem' }}>
+              Volver al Dashboard
             </button>
           </div>
         </div>
