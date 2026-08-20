@@ -1,7 +1,7 @@
 {
   "name": "sistema-ventas-pos",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.7.1",
   "type": "module",
   "main": "electron.cjs",
   "author": "Andrés Cuesta",
@@ -130,8 +130,9 @@
     "fileAssociations": [],
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://releases.tu-dominio.com/sistema-ventas-pos",
+        "provider": "github",
+        "owner": "andrescuesta19",
+        "repo": "sistema-ventas-pos",
         "channel": "latest"
       }
     ]

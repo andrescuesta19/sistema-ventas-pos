@@ -92,20 +92,3 @@ CREATE TABLE IF NOT EXISTS detalle_ventas (
     FOREIGN KEY (id_venta) REFERENCES ventas(id_venta),
     FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
 );
-
-CREATE TABLE IF NOT EXISTS integraciones_ecommerce (
-    id_integracion SERIAL PRIMARY KEY,
-    id_local INTEGER NOT NULL REFERENCES locales(id_local),
-    plataforma VARCHAR(50) NOT NULL,
-    nombre_cuenta VARCHAR(100) NOT NULL,
-    url_tienda VARCHAR(255),
-    api_key TEXT,
-    access_token TEXT,
-    refresh_token TEXT,
-    shop_id VARCHAR(100),
-    estado VARCHAR(20) DEFAULT 'Conectado',
-    auto_sync_stock BOOLEAN DEFAULT true,
-    fecha_conexion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    ultima_sincronizacion TIMESTAMP
-);
-

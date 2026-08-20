@@ -16,8 +16,7 @@ import {
   Settings,
   Building2,
   Wallet,
-  UserCircle2,
-  Share2
+  UserCircle2
 } from 'lucide-react';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
@@ -35,7 +34,6 @@ import SuperAdmin from './pages/SuperAdmin';
 import Proveedores from './pages/Proveedores';
 import Caja from './pages/Caja';
 import Nomina from './pages/Nomina';
-import Integraciones from './pages/Integraciones';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -172,7 +170,6 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/pos', icon: ShoppingCart, label: 'Ventas' },
     { to: '/inventario', icon: Package, label: 'Productos' },
-    { to: '/integraciones', icon: Share2, label: 'Integraciones' },
     { to: '/clientes', icon: Users, label: 'Clientes' },
     { to: '/proveedores', icon: Building2, label: 'Proveedores' },
     { to: '/historial', icon: FileText, label: 'Reportes' },
@@ -583,7 +580,6 @@ function App() {
           <Route path="/pos" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><POS user={user} /></AppLayout> : <Navigate to="/login" />} />
           {/* v1.5.4: ternario redundante simplificado */}
           <Route path="/inventario" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Inventario user={user} /></AppLayout> : <Navigate to="/login" />} />
-          <Route path="/integraciones" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Integraciones user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/historial" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Historial user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/clientes" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Clientes user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/facturas" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Facturas user={user} /></AppLayout> : <Navigate to="/login" />} />
