@@ -495,11 +495,13 @@ async function installUpdateManually() {
   console.log('🔁 Reemplazando la app en /Applications (pedirá tu contraseña)...');
   // execFile evita problemas de quoting con espacios y comillas.
   // El .env se restaura DENTRO del script admin (si no, queda como root y el
-  // proceso normal no puede escribirlo).
+  // proceso normal no puede escribirlo). También se hace chown -R al usuario
+  // actual porque el backend necesita escribir en backend/uploads/.
+  const currentUser = os.userInfo().username;
   const envRestore = hadEnv
     ? ` && cp '${envBackup}' '${envPath}' && chmod 644 '${envPath}'`
     : '';
-  const shellCmd = `rm -rf '${APP_INSTALL_PATH}' && cp -R '${newApp}' '${APP_INSTALL_PATH}' && chmod -R 755 '${APP_INSTALL_PATH}'${envRestore}`;
+  const shellCmd = `rm -rf '${APP_INSTALL_PATH}' && cp -R '${newApp}' '${APP_INSTALL_PATH}' && chmod -R 755 '${APP_INSTALL_PATH}' && chown -R ${currentUser}:staff '${APP_INSTALL_PATH}'${envRestore}`;
   const appleScript = `do shell script "${shellCmd}" with administrator privileges`;
   await execFileAsync('osascript', ['-e', appleScript]);
 
