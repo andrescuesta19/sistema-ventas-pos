@@ -2657,6 +2657,70 @@ app.get('/api/ecommerce/integraciones', requireAuth, requireAprobado, async (req
     }
 });
 
+// POST /api/ecommerce/conectar — conectar tienda por URL (todas las plataformas)
+app.post('/api/ecommerce/conectar', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { plataforma, url_tienda, nombre_tienda, access_token, consumer_key, consumer_secret } = req.body;
+        if (!plataforma || !url_tienda) {
+            return res.status(400).json({ error: 'Se requiere plataforma y URL de la tienda.' });
+        }
+        // Validar y normalizar URL
+        let url;
+        try {
+            url = new URL(url_tienda.includes('://') ? url_tienda : 'https://' + url_tienda);
+        } catch {
+            return res.status(400).json({ error: 'La URL de la tienda no es válida.' });
+        }
+        const domain = url.hostname.replace(/^www\./, '');
+        const tiendaNombre = nombre_tienda || domain;
+
+        // Shopify: verificar token si se proporciona
+        if (plataforma === 'shopify' && access_token) {
+            const verifyRes = await fetch(`https://${domain}/admin/api/2024-01/shop.json`, {
+                headers: { 'X-Shopify-Access-Token': access_token }
+            });
+            if (!verifyRes.ok) {
+                return res.status(400).json({ error: 'No se pudo verificar la tienda Shopify. Revisa el dominio y el token.' });
+            }
+            const shopData = await verifyRes.json();
+            if (shopData.shop?.name) tiendaNombre = shopData.shop.name;
+        }
+
+        // WooCommerce: verificar credenciales si se proporcionan
+        if (plataforma === 'woocommerce' && consumer_key && consumer_secret) {
+            const base = url.origin;
+            const verifyRes = await fetch(`${base}/wp-json/wc/v3/products?per_page=1`, {
+                headers: { 'Authorization': 'Basic ' + Buffer.from(consumer_key + ':' + consumer_secret).toString('base64') }
+            });
+            if (!verifyRes.ok) {
+                return res.status(400).json({ error: 'No se pudieron verificar las credenciales de WooCommerce.' });
+            }
+        }
+
+        // Guardar credenciales (token o consumer key/secret) según plataforma
+        const credenciales = plataforma === 'woocommerce'
+            ? (consumer_key && consumer_secret ? JSON.stringify({ consumer_key, consumer_secret }) : null)
+            : (access_token || null);
+
+        await db.query(`
+            INSERT INTO ecommerce_integraciones (id_local, plataforma, nombre_tienda, shop_domain, access_token, activa)
+            VALUES ($1, $2, $3, $4, $5, true)
+            ON CONFLICT (id_local, plataforma, shop_domain)
+            DO UPDATE SET nombre_tienda=$3, access_token=$5, activa=true, fecha_conexion=NOW()
+        `, [idLocal, plataforma, tiendaNombre, domain, credenciales]);
+
+        try {
+            await db.query(`ALTER TABLE ecommerce_integraciones ADD CONSTRAINT uq_local_plat_shop UNIQUE(id_local, plataforma, shop_domain)`);
+        } catch {}
+
+        res.json({ success: true, nombre_tienda: tiendaNombre });
+    } catch (err) {
+        console.error('Error conectando tienda:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
 // POST /api/ecommerce/shopify/conectar — guardar integración Shopify
 app.post('/api/ecommerce/shopify/conectar', requireAuth, requireAprobado, async (req, res) => {
     try {
@@ -2775,6 +2839,67 @@ app.post('/api/ecommerce/shopify/sync-productos', requireAuth, requireAprobado, 
         });
     } catch (err) {
         console.error('Error sincronizando con Shopify:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/ecommerce/woocommerce/sync-productos — publicar productos POS en WooCommerce
+app.post('/api/ecommerce/woocommerce/sync-productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { integracion_id } = req.body;
+
+        const intR = await db.query(
+            'SELECT shop_domain, access_token FROM ecommerce_integraciones WHERE id=$1 AND id_local=$2 AND plataforma=$3',
+            [integracion_id, idLocal, 'woocommerce']
+        );
+        if (intR.rows.length === 0) return res.status(404).json({ error: 'Integración no encontrada.' });
+        const { shop_domain, access_token } = intR.rows[0];
+        let creds;
+        try { creds = JSON.parse(access_token); } catch { creds = null; }
+        if (!creds?.consumer_key || !creds?.consumer_secret) {
+            return res.status(400).json({ error: 'La integración WooCommerce no tiene credenciales válidas.' });
+        }
+        const base = 'https://' + shop_domain;
+        const auth = 'Basic ' + Buffer.from(creds.consumer_key + ':' + creds.consumer_secret).toString('base64');
+
+        const prodR = await db.query(
+            `SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.stock_actual, p.imagen_url,
+                    c.nombre_categoria
+             FROM productos p
+             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+             WHERE p.id_local=$1 AND p.stock_actual > 0`,
+            [idLocal]
+        );
+
+        let sincronizados = 0;
+        const errores = [];
+
+        for (const prod of prodR.rows) {
+            try {
+                const wcProduct = {
+                    name: prod.nombre_producto,
+                    type: 'simple',
+                    regular_price: String(prod.precio_venta),
+                    manage_stock: true,
+                    stock_quantity: prod.stock_actual,
+                    categories: prod.nombre_categoria ? [{ name: prod.nombre_categoria }] : []
+                };
+                const r = await fetch(`${base}/wp-json/wc/v3/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': auth },
+                    body: JSON.stringify(wcProduct)
+                });
+                if (r.ok) sincronizados++;
+                else errores.push(`${prod.nombre_producto}: ${r.status}`);
+            } catch (e) {
+                errores.push(`${prod.nombre_producto}: ${e.message}`);
+            }
+        }
+
+        res.json({ success: true, total: prodR.rows.length, sincronizados, errores });
+    } catch (err) {
+        console.error('Error sincronizando con WooCommerce:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
@@ -3018,16 +3143,16 @@ app.post('/api/cotizaciones/:id/convertir-venta', requireAuth, requireAprobado, 
         }
 
         const venta = await client.query(
-            `INSERT INTO ventas (id_local, id_turno, id_cliente, id_usuario, subtotal, descuento, total_neto, metodo_pago, estado)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Completada') RETURNING id_venta`,
-            [idLocal, idTurno, cotizacion.id_cliente, req.user.id_usuario, cotizacion.subtotal, cotizacion.descuento, cotizacion.total, metodo_pago]
+            `INSERT INTO ventas (id_usuario, id_local, id_cliente, id_turno, subtotal, descuento_total, impuestos, total_neto, metodo_pago, estado_factura, fecha_venta)
+             VALUES ($1,$2,$3,$4,$5,$6,0,$7,$8,'Local',(NOW() AT TIME ZONE 'America/Bogota')) RETURNING id_venta`,
+            [req.user.id_usuario, idLocal, cotizacion.id_cliente, idTurno, cotizacion.subtotal, cotizacion.descuento, cotizacion.total, metodo_pago]
         );
         const idVenta = venta.rows[0].id_venta;
 
         for (const it of items.rows) {
             await client.query(
-                `INSERT INTO detalle_ventas (id_venta, id_producto, cantidad, precio_unitario, subtotal)
-                 VALUES ($1,$2,$3,$4,$5)`,
+                `INSERT INTO detalle_ventas (id_venta, id_producto, cantidad, precio_unitario_cobrado, descuento_aplicado, subtotal)
+                 VALUES ($1,$2,$3,$4,0,$5)`,
                 [idVenta, it.id_producto, it.cantidad, it.precio_unitario, parseFloat(it.precio_unitario) * parseInt(it.cantidad)]
             );
         }
