@@ -16,7 +16,8 @@ import {
   Settings,
   Building2,
   Wallet,
-  UserCircle2
+  UserCircle2,
+  Store
 } from 'lucide-react';
 import Login from './pages/Login';
 import Registro from './pages/Registro';
@@ -34,6 +35,7 @@ import SuperAdmin from './pages/SuperAdmin';
 import Proveedores from './pages/Proveedores';
 import Caja from './pages/Caja';
 import Nomina from './pages/Nomina';
+import Ecommerce from './pages/Ecommerce';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -177,6 +179,7 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
     { to: '/nomina', icon: UserCircle2, label: 'Nómina' },
     { to: '/caja', icon: Wallet, label: 'Caja y Bancos' },
     { to: '/cierre', icon: Calculator, label: 'Cierre de Caja' },
+    { to: '/ecommerce', icon: Store, label: 'E-commerce' },
   ];
   // v1.5.3: El cliente SÍ ve Configuración (perfil, cambiar contraseña, modo oscuro).
   // Gestión de Usuarios sigue siendo solo del super-admin.
@@ -593,6 +596,8 @@ function App() {
           <Route path="/proveedores" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Proveedores user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/caja" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Caja /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/nomina" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Nomina user={user} /></AppLayout> : <Navigate to="/login" />} />
+          {/* v1.7.2: E-commerce restaurado (existía Ecommerce.jsx pero no estaba registrado) */}
+          <Route path="/ecommerce" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Ecommerce user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </ErrorBoundary>

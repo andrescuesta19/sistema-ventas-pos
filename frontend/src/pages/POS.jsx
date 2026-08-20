@@ -44,6 +44,9 @@ const POS = ({ user }) => {
   const [printFormat, setPrintFormat] = useState(null);
   const [ultimoRecibo, setUltimoRecibo] = useState(null);
 
+  // v1.7.2: galería de imágenes — índice de imagen activa por producto
+  const [imagenActiva, setImagenActiva] = useState({});
+
   useEffect(() => {
     fetchTurno();
     fetchAllProductos();
@@ -470,12 +473,42 @@ const POS = ({ user }) => {
                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
                 <div style={{ height: '110px', backgroundColor: '#F8FAFC', borderRadius: '8px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                  {p.imagen_url ? (
-                    <img src={p.imagen_url} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
-                  ) : (
-                    <span style={{ fontSize: '2rem' }}>📱</span>
-                  )}
+                  {(() => {
+                    // v1.7.2: galería de imágenes — usa la lista de imágenes si existe
+                    const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
+                    const idx = Math.min(imagenActiva[p.id_producto] || 0, Math.max(imgs.length - 1, 0));
+                    const imgActual = imgs[idx] || null;
+                    return imgActual ? (
+                      <img src={imgActual} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
+                    ) : (
+                      <span style={{ fontSize: '2rem' }}>📱</span>
+                    );
+                  })()}
                 </div>
+                {/* v1.7.2: miniaturas de la galería (si hay más de una imagen) */}
+                {(() => {
+                  const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
+                  if (imgs.length <= 1) return null;
+                  const idx = Math.min(imagenActiva[p.id_producto] || 0, imgs.length - 1);
+                  return (
+                    <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+                      {imgs.map((url, i) => (
+                        <div
+                          key={i}
+                          onClick={(e) => { e.stopPropagation(); setImagenActiva(prev => ({ ...prev, [p.id_producto]: i })); }}
+                          style={{
+                            width: 26, height: 26, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                            border: i === idx ? '2px solid #2A9D8F' : '2px solid transparent',
+                            opacity: i === idx ? 1 : 0.55,
+                            flexShrink: 0
+                          }}
+                        >
+                          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <h4 style={{ marginBottom: '0.4rem', fontSize: '0.95rem', height: '38px', overflow: 'hidden' }}>{p.nombre_producto}</h4>
                 <div className="flex-between" style={{ alignItems: 'center' }}>
                   <div>

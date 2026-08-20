@@ -1048,6 +1048,23 @@ app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
             params.push(`%${q}%`, q);
         }
         const { rows } = await db.query(query, params);
+
+        // v1.7.2: incluir galería de imágenes de cada producto
+        if (rows.length > 0) {
+            const ids = rows.map(p => p.id_producto);
+            const imgRes = await db.query(
+                `SELECT id_producto, url, orden FROM producto_imagenes WHERE id_producto = ANY($1) ORDER BY orden ASC`,
+                [ids]
+            );
+            const porProducto = {};
+            for (const img of imgRes.rows) {
+                if (!porProducto[img.id_producto]) porProducto[img.id_producto] = [];
+                porProducto[img.id_producto].push({ url: img.url, orden: img.orden });
+            }
+            for (const p of rows) {
+                p.imagenes = porProducto[p.id_producto] || [];
+            }
+        }
         res.json(rows);
     } catch (err) {
         console.error('Error listando productos:', err);
@@ -2491,6 +2508,111 @@ app.delete('/api/productos/:id/imagen', requireAuth, requireAprobado, async (req
             if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
         }
         await db.query('UPDATE productos SET imagen_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =======================================================
+// v1.7.2: GALERÍA DE IMÁGENES DE PRODUCTOS
+// =======================================================
+// Un producto puede tener varias imágenes (como en e-commerce).
+// La primera imagen (orden 0) se usa como imagen principal.
+
+// Crear tabla si no existe (se ejecuta una sola vez al arrancar)
+(async () => {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS producto_imagenes (
+                id SERIAL PRIMARY KEY,
+                id_producto INTEGER NOT NULL REFERENCES productos(id_producto) ON DELETE CASCADE,
+                url VARCHAR(500) NOT NULL,
+                orden INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        console.log('[v1.7.2] Tabla producto_imagenes lista');
+    } catch (e) {
+        console.error('Error creando tabla producto_imagenes:', e.message);
+    }
+})();
+
+// POST /api/productos/:id/imagenes — subir una o varias imágenes (multipart, campo "imagenes")
+app.post('/api/productos/:id/imagenes', requireAuth, requireAprobado, uploadProducto.array('imagenes', 10), async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
+        }
+        // Verificar que el producto pertenece al local
+        const prod = await db.query('SELECT id_producto FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        if (prod.rows.length === 0) {
+            return res.status(404).json({ error: 'Producto no encontrado.' });
+        }
+        // Obtener el siguiente orden disponible
+        const ord = await db.query('SELECT COALESCE(MAX(orden), -1) + 1 as next FROM producto_imagenes WHERE id_producto=$1', [idProd]);
+        let orden = Number(ord.rows[0].next);
+
+        const urls = [];
+        for (const file of req.files) {
+            const url = `/uploads/productos/${file.filename}`;
+            await db.query('INSERT INTO producto_imagenes (id_producto, url, orden) VALUES ($1, $2, $3)', [idProd, url, orden]);
+            urls.push({ url, orden });
+            orden++;
+        }
+        // Si el producto no tenía imagen principal, usar la primera subida
+        const cur = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1', [idProd]);
+        if (!cur.rows[0]?.imagen_url && urls.length > 0) {
+            await db.query('UPDATE productos SET imagen_url=$1 WHERE id_producto=$2', [urls[0].url, idProd]);
+        }
+        res.json({ success: true, imagenes: urls });
+    } catch (err) {
+        console.error('Error subiendo imágenes:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// GET /api/productos/:id/imagenes — listar imágenes de un producto
+app.get('/api/productos/:id/imagenes', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        const prod = await db.query('SELECT id_producto FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        if (prod.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado.' });
+        const r = await db.query('SELECT id, url, orden FROM producto_imagenes WHERE id_producto=$1 ORDER BY orden ASC', [idProd]);
+        res.json(r.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/productos/:id/imagenes/:idImagen — eliminar una imagen de la galería
+app.delete('/api/productos/:id/imagenes/:idImagen', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        const idImagen = Number(req.params.idImagen);
+        // Verificar que el producto pertenece al local
+        const prod = await db.query('SELECT id_producto FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        if (prod.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado.' });
+
+        const img = await db.query('SELECT url FROM producto_imagenes WHERE id=$1 AND id_producto=$2', [idImagen, idProd]);
+        if (img.rows.length === 0) return res.status(404).json({ error: 'Imagen no encontrada.' });
+
+        // Borrar archivo del disco
+        const fullPath = path.join(__dirname, img.rows[0].url);
+        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+
+        await db.query('DELETE FROM producto_imagenes WHERE id=$1 AND id_producto=$2', [idImagen, idProd]);
+
+        // Si la imagen eliminada era la principal, reasignar la primera restante
+        const cur = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1', [idProd]);
+        if (cur.rows[0]?.imagen_url === img.rows[0].url) {
+            const next = await db.query('SELECT url FROM producto_imagenes WHERE id_producto=$1 ORDER BY orden ASC LIMIT 1', [idProd]);
+            await db.query('UPDATE productos SET imagen_url=$1 WHERE id_producto=$2', [next.rows[0]?.url || null, idProd]);
+        }
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Error interno del servidor.' });
