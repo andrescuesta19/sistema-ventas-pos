@@ -2779,6 +2779,273 @@ app.post('/api/ecommerce/shopify/sync-productos', requireAuth, requireAprobado, 
     }
 });
 
+// ─────────────────────────────────────────────────────────
+// COTIZACIONES (v1.8.0)
+// Una cotización es una oferta de precios a un cliente sin
+// afectar inventario. Puede convertirse en venta después.
+// ─────────────────────────────────────────────────────────
+(async () => {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS cotizaciones (
+                id_cotizacion SERIAL PRIMARY KEY,
+                id_local INTEGER NOT NULL REFERENCES locales(id_local),
+                id_cliente INTEGER REFERENCES clientes(id_cliente),
+                nombre_cliente VARCHAR(200),
+                subtotal NUMERIC(14,2) DEFAULT 0,
+                descuento NUMERIC(14,2) DEFAULT 0,
+                total NUMERIC(14,2) DEFAULT 0,
+                estado VARCHAR(20) DEFAULT 'Pendiente',
+                valida_hasta DATE,
+                notas TEXT,
+                creado_por INTEGER REFERENCES usuarios(id_usuario),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS detalle_cotizaciones (
+                id_detalle SERIAL PRIMARY KEY,
+                id_cotizacion INTEGER NOT NULL REFERENCES cotizaciones(id_cotizacion) ON DELETE CASCADE,
+                id_producto INTEGER REFERENCES productos(id_producto),
+                nombre_producto VARCHAR(300),
+                cantidad INTEGER DEFAULT 1,
+                precio_unitario NUMERIC(14,2) DEFAULT 0,
+                subtotal NUMERIC(14,2) DEFAULT 0
+            )
+        `);
+        console.log('[v1.8.0] Tablas cotizaciones listas');
+    } catch (e) {
+        console.error('Error creando tablas de cotizaciones:', e.message);
+    }
+})();
+
+// POST /api/cotizaciones — crear una cotización con sus items
+app.post('/api/cotizaciones', requireAuth, requireAprobado, async (req, res) => {
+    const client = await db.connect();
+    try {
+        const { id_cliente, nombre_cliente, items, descuento = 0, valida_hasta, notas } = req.body;
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: 'La cotización debe tener al menos un producto.' });
+        }
+        const idLocal = Number(req.user.id_local);
+        const desc = parseFloat(descuento) || 0;
+
+        // Calcular subtotal y total con precios del servidor (no confiar en el cliente)
+        let subtotal = 0;
+        const itemsFinales = [];
+        for (const it of items) {
+            const idProd = Number(it.id_producto);
+            const cant = Math.max(1, parseInt(it.cantidad) || 1);
+            const prod = await client.query(
+                'SELECT id_producto, nombre_producto, precio_venta FROM productos WHERE id_producto=$1 AND id_local=$2',
+                [idProd, idLocal]
+            );
+            if (prod.rows.length === 0) {
+                return res.status(404).json({ error: 'Producto no encontrado: ' + idProd });
+            }
+            const precio = parseFloat(prod.rows[0].precio_venta) || 0;
+            const sub = precio * cant;
+            subtotal += sub;
+            itemsFinales.push({
+                id_producto: idProd,
+                nombre_producto: prod.rows[0].nombre_producto,
+                cantidad: cant,
+                precio_unitario: precio,
+                subtotal: sub
+            });
+        }
+        const total = Math.max(0, subtotal - desc);
+
+        await client.query('BEGIN');
+        const ins = await client.query(
+            `INSERT INTO cotizaciones (id_local, id_cliente, nombre_cliente, subtotal, descuento, total, estado, valida_hasta, notas, creado_por)
+             VALUES ($1,$2,$3,$4,$5,$6,'Pendiente',$7,$8,$9) RETURNING id_cotizacion`,
+            [idLocal, id_cliente || null, nombre_cliente || null, subtotal, desc, total, valida_hasta || null, notas || null, req.user.id_usuario]
+        );
+        const idCot = ins.rows[0].id_cotizacion;
+        for (const it of itemsFinales) {
+            await client.query(
+                `INSERT INTO detalle_cotizaciones (id_cotizacion, id_producto, nombre_producto, cantidad, precio_unitario, subtotal)
+                 VALUES ($1,$2,$3,$4,$5,$6)`,
+                [idCot, it.id_producto, it.nombre_producto, it.cantidad, it.precio_unitario, it.subtotal]
+            );
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, id_cotizacion: idCot, total });
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('Error creando cotización:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    } finally {
+        client.release();
+    }
+});
+
+// GET /api/cotizaciones — listar cotizaciones del local (con filtro por estado)
+app.get('/api/cotizaciones', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { estado } = req.query;
+        let sql = `
+            SELECT c.id_cotizacion, c.nombre_cliente, c.subtotal, c.descuento, c.total,
+                   c.estado, c.valida_hasta, c.notas, c.created_at,
+                   COALESCE(cl.nombre_razon_social, c.nombre_cliente) AS cliente_nombre,
+                   (SELECT COUNT(*) FROM detalle_cotizaciones d WHERE d.id_cotizacion = c.id_cotizacion) AS num_items
+            FROM cotizaciones c
+            LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
+            WHERE c.id_local = $1
+        `;
+        const params = [idLocal];
+        if (estado) {
+            params.push(estado);
+            sql += ` AND c.estado = $${params.length}`;
+        }
+        sql += ` ORDER BY c.created_at DESC LIMIT 200`;
+        const r = await db.query(sql, params);
+        res.json(r.rows);
+    } catch (err) {
+        console.error('Error listando cotizaciones:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// GET /api/cotizaciones/:id — detalle con items
+app.get('/api/cotizaciones/:id', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idCot = Number(req.params.id);
+        const c = await db.query(
+            `SELECT c.*, COALESCE(cl.nombre_razon_social, c.nombre_cliente) AS cliente_nombre
+             FROM cotizaciones c LEFT JOIN clientes cl ON c.id_cliente = cl.id_cliente
+             WHERE c.id_cotizacion=$1 AND c.id_local=$2`,
+            [idCot, idLocal]
+        );
+        if (c.rows.length === 0) return res.status(404).json({ error: 'Cotización no encontrada.' });
+        const items = await db.query(
+            'SELECT id_detalle, id_producto, nombre_producto, cantidad, precio_unitario, subtotal FROM detalle_cotizaciones WHERE id_cotizacion=$1 ORDER BY id_detalle',
+            [idCot]
+        );
+        res.json({ ...c.rows[0], items: items.rows });
+    } catch (err) {
+        console.error('Error en detalle de cotización:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// PUT /api/cotizaciones/:id — actualizar estado y/o datos
+app.put('/api/cotizaciones/:id', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idCot = Number(req.params.id);
+        const { estado, nombre_cliente, valida_hasta, notas } = req.body;
+        const estadosValidos = ['Pendiente', 'Aprobada', 'Rechazada', 'Vencida'];
+        if (estado && !estadosValidos.includes(estado)) {
+            return res.status(400).json({ error: 'Estado inválido.' });
+        }
+        const c = await db.query('SELECT id_cotizacion FROM cotizaciones WHERE id_cotizacion=$1 AND id_local=$2', [idCot, idLocal]);
+        if (c.rows.length === 0) return res.status(404).json({ error: 'Cotización no encontrada.' });
+        await db.query(
+            `UPDATE cotizaciones SET estado=COALESCE($1, estado), nombre_cliente=COALESCE($2, nombre_cliente),
+             valida_hasta=COALESCE($3, valida_hasta), notas=COALESCE($4, notas) WHERE id_cotizacion=$5`,
+            [estado || null, nombre_cliente || null, valida_hasta || null, notas || null, idCot]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error actualizando cotización:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/cotizaciones/:id — eliminar
+app.delete('/api/cotizaciones/:id', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idCot = Number(req.params.id);
+        const c = await db.query('SELECT id_cotizacion FROM cotizaciones WHERE id_cotizacion=$1 AND id_local=$2', [idCot, idLocal]);
+        if (c.rows.length === 0) return res.status(404).json({ error: 'Cotización no encontrada.' });
+        await db.query('DELETE FROM cotizaciones WHERE id_cotizacion=$1', [idCot]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error eliminando cotización:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/cotizaciones/:id/convertir-venta — convierte la cotización en una venta
+app.post('/api/cotizaciones/:id/convertir-venta', requireAuth, requireAprobado, async (req, res) => {
+    const client = await db.connect();
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idCot = Number(req.params.id);
+        const { metodo_pago = 'Efectivo' } = req.body;
+
+        const cot = await client.query(
+            'SELECT * FROM cotizaciones WHERE id_cotizacion=$1 AND id_local=$2',
+            [idCot, idLocal]
+        );
+        if (cot.rows.length === 0) return res.status(404).json({ error: 'Cotización no encontrada.' });
+        const cotizacion = cot.rows[0];
+
+        const items = await client.query(
+            'SELECT id_producto, cantidad, precio_unitario FROM detalle_cotizaciones WHERE id_cotizacion=$1',
+            [idCot]
+        );
+
+        // Verificar turno abierto
+        const turno = await client.query(
+            `SELECT id_turno FROM turnos_caja WHERE id_local=$1 AND estado_turno='Abierto' ORDER BY id_turno DESC LIMIT 1`,
+            [idLocal]
+        );
+        if (turno.rows.length === 0) {
+            return res.status(400).json({ error: 'No hay un turno de caja abierto. Abre el turno desde el Dashboard.' });
+        }
+        const idTurno = turno.rows[0].id_turno;
+
+        await client.query('BEGIN');
+
+        // Verificar stock y descontar
+        for (const it of items.rows) {
+            const prod = await client.query('SELECT stock_actual FROM productos WHERE id_producto=$1 AND id_local=$2', [it.id_producto, idLocal]);
+            if (prod.rows.length === 0) {
+                await client.query('ROLLBACK').catch(() => {});
+                return res.status(404).json({ error: 'Producto no encontrado.' });
+            }
+            if (parseInt(prod.rows[0].stock_actual) < parseInt(it.cantidad)) {
+                await client.query('ROLLBACK').catch(() => {});
+                return res.status(400).json({ error: 'Stock insuficiente para uno de los productos.' });
+            }
+            await client.query('UPDATE productos SET stock_actual = stock_actual - $1 WHERE id_producto=$2', [it.cantidad, it.id_producto]);
+        }
+
+        const venta = await client.query(
+            `INSERT INTO ventas (id_local, id_turno, id_cliente, id_usuario, subtotal, descuento, total_neto, metodo_pago, estado)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Completada') RETURNING id_venta`,
+            [idLocal, idTurno, cotizacion.id_cliente, req.user.id_usuario, cotizacion.subtotal, cotizacion.descuento, cotizacion.total, metodo_pago]
+        );
+        const idVenta = venta.rows[0].id_venta;
+
+        for (const it of items.rows) {
+            await client.query(
+                `INSERT INTO detalle_ventas (id_venta, id_producto, cantidad, precio_unitario, subtotal)
+                 VALUES ($1,$2,$3,$4,$5)`,
+                [idVenta, it.id_producto, it.cantidad, it.precio_unitario, parseFloat(it.precio_unitario) * parseInt(it.cantidad)]
+            );
+        }
+
+        // Marcar la cotización como aprobada
+        await client.query(`UPDATE cotizaciones SET estado='Aprobada' WHERE id_cotizacion=$1`, [idCot]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, id_venta: idVenta });
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('Error convirtiendo cotización en venta:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    } finally {
+        client.release();
+    }
+});
+
 // =====================================================
 // v1.5.6: ERROR HANDLER GLOBAL
 // =====================================================
