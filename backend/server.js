@@ -2582,6 +2582,80 @@ app.delete('/api/nomina/pagos/:id', requireAuth, requireAprobado, requireAdmin, 
 });
 
 // =======================================================
+// ATENCIÓN AL CLIENTE / SOPORTE (v1.9.0)
+// =======================================================
+(async () => {
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS tickets_soporte (
+                id_ticket SERIAL PRIMARY KEY,
+                id_local INTEGER REFERENCES locales(id_local) ON DELETE SET NULL,
+                nombre VARCHAR(200) NOT NULL,
+                correo VARCHAR(150),
+                asunto VARCHAR(200),
+                mensaje TEXT NOT NULL,
+                estado VARCHAR(20) DEFAULT 'Abierto',
+                respuesta TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        console.error('Error creando tabla tickets_soporte:', e.message);
+    }
+})();
+
+// POST /api/soporte/contacto — enviar ticket de soporte (con sesión)
+app.post('/api/soporte/contacto', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { nombre, correo, asunto, mensaje } = req.body;
+        if (!nombre?.trim() || !mensaje?.trim()) {
+            return res.status(400).json({ error: 'Nombre y mensaje son obligatorios.' });
+        }
+        const r = await db.query(
+            `INSERT INTO tickets_soporte (id_local, nombre, correo, asunto, mensaje)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [idLocal, nombre.trim(), correo?.trim() || null, asunto?.trim() || 'Consulta general', mensaje.trim()]
+        );
+        // Notificar por correo al soporte (super-admin)
+        if (transporter) {
+            const supR = await db.query('SELECT correo FROM super_admins WHERE estado = true LIMIT 1');
+            if (supR.rows.length > 0) {
+                await enviarEmail({
+                    to: supR.rows[0].correo,
+                    subject: `[Soporte] ${asunto || 'Consulta'} — ${nombre.trim()}`,
+                    html: `<h3>Nuevo ticket de soporte</h3>
+                           <p><b>Nombre:</b> ${nombre.trim()}</p>
+                           <p><b>Correo:</b> ${correo || '—'}</p>
+                           <p><b>Local:</b> ${idLocal}</p>
+                           <p><b>Mensaje:</b></p><p>${mensaje.trim()}</p>`,
+                    tipo: 'soporte'
+                });
+            }
+        }
+        res.json({ success: true, ticket: r.rows[0] });
+    } catch (err) {
+        console.error('Error creando ticket de soporte:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// GET /api/soporte/tickets — listar tickets del local (admin)
+app.get('/api/soporte/tickets', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { rows } = await db.query(
+            'SELECT * FROM tickets_soporte WHERE id_local = $1 ORDER BY created_at DESC',
+            [idLocal]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando tickets:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =======================================================
 // IMÁGENES DE PRODUCTO
 // =======================================================
 
