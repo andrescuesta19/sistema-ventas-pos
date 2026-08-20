@@ -658,6 +658,11 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                     ¿Olvidaste tu contraseña?
                   </Link>
                 </p>
+                <p style={{ ...styles.footer, marginTop: '0.5rem' }}>
+                  <Link to="/terminos" style={{ color: 'rgba(126, 217, 87, 0.6)', fontSize: '0.8rem', textDecoration: 'none' }}>
+                    Términos y condiciones
+                  </Link>
+                </p>
                 {/* v1.5.3: El link de Super-Admin se quitó del login público. El super-admin
                     accede navegando manualmente a /super-admin (ruta secreta). */}
               </motion.form>

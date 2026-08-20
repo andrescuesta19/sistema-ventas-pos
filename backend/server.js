@@ -2690,11 +2690,15 @@ app.post('/api/ecommerce/conectar', requireAuth, requireAprobado, async (req, re
         // WooCommerce: verificar credenciales si se proporcionan
         if (plataforma === 'woocommerce' && consumer_key && consumer_secret) {
             const base = url.origin;
-            const verifyRes = await fetch(`${base}/wp-json/wc/v3/products?per_page=1`, {
-                headers: { 'Authorization': 'Basic ' + Buffer.from(consumer_key + ':' + consumer_secret).toString('base64') }
-            });
-            if (!verifyRes.ok) {
-                return res.status(400).json({ error: 'No se pudieron verificar las credenciales de WooCommerce.' });
+            try {
+                const verifyRes = await fetch(`${base}/wp-json/wc/v3/products?per_page=1`, {
+                    headers: { 'Authorization': 'Basic ' + Buffer.from(consumer_key + ':' + consumer_secret).toString('base64') }
+                });
+                if (!verifyRes.ok) {
+                    return res.status(400).json({ error: 'No se pudieron verificar las credenciales de WooCommerce.' });
+                }
+            } catch {
+                return res.status(400).json({ error: 'No se pudo conectar con la tienda WooCommerce. Revisa la URL.' });
             }
         }
 
@@ -2703,16 +2707,17 @@ app.post('/api/ecommerce/conectar', requireAuth, requireAprobado, async (req, re
             ? (consumer_key && consumer_secret ? JSON.stringify({ consumer_key, consumer_secret }) : null)
             : (access_token || null);
 
+        // Asegurar constraint UNIQUE antes del upsert
+        try {
+            await db.query(`ALTER TABLE ecommerce_integraciones ADD CONSTRAINT uq_local_plat_shop UNIQUE(id_local, plataforma, shop_domain)`);
+        } catch {}
+
         await db.query(`
             INSERT INTO ecommerce_integraciones (id_local, plataforma, nombre_tienda, shop_domain, access_token, activa)
             VALUES ($1, $2, $3, $4, $5, true)
             ON CONFLICT (id_local, plataforma, shop_domain)
             DO UPDATE SET nombre_tienda=$3, access_token=$5, activa=true, fecha_conexion=NOW()
         `, [idLocal, plataforma, tiendaNombre, domain, credenciales]);
-
-        try {
-            await db.query(`ALTER TABLE ecommerce_integraciones ADD CONSTRAINT uq_local_plat_shop UNIQUE(id_local, plataforma, shop_domain)`);
-        } catch {}
 
         res.json({ success: true, nombre_tienda: tiendaNombre });
     } catch (err) {

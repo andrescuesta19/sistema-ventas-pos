@@ -38,6 +38,7 @@ import Caja from './pages/Caja';
 import Nomina from './pages/Nomina';
 import Ecommerce from './pages/Ecommerce';
 import Cotizaciones from './pages/Cotizaciones';
+import Terminos from './pages/Terminos';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -594,6 +595,7 @@ function App() {
           <Route path="/usuarios" element={user ? (user.rol === 'Administrador' ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><PanelUsuarios user={user} /></AppLayout> : <Navigate to="/dashboard" />) : <Navigate to="/login" />} />
           <Route path="/configuracion" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Configuracion user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/recuperar-password" element={!user ? <RecuperarPassword /> : <Navigate to="/dashboard" />} />
+          <Route path="/terminos" element={<Terminos />} />
           {/* v1.5.5: /super-admin fuera del layout para que no se monte el Header del cliente */}
           <Route path="/super-admin" element={<SuperAdmin />} />
           {/* v1.5.5: Proveedores y Nómina ahora son funcionales */}
