@@ -2656,6 +2656,120 @@ app.get('/api/soporte/tickets', requireAuth, requireAprobado, requireAdmin, asyn
 });
 
 // =======================================================
+// BOT DE AUTOMATIZACIONES (v1.9.0)
+// Reportes automáticos por correo para el super-admin
+// =======================================================
+
+// Genera el resumen del reporte (ventas, usuarios, locales, tickets)
+async function generarResumenReporte(desde, hasta) {
+    const [localesR, usuariosR, ventasR, ticketsR, nuevosR] = await Promise.all([
+        db.query('SELECT COUNT(*)::int AS total FROM locales'),
+        db.query('SELECT COUNT(*)::int AS total FROM usuarios'),
+        db.query(
+            `SELECT COALESCE(SUM(total_neto),0) AS total, COUNT(*)::int AS cantidad
+             FROM ventas WHERE fecha_venta BETWEEN $1 AND $2`,
+            [desde, hasta]
+        ),
+        db.query(`SELECT COUNT(*)::int AS total FROM tickets_soporte WHERE estado = 'Abierto'`),
+        db.query(
+            `SELECT COUNT(*)::int AS total FROM usuarios WHERE created_at BETWEEN $1 AND $2`,
+            [desde, hasta]
+        )
+    ]);
+    return {
+        total_locales: localesR.rows[0].total,
+        total_usuarios: usuariosR.rows[0].total,
+        ventas_periodo: ventasR.rows[0].total,
+        ventas_cantidad: ventasR.rows[0].cantidad,
+        tickets_abiertos: ticketsR.rows[0].total,
+        nuevos_usuarios: nuevosR.rows[0].total
+    };
+}
+
+// Genera y envía el reporte (usado por el endpoint y el cron)
+async function enviarReporteAutomatico(tipo = 'semanal') {
+    const ahora = new Date();
+    const desde = new Date(ahora);
+    if (tipo === 'mensual') desde.setDate(1);
+    else desde.setDate(ahora.getDate() - 7);
+
+    const resumen = await generarResumenReporte(desde.toISOString(), ahora.toISOString());
+    const supR = await db.query('SELECT correo, nombre FROM super_admins WHERE estado = true LIMIT 1');
+    if (supR.rows.length === 0) return { success: false, error: 'No hay super-admin activo.' };
+
+    const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto">
+          <h2 style="color:#7ed957">📊 Reporte ${tipo === 'mensual' ? 'Mensual' : 'Semanal'} — Sistema de Ventas POS</h2>
+          <p>Hola <b>${supR.rows[0].nombre}</b>, este es el resumen del periodo:</p>
+          <table style="width:100%;border-collapse:collapse;margin:1rem 0">
+            <tr><td style="padding:8px;border:1px solid #ddd">🏪 Locales registrados</td><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${resumen.total_locales}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #ddd">👥 Usuarios totales</td><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${resumen.total_usuarios}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #ddd">🆕 Nuevos usuarios del periodo</td><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${resumen.nuevos_usuarios}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #ddd">💰 Ventas del periodo</td><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${fmtCOP(resumen.ventas_periodo)} (${resumen.ventas_cantidad} ventas)</td></tr>
+            <tr><td style="padding:8px;border:1px solid #ddd">🎫 Tickets de soporte abiertos</td><td style="padding:8px;border:1px solid #ddd;font-weight:bold">${resumen.tickets_abiertos}</td></tr>
+          </table>
+          <p style="color:#888;font-size:0.85rem">Generado automáticamente por el bot de automatizaciones.</p>
+        </div>`;
+
+    const env = await enviarEmail({
+        to: supR.rows[0].correo,
+        subject: `📊 Reporte ${tipo === 'mensual' ? 'Mensual' : 'Semanal'} del sistema`,
+        html,
+        tipo: 'reporte_automatico'
+    });
+    return { success: true, enviado: env.success, resumen };
+}
+
+// GET /api/super/tickets — todos los tickets de soporte (super-admin)
+app.get('/api/super/tickets', requireSuperAdmin, async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            'SELECT * FROM tickets_soporte ORDER BY created_at DESC LIMIT 50'
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando tickets globales:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/super/reporte — enviar reporte manualmente
+app.post('/api/super/reporte', requireSuperAdmin, async (req, res) => {
+    try {
+        const { tipo = 'semanal' } = req.body;
+        const resultado = await enviarReporteAutomatico(tipo);
+        res.json(resultado);
+    } catch (err) {
+        console.error('Error generando reporte:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// Cron: reporte semanal (lunes 8am) y mensual (día 1, 8am)
+function programarReportes() {
+    const check = () => {
+        const ahora = new Date();
+        const dia = ahora.getDay();      // 1 = lunes
+        const fecha = ahora.getDate();   // día del mes
+        const hora = ahora.getHours();
+        if (hora === 8) {
+            if (dia === 1) {
+                console.log('🤖 Bot: enviando reporte semanal...');
+                enviarReporteAutomatico('semanal').catch(() => {});
+            }
+            if (fecha === 1) {
+                console.log('🤖 Bot: enviando reporte mensual...');
+                enviarReporteAutomatico('mensual').catch(() => {});
+            }
+        }
+    };
+    check();
+    setInterval(check, 60 * 60 * 1000); // cada hora
+}
+programarReportes();
+
+// =======================================================
 // IMÁGENES DE PRODUCTO
 // =======================================================
 

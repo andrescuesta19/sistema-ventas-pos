@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { Shield, Check, X, LogOut, RefreshCw, Store, Users,
-  TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck, Eye, EyeOff
+  TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck, Eye, EyeOff,
+  Bot, Send, Ticket
 } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -21,6 +22,9 @@ const SuperAdmin = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [feedback, setFeedback] = useState({}); // { idUsuario: 'aprobando' }
   const [showPwd, setShowPwd] = useState(false); // v1.5.5: mostrar/ocultar contraseña
+  const [tickets, setTickets] = useState([]); // v1.9.0: tickets de soporte
+  const [reporteEnviando, setReporteEnviando] = useState(false); // v1.9.0: bot automatizaciones
+  const [reporteMsg, setReporteMsg] = useState(null);
 
   // Recuperar sesión del super-admin
   useEffect(() => {
@@ -42,18 +46,48 @@ const SuperAdmin = () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [s, l, m] = await Promise.all([
+      const [s, l, m, t] = await Promise.all([
         fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.json()),
+        fetch(`${API_URL}/api/super/tickets`, { headers }).then(r => r.json()),
       ]);
       setSolicitudes(Array.isArray(s) ? s : []);
       setLocales(Array.isArray(l) ? l : []);
       setMetricas(m);
+      setTickets(Array.isArray(t) ? t : []);
     } catch (err) {
       console.error('Error cargando datos:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // v1.9.0: enviar reporte automático (bot de automatizaciones)
+  const enviarReporte = async (tipo) => {
+    setReporteEnviando(true);
+    setReporteMsg(null);
+    try {
+      const r = await fetch(`${API_URL}/api/super/reporte`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tipo }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setReporteMsg({
+          ok: true,
+          text: data.enviado
+            ? `Reporte ${tipo === 'mensual' ? 'mensual' : 'semanal'} enviado a tu correo.`
+            : 'Reporte generado, pero el correo no se pudo enviar (revisa la configuración SMTP).',
+        });
+      } else {
+        setReporteMsg({ ok: false, text: data.error || 'Error al generar el reporte.' });
+      }
+    } catch {
+      setReporteMsg({ ok: false, text: 'Error de conexión.' });
+    } finally {
+      setReporteEnviando(false);
     }
   };
 
@@ -296,6 +330,7 @@ const SuperAdmin = () => {
           {[
             { id: 'solicitudes', label: 'Solicitudes Pendientes', count: solicitudes.length },
             { id: 'locales', label: 'Todos los Locales', count: locales.length },
+            { id: 'automatizaciones', label: 'Automatizaciones', count: tickets.filter(t => t.estado === 'Abierto').length },
           ].map(t => (
             <button
               key={t.id}
@@ -426,6 +461,111 @@ const SuperAdmin = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {tab === 'automatizaciones' && (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{
+              background: 'rgba(20, 40, 25, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 12, padding: '1.25rem 1.5rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                <Bot size={20} color="#7ed957" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Bot de Automatizaciones</h3>
+                <span style={{
+                  marginLeft: 'auto', padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.75rem', fontWeight: 700,
+                  background: 'rgba(126, 217, 87, 0.15)', color: '#7ed957',
+                }}>● Activo</span>
+              </div>
+              <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.88rem', lineHeight: 1.6 }}>
+                El bot genera reportes automáticos con el resumen del sistema (locales, usuarios, ventas y tickets de soporte)
+                y los envía a tu correo. Se ejecuta automáticamente:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginTop: '1rem' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 10, padding: '0.9rem 1rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#7ed957' }}>📅 Reporte semanal</div>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: '0.82rem', marginTop: '0.25rem' }}>Todos los lunes a las 8:00 am</div>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.04)', borderRadius: 10, padding: '0.9rem 1rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#7ed957' }}>📊 Reporte mensual</div>
+                  <div style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: '0.82rem', marginTop: '0.25rem' }}>El día 1 de cada mes a las 8:00 am</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => enviarReporte('semanal')}
+                  disabled={reporteEnviando}
+                  style={{
+                    background: '#7ed957', border: 'none', color: '#0a1a0e', fontWeight: 700,
+                    padding: '0.6rem 1.2rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.88rem',
+                    display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'inherit',
+                  }}
+                >
+                  <Send size={14} /> {reporteEnviando ? 'Enviando...' : 'Enviar reporte semanal ahora'}
+                </button>
+                <button
+                  onClick={() => enviarReporte('mensual')}
+                  disabled={reporteEnviando}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#fff', fontWeight: 600, padding: '0.6rem 1.2rem', borderRadius: 8,
+                    cursor: 'pointer', fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'inherit',
+                  }}
+                >
+                  <Send size={14} /> Enviar reporte mensual ahora
+                </button>
+              </div>
+              {reporteMsg && (
+                <div style={{
+                  marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: 8, fontSize: '0.85rem',
+                  background: reporteMsg.ok ? 'rgba(126, 217, 87, 0.1)' : 'rgba(255, 138, 107, 0.1)',
+                  border: '1px solid ' + (reporteMsg.ok ? 'rgba(126, 217, 87, 0.3)' : 'rgba(255, 138, 107, 0.3)'),
+                  color: reporteMsg.ok ? '#7ed957' : '#ff8a6b',
+                }}>
+                  {reporteMsg.text}
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              background: 'rgba(20, 40, 25, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 12, padding: '1.25rem 1.5rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                <Ticket size={20} color="#fbbf24" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Tickets de Soporte</h3>
+              </div>
+              {tickets.length === 0 ? (
+                <p style={{ margin: 0, color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.88rem' }}>
+                  No hay tickets de soporte registrados.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: '0.6rem' }}>
+                  {tickets.map(t => (
+                    <div key={t.id_ticket} style={{
+                      background: 'rgba(255, 255, 255, 0.04)', borderRadius: 10, padding: '0.85rem 1rem',
+                      display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                    }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{t.asunto || 'Consulta'}</div>
+                        <div style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                          {t.nombre} {t.correo && `· ${t.correo}`} · Local {t.id_local}
+                        </div>
+                        <div style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.85rem', marginTop: '0.4rem' }}>{t.mensaje}</div>
+                      </div>
+                      <span style={{
+                        padding: '0.15rem 0.6rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, flexShrink: 0,
+                        background: t.estado === 'Abierto' ? 'rgba(255, 138, 107, 0.15)' : 'rgba(126, 217, 87, 0.15)',
+                        color: t.estado === 'Abierto' ? '#ff8a6b' : '#7ed957',
+                      }}>{t.estado}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
