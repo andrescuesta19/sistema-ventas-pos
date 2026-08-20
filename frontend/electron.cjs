@@ -437,7 +437,9 @@ async function checkForUpdates(userInitiated = false) {
 const APP_INSTALL_PATH = '/Applications/Sistema de Ventas POS.app';
 
 function findPendingZip() {
-  const pendingDir = path.join(app.getPath('userData'), '..', 'Caches', 'sistema-ventas-pos-updater', 'pending');
+  // app.getPath('cache') = ~/Library/Caches (el ZIP descargado vive en
+  // ~/Library/Caches/sistema-ventas-pos-updater/pending/)
+  const pendingDir = path.join(app.getPath('cache'), 'sistema-ventas-pos-updater', 'pending');
   try {
     const files = fs.readdirSync(pendingDir).filter(f => f.endsWith('.zip'));
     if (files.length === 0) return null;
