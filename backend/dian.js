@@ -21,6 +21,37 @@ function escXml(s) {
         .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+// =====================================================
+// Cifrado de la contraseña del certificado .p12
+// Se guarda cifrada en la BD (AES-256-GCM) para no
+// almacenarla en texto plano. La clave se deriva de una
+// semilla del entorno + el id del local.
+// =====================================================
+const crypto = require('crypto');
+
+function _dianKey(idLocal) {
+    const seed = process.env.DIAN_SECRET || process.env.DATABASE_URL || 'posmaster-dian-seed';
+    return crypto.createHash('sha256').update(`${seed}:${idLocal}`).digest();
+}
+
+function cifrarPassword(plain, idLocal) {
+    if (!plain) return null;
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', _dianKey(idLocal), iv);
+    const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `enc:${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`;
+}
+
+function descifrarPassword(stored, idLocal) {
+    if (!stored) return null;
+    if (!stored.startsWith('enc:')) return stored; // legacy en texto plano
+    const [, ivB64, tagB64, dataB64] = stored.split(':');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', _dianKey(idLocal), Buffer.from(ivB64, 'base64'));
+    decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()]).toString('utf8');
+}
+
 // Genera el XML UBL 2.1 de la factura electrónica de venta
 function generarXMLFactura({ config, venta, cliente, items, consecutivo }) {
     const fecha = new Date(venta.fecha_venta || new Date());
@@ -228,4 +259,4 @@ ${signedInfo}
     return xml.replace(/<\/Invoice>/, signatureXml + '\n</Invoice>');
 }
 
-module.exports = { generarXMLFactura, firmarXML, escXml };
+module.exports = { generarXMLFactura, firmarXML, escXml, cifrarPassword, descifrarPassword };

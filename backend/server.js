@@ -1628,7 +1628,7 @@ app.put('/api/dian/configuracion', requireAuth, requireAprobado, requireAdmin, a
              ciudad?.trim() || null, departamento?.trim() || null, telefono?.trim() || null,
              correo?.trim() || null, resolucion_numero?.trim() || null, resolucion_fecha || null,
              resolucion_desde?.trim() || null, resolucion_hasta?.trim() || null,
-             prefijo?.trim() || null, certificado_password || null, habilitado === undefined ? null : !!habilitado]);
+             prefijo?.trim() || null, dian.cifrarPassword(certificado_password, idLocal), habilitado === undefined ? null : !!habilitado]);
         res.json({ success: true });
     } catch (err) {
         console.error('Error guardando configuración DIAN:', err);
@@ -1637,14 +1637,22 @@ app.put('/api/dian/configuracion', requireAuth, requireAprobado, requireAdmin, a
 });
 
 // POST /api/dian/certificado — subir certificado digital .p12
-app.post('/api/dian/certificado', requireAuth, requireAprobado, requireAdmin, multer({ storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = path.join(__dirname, 'certificados');
-        fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
+app.post('/api/dian/certificado', requireAuth, requireAprobado, requireAdmin, multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const dir = path.join(__dirname, 'certificados');
+            fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (req, file, cb) => cb(null, `local_${req.user.id_local}.p12`)
+    }),
+    // Solo se aceptan certificados .p12 (evita subir archivos arbitrarios)
+    fileFilter: (req, file, cb) => {
+        const ok = /\.p12$/i.test(file.originalname);
+        cb(ok ? null : new Error('Solo se permiten archivos .p12'), ok);
     },
-    filename: (req, file, cb) => cb(null, `local_${req.user.id_local}.p12`)
-}), limits: { fileSize: 5 * 1024 * 1024 } }).single('certificado'), async (req, res) => {
+    limits: { fileSize: 5 * 1024 * 1024 }
+}).single('certificado'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'Se requiere el archivo del certificado.' });
         const idLocal = Number(req.user.id_local);
@@ -1709,7 +1717,7 @@ app.post('/api/dian/emitir/:idVenta', requireAuth, requireAprobado, requireAdmin
         // Firmar con el certificado
         let xmlFirmado;
         try {
-            xmlFirmado = dian.firmarXML(xml, cfg.certificado_path, cfg.certificado_password);
+            xmlFirmado = dian.firmarXML(xml, cfg.certificado_path, dian.descifrarPassword(cfg.certificado_password, idLocal));
         } catch (e) {
             return res.status(400).json({ error: 'No se pudo firmar el XML: ' + e.message });
         }
