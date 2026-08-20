@@ -92,8 +92,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
   };
 
   const handleLogout = () => {
-    clearSession();
-    navigate('/login');
+    window.dispatchEvent(new CustomEvent('auth:logout'));
   };
 
   const irAResultado = (tipo, id) => {
