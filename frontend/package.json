@@ -1,7 +1,7 @@
 {
   "name": "sistema-ventas-pos",
   "private": true,
-  "version": "1.7.5",
+  "version": "1.7.6",
   "type": "module",
   "main": "electron.cjs",
   "author": "Andrés Cuesta",
