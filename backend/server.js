@@ -1960,15 +1960,28 @@ app.post('/api/super/login', loginLimiter, async (req, res) => {
     try {
         const correo = (req.body.correo || '').toString().trim();
         const contrasena = (req.body.contrasena || '').toString();
-        if (!correo || !contrasena) {
-            return res.status(400).json({ error: 'Correo y contraseña son requeridos.' });
+        const codigo = (req.body.codigo || '').toString().trim();
+
+// Validar código de acceso de 4 dígitos (obligatorio)
+        const rCode = await db.query('SELECT codigo_acceso FROM super_admins WHERE correo = \$1', [correo.toLowerCase().trim()]);
+        const rowCode = rCode.rows[0];
+
+        if (!rowCode || !rowCode.codigo_acceso) {
+            return res.status(500).json({ error: 'Error interno: código de acceso no configurado' });
         }
 
-        const r = await db.query('SELECT * FROM super_admins WHERE correo = $1', [correo.toLowerCase().trim()]);
+        const storedCode = String(rowCode.codigo_acceso);
+        const inputCode = String(codigo);
+
+        if (storedCode !== inputCode) {
+            return res.status(401).json({ error: 'Código de acceso incorrecto.' });
+        }
+
+        // Continuar con validación de contraseña normal
+        const r = await db.query('SELECT * FROM super_admins WHERE correo = \$1', [correo.toLowerCase().trim()]);
         const row = r.rows[0];
 
         if (!row) {
-            await bcrypt.compare(contrasena, BCRYPT_DUMMY_HASH);
             return res.status(401).json({ error: 'Credenciales inválidas.' });
         }
         if (!row.estado) {
@@ -1979,7 +1992,7 @@ app.post('/api/super/login', loginLimiter, async (req, res) => {
         if (!ok) return res.status(401).json({ error: 'Credenciales inválidas.' });
 
         // Actualizar last_login
-        await db.query('UPDATE super_admins SET last_login = NOW() WHERE id_super = $1', [row.id_super]);
+        await db.query('UPDATE super_admins SET last_login = NOW() WHERE id_super = \$1', [row.id_super]);
 
         const token = signToken({
             id_super: row.id_super,
