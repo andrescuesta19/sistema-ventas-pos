@@ -1,7 +1,7 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete, getToken } from '../api';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Image as ImageIcon, Images, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X } from 'lucide-react';
 
 const Inventario = ({ user }) => {
   const [productos, setProductos] = useState([]);
@@ -177,7 +177,7 @@ const Inventario = ({ user }) => {
                     {/* v1.7.2: botón de galería de fotos */}
                     <button onClick={() => abrirGaleria(p)} title="Ver / subir fotos"
                       style={{ backgroundColor: 'var(--green-light)', border: '1px solid var(--border-soft)', color: 'var(--green-primary)', cursor: 'pointer', padding: '0.5rem 0.7rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: 600 }}>
-                      <Images size={16} />
+                      <ImagePlus size={16} />
                       {(p.imagenes && p.imagenes.length) ? `${p.imagenes.length}` : ''}
                     </button>
                     <button onClick={() => handleDelete(p.id_producto)} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '0.5rem' }}>
@@ -250,7 +250,7 @@ const Inventario = ({ user }) => {
           <div className="modal-content" style={{ maxWidth: '680px', maxHeight: '85vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Images size={20} color="var(--green-primary)" />
+                <ImagePlus size={20} color="var(--green-primary)" />
                 Fotos de: {galeria.nombre_producto}
               </h2>
               <button className="close-btn" onClick={cerrarGaleria}>×</button>
