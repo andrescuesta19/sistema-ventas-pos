@@ -14,7 +14,8 @@ import {
   ShoppingCart,
   DollarSign,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
 import { API_URL } from '../config';
@@ -663,8 +664,13 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                     Términos y condiciones
                   </Link>
                 </p>
-                {/* v1.5.3: El link de Super-Admin se quitó del login público. El super-admin
-                    accede navegando manualmente a /super-admin (ruta secreta). */}
+                {/* v1.9.1: Acceso visible al super-admin (solo el dueño del sistema lo usa).
+                    Antes era ruta secreta /super-admin y el usuario no encontraba cómo entrar. */}
+                <p style={{ ...styles.footer, marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
+                  <Link to="/super-admin" style={{ color: 'rgba(126, 217, 87, 0.5)', fontSize: '0.78rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <ShieldCheck size={13} /> Acceso Super-Admin (dueño del sistema)
+                  </Link>
+                </p>
               </motion.form>
             )}
 
