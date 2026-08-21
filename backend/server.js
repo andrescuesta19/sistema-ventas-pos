@@ -2071,7 +2071,6 @@ app.get('/api/super/locales', requireSuperAdmin, async (req, res) => {
         const r = await db.query(`
             SELECT
                 l.id_local, l.nombre_local, l.direccion, l.nit, l.telefono, l.ciudad, l.email,
-                l.created_at,
                 (SELECT COUNT(*) FROM usuarios u WHERE u.id_local = l.id_local) as total_usuarios,
                 (SELECT COUNT(*) FROM usuarios u WHERE u.id_local = l.id_local AND u.aprobado_por_admin = false) as pendientes_aprobacion
             FROM locales l
