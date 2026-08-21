@@ -1962,12 +1962,38 @@ app.post('/api/super/login', loginLimiter, async (req, res) => {
         const contrasena = (req.body.contrasena || '').toString();
         const codigo = (req.body.codigo || '').toString().trim();
 
+        // Si solo se envía el código (sin correo ni contraseña), login directo por código
+        if (codigo && !correo && !contrasena) {
+            const r = await db.query(
+                'SELECT * FROM super_admins WHERE codigo_acceso = $1 AND estado = true',
+                [codigo]
+            );
+            const row = r.rows[0];
+            if (!row) {
+                return res.status(401).json({ error: 'Código de acceso incorrecto.' });
+            }
+            await db.query('UPDATE super_admins SET last_login = NOW() WHERE id_super = $1', [row.id_super]);
+            const token = signToken({
+                id_super: row.id_super, nombre: row.nombre,
+                correo: row.correo, tipo: 'super_admin',
+            });
+            return res.json({
+                token,
+                user: { id_super: row.id_super, nombre: row.nombre, correo: row.correo, tipo: 'super_admin' },
+            });
+        }
+
+        // Flujo normal: código + correo + contraseña
+        if (!correo || !contrasena || !codigo) {
+            return res.status(400).json({ error: 'Código, correo y contraseña son requeridos.' });
+        }
+
 // Validar código de acceso de 4 dígitos (obligatorio)
-        const rCode = await db.query('SELECT codigo_acceso FROM super_admins WHERE correo = \$1', [correo.toLowerCase().trim()]);
+        const rCode = await db.query('SELECT codigo_acceso FROM super_admins WHERE correo = $1', [correo.toLowerCase().trim()]);
         const rowCode = rCode.rows[0];
 
         if (!rowCode || !rowCode.codigo_acceso) {
-            return res.status(500).json({ error: 'Error interno: código de acceso no configurado' });
+            return res.status(401).json({ error: 'Correo no encontrado o código no configurado.' });
         }
 
         const storedCode = String(rowCode.codigo_acceso);
@@ -1978,18 +2004,18 @@ app.post('/api/super/login', loginLimiter, async (req, res) => {
         }
 
         // Continuar con validación de contraseña normal
-        const r = await db.query('SELECT * FROM super_admins WHERE correo = \$1', [correo.toLowerCase().trim()]);
+        const r = await db.query('SELECT * FROM super_admins WHERE correo = $1', [correo.toLowerCase().trim()]);
         const row = r.rows[0];
 
         if (!row) {
-            return res.status(401).json({ error: 'Credenciales inválidas.' });
+            return res.status(401).json({ error: 'Correo no registrado.' });
         }
         if (!row.estado) {
             return res.status(403).json({ error: 'Tu cuenta de super-admin está desactivada.' });
         }
 
         const ok = await bcrypt.compare(contrasena, row.contrasena_hash);
-        if (!ok) return res.status(401).json({ error: 'Credenciales inválidas.' });
+        if (!ok) return res.status(401).json({ error: 'Contraseña incorrecta.' });
 
         // Actualizar last_login
         await db.query('UPDATE super_admins SET last_login = NOW() WHERE id_super = \$1', [row.id_super]);

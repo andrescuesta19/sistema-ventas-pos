@@ -96,14 +96,19 @@ const SuperAdmin = () => {
     setLoginError('');
     setLoginLoading(true);
     try {
+      // Si solo hay código (sin correo ni contraseña), enviar solo el código
+      const payload = loginForm.correo.trim() && loginForm.contrasena
+        ? {
+            correo: loginForm.correo.trim(),
+            contrasena: loginForm.contrasena,
+            codigo: loginForm.codigo.trim(),
+          }
+        : { codigo: loginForm.codigo.trim() };
+
       const r = await fetch(`${API_URL}/api/super/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          correo: loginForm.correo.trim(),
-          contrasena: loginForm.contrasena,  // NO trim aquí para no romper contraseñas con espacios intencionales
-          codigo: loginForm.codigo.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -230,12 +235,11 @@ const SuperAdmin = () => {
               />
             </div>
             <div style={{ marginBottom: '0.85rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Correo</label>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Correo <span style={{ opacity: 0.5, fontWeight: 400 }}>(opcional)</span></label>
               <input
                 type="email"
                 value={loginForm.correo}
                 onChange={e => setLoginForm({ ...loginForm, correo: e.target.value })}
-                required
                 placeholder="super@posmaster.com"
                 style={{
                   width: '100%', padding: '0.75rem 0.9rem',
@@ -247,13 +251,12 @@ const SuperAdmin = () => {
               />
             </div>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Contraseña</label>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Contraseña <span style={{ opacity: 0.5, fontWeight: 400 }}>(opcional)</span></label>
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPwd ? 'text' : 'password'}
                   value={loginForm.contrasena}
                   onChange={e => setLoginForm({ ...loginForm, contrasena: e.target.value })}
-                  required
                   placeholder="Contraseña"
                   style={{
                     width: '100%', padding: '0.75rem 2.6rem 0.75rem 0.9rem',
@@ -289,6 +292,11 @@ const SuperAdmin = () => {
               {loginLoading ? 'Verificando...' : 'Acceder al Panel'}
             </button>
           </form>
+
+          <p style={{ marginTop: '1rem', textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.78rem', lineHeight: 1.5 }}>
+            Solo necesitas el código de 4 dígitos para ingresar.<br/>
+            Correo y contraseña son opcionales.
+          </p>
 
           <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
             <button onClick={() => navigate('/login')} style={{ background: 'none', border: 'none', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'inherit' }}>
