@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { Shield, Check, X, LogOut, RefreshCw, Store, Users,
   TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck, Eye, EyeOff,
-  Bot, Send, Ticket
+  Bot, Send, Ticket, MessageCircle
 } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -25,6 +25,12 @@ const SuperAdmin = () => {
   const [tickets, setTickets] = useState([]); // v1.9.0: tickets de soporte
   const [reporteEnviando, setReporteEnviando] = useState(false); // v1.9.0: bot automatizaciones
   const [reporteMsg, setReporteMsg] = useState(null);
+  // Bot de comandos
+  const [botMensajes, setBotMensajes] = useState([
+    { tipo: 'bot', texto: '🤖 Hola, soy tu asistente. Escribe "ayuda" para ver los comandos disponibles.' }
+  ]);
+  const [botInput, setBotInput] = useState('');
+  const [botLoading, setBotLoading] = useState(false);
 
   // Recuperar sesión del super-admin
   useEffect(() => {
@@ -134,6 +140,28 @@ const SuperAdmin = () => {
     setSuperAdmin(null);
     localStorage.removeItem('super_admin_token');
     localStorage.removeItem('super_admin_user');
+  };
+
+  // Enviar comando al bot
+  const enviarBot = async (texto) => {
+    if (!texto.trim() || botLoading) return;
+    const msg = texto.trim();
+    setBotInput('');
+    setBotMensajes(prev => [...prev, { tipo: 'usuario', texto: msg }]);
+    setBotLoading(true);
+    try {
+      const r = await fetch(`${API_URL}/api/super/bot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mensaje: msg }),
+      });
+      const data = await r.json();
+      setBotMensajes(prev => [...prev, { tipo: 'bot', texto: data.respuesta || 'Sin respuesta.' }]);
+    } catch {
+      setBotMensajes(prev => [...prev, { tipo: 'bot', texto: '❌ Error de conexión.' }]);
+    } finally {
+      setBotLoading(false);
+    }
   };
 
   const aprobar = async (idUsuario, nombre) => {
@@ -360,6 +388,7 @@ const SuperAdmin = () => {
           {[
             { id: 'solicitudes', label: 'Solicitudes Pendientes', count: solicitudes.length },
             { id: 'locales', label: 'Todos los Locales', count: locales.length },
+            { id: 'bot', label: '🤖 Bot', count: 0 },
             { id: 'automatizaciones', label: 'Automatizaciones', count: tickets.filter(t => t.estado === 'Abierto').length },
           ].map(t => (
             <button
@@ -595,6 +624,81 @@ const SuperAdmin = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab Bot */}
+        {tab === 'bot' && (
+          <div style={{
+            background: 'rgba(20, 40, 25, 0.5)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 12, padding: '1.25rem 1.5rem',
+            display: 'flex', flexDirection: 'column', height: '60vh',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+              <MessageCircle size={20} color="#7ed957" />
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Chat con el Bot</h3>
+              <span style={{
+                marginLeft: 'auto', padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.75rem', fontWeight: 700,
+                background: 'rgba(126, 217, 87, 0.15)', color: '#7ed957',
+              }}>● En línea</span>
+            </div>
+
+            {/* Mensajes */}
+            <div style={{
+              flex: 1, overflowY: 'auto', padding: '0.5rem',
+              display: 'flex', flexDirection: 'column', gap: '0.6rem',
+              background: 'rgba(0, 0, 0, 0.2)', borderRadius: 10, marginBottom: '0.75rem',
+            }}>
+              {botMensajes.map((m, i) => (
+                <div key={i} style={{
+                  maxWidth: '80%', alignSelf: m.tipo === 'usuario' ? 'flex-end' : 'flex-start',
+                  background: m.tipo === 'usuario' ? '#1a8a4a' : 'rgba(255, 255, 255, 0.08)',
+                  color: '#fff', padding: '0.65rem 0.9rem', borderRadius: 12,
+                  fontSize: '0.88rem', lineHeight: 1.5, whiteSpace: 'pre-wrap',
+                  border: m.tipo === 'usuario' ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                }}>
+                  {m.texto}
+                </div>
+              ))}
+              {botLoading && (
+                <div style={{ alignSelf: 'flex-start', color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem', padding: '0.5rem' }}>
+                  Escribiendo...
+                </div>
+              )}
+            </div>
+
+            {/* Input */}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={botInput}
+                onChange={e => setBotInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && enviarBot(botInput)}
+                placeholder="Escribe un comando... (ej: ayuda, ver locales, reporte)"
+                style={{
+                  flex: 1, padding: '0.7rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1.5px solid rgba(126, 217, 87, 0.15)',
+                  borderRadius: 10, color: '#fff', fontSize: '0.9rem',
+                  fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                }}
+              />
+              <button
+                onClick={() => enviarBot(botInput)}
+                disabled={botLoading || !botInput.trim()}
+                style={{
+                  background: '#1a8a4a', border: 'none', color: '#fff',
+                  padding: '0.7rem 1.2rem', borderRadius: 10,
+                  cursor: botLoading || !botInput.trim() ? 'not-allowed' : 'pointer',
+                  opacity: botLoading || !botInput.trim() ? 0.5 : 1,
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  fontFamily: 'inherit', fontWeight: 600,
+                }}
+              >
+                <Send size={16} /> Enviar
+              </button>
             </div>
           </div>
         )}
