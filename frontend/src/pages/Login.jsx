@@ -585,12 +585,13 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
         </div>
 
         {/* CARD INFERIOR — Flujo de 2 pasos */}
-        <motion.div
-          style={styles.cardWrap}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        >
+<motion.div
+              style={styles.cardWrap}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              style={{ ...styles.cardWrap, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(255, 255, 255, 0.02)' }}
+            >
           <AnimatePresence mode="wait">
             {step === 'email' && (
               <motion.form

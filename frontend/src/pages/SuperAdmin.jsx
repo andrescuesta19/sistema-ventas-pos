@@ -177,6 +177,7 @@ const SuperAdmin = () => {
         minHeight: '100vh', background: '#0a1a0e', color: '#fff',
         fontFamily: 'Inter, system-ui, sans-serif',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem',
+        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.1)',
       }}>
         <div style={{
           background: 'rgba(20, 40, 25, 0.6)', backdropFilter: 'blur(16px)',

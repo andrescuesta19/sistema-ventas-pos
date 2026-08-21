@@ -95,6 +95,14 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
     window.dispatchEvent(new CustomEvent('auth:logout'));
   };
 
+  // Liquid Glass effect for header/sidebar
+  const headerGlassStyle = {
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(20, 40, 25, 0.6)',
+  };
+
   const irAResultado = (tipo, id) => {
     setSearchOpen(false);
     setSearch('');
@@ -158,7 +166,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
                           (searchResults?.ventas?.length || 0);
 
   return (
-    <div style={styles.header}>
+    <div style={{ ...styles.header, ...headerGlassStyle }}>
       {/* Buscador global */}
       <div style={styles.searchWrap} ref={searchRef}>
         <Search size={16} style={styles.searchIcon} />
