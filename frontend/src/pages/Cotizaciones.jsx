@@ -79,15 +79,15 @@ const Cotizaciones = ({ user }) => {
     const term = busquedaProd.trim();
     try {
       const url = term
-        ? `${API_URL}/api/productos?id_local=${user.id_local}&q=${encodeURIComponent(term)}`
-        : `${API_URL}/api/productos?id_local=${user.id_local}`;
+        ? `${API_URL}/api/productos?id_local=${user?.id_local}&q=${encodeURIComponent(term)}`
+        : `${API_URL}/api/productos?id_local=${user?.id_local}`;
       const data = await apiGet(url);
       const lista = Array.isArray(data) ? data : (data.productos || []);
       setProductos(lista.slice(0, 20));
     } catch (err) {
       setError('Error buscando productos: ' + err.message);
     }
-  }, [busquedaProd, user.id_local]);
+  }, [busquedaProd, user?.id_local]);
 
   useEffect(() => {
     if (showNueva) {
