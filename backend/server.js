@@ -1929,7 +1929,7 @@ try {
 
 // Health check (sin auth) — útil para que la app verifique que el backend está vivo
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), version: APP_VERSION });
+    console.log('HEALTH_VERSION:', APP_VERSION); res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.9.3' });
 });
 
 // =====================================================
