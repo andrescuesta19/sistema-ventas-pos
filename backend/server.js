@@ -2984,6 +2984,179 @@ app.post('/api/super/reporte', requireSuperAdmin, async (req, res) => {
     }
 });
 
+// POST /api/super/bot — chat de comandos para el super-admin
+app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
+    try {
+        const mensaje = (req.body.mensaje || '').trim().toLowerCase();
+
+        if (!mensaje) {
+            return res.json({ respuesta: 'Escribe un comando. Escribe "ayuda" para ver los disponibles.' });
+        }
+
+        ///ayuda
+        if (mensaje === 'ayuda' || mensaje === 'help' || mensaje === '?') {
+            return res.json({ respuesta:
+                '🤖 *Comandos disponibles:*\n\n' +
+                '📊 *Reportes:*\n' +
+                '• "reporte semanal" — Envía el reporte semanal\n' +
+                '• "reporte mensual" — Envía el reporte mensual\n\n' +
+                '🏪 *Locales:*\n' +
+                '• "ver locales" — Lista todos los locales\n' +
+                '• "locales pendientes" — Locales con usuarios sin aprobar\n\n' +
+                '👥 *Usuarios:*\n' +
+                '• "ver usuarios" — Lista todos los usuarios\n' +
+                '• "usuarios pendientes" — Usuarios esperando aprobación\n' +
+                '• "aprobar [nombre]" — Aprobar un usuario pendiente\n' +
+                '• "rechazar [nombre]" — Rechazar un usuario pendiente\n\n' +
+                '🎫 *Soporte:*\n' +
+                '• "ver tickets" — Tickets de soporte abiertos\n' +
+                '• "tickets abiertos" — Solo los que están abiertos\n\n' +
+                '📈 *Métricas:*\n' +
+                '• "métricas" — Resumen del sistema\n' +
+                '• "resumen" — Lo mismo que métricas\n\n' +
+                '🔄 *Sistema:*\n' +
+                '• "actualizar" — Info de la versión actual\n' +
+                '• "estado" — Estado del servidor'
+            });
+        }
+
+        // métricas / resumen
+        if (mensaje === 'metricas' || mensaje === 'métricas' || mensaje === 'resumen') {
+            const [locales, usuarios, ventas, tickets] = await Promise.all([
+                db.query('SELECT COUNT(*)::int AS n FROM locales'),
+                db.query('SELECT COUNT(*)::int AS n FROM usuarios'),
+                db.query("SELECT COUNT(*)::int AS n, COALESCE(SUM(total_neto),0)::numeric AS total FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '30 days'"),
+                db.query("SELECT COUNT(*)::int AS n FROM tickets_soporte WHERE estado = 'Abierto'"),
+            ]);
+            const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
+            return res.json({ respuesta:
+                `📈 *Resumen del sistema:*\n\n` +
+                `🏪 Locales: ${locales.rows[0].n}\n` +
+                `👥 Usuarios: ${usuarios.rows[0].n}\n` +
+                `💰 Ventas (30 días): ${fmtCOP(ventas.rows[0].total)} (${ventas.rows[0].n} ventas)\n` +
+                `🎫 Tickets abiertos: ${tickets.rows[0].n}`
+            });
+        }
+
+        // ver locales
+        if (mensaje === 'ver locales' || mensaje === 'locales') {
+            const r = await db.query('SELECT id_local, nombre_local, ciudad, nit FROM locales ORDER BY id_local');
+            if (r.rows.length === 0) return res.json({ respuesta: 'No hay locales registrados.' });
+            const lista = r.rows.map(l => `• *${l.nombre_local}* (ID ${l.id_local})${l.ciudad ? ' — ' + l.ciudad : ''}${l.nit ? ' | NIT: ' + l.nit : ''}`).join('\n');
+            return res.json({ respuesta: `🏪 *Locales registrados (${r.rows.length}):*\n\n${lista}` });
+        }
+
+        // locales pendientes
+        if (mensaje === 'locales pendientes') {
+            const r = await db.query(`
+                SELECT l.nombre_local, COUNT(u.id_usuario)::int AS pendientes
+                FROM locales l
+                LEFT JOIN usuarios u ON u.id_local = l.id_local AND u.aprobado_por_admin = false
+                GROUP BY l.id_local, l.nombre_local
+                HAVING COUNT(u.id_usuario) > 0
+            `);
+            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay locales con usuarios pendientes.' });
+            const lista = r.rows.map(l => `• *${l.nombre_local}*: ${l.pendientes} pendiente(s)`).join('\n');
+            return res.json({ respuesta: `⏳ *Locales con usuarios pendientes:*\n\n${lista}` });
+        }
+
+        // ver usuarios
+        if (mensaje === 'ver usuarios' || mensaje === 'usuarios') {
+            const r = await db.query(`
+                SELECT u.nombre, u.correo, l.nombre_local, u.aprobado_por_admin
+                FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local
+                ORDER BY u.id_usuario
+            `);
+            if (r.rows.length === 0) return res.json({ respuesta: 'No hay usuarios registrados.' });
+            const lista = r.rows.map(u => `• *${u.nombre}* (${u.correo}) — ${u.nombre_local || 'sin local'} ${u.aprobado_por_admin ? '✅' : '⏳'}`).join('\n');
+            return res.json({ respuesta: `👥 *Usuarios (${r.rows.length}):*\n\n${lista}` });
+        }
+
+        // usuarios pendientes
+        if (mensaje === 'usuarios pendientes' || mensaje === 'pendientes') {
+            const r = await db.query(`
+                SELECT u.id_usuario, u.nombre, u.correo, l.nombre_local
+                FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local
+                WHERE u.aprobado_por_admin = false
+                ORDER BY u.created_at
+            `);
+            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay usuarios pendientes de aprobación.' });
+            const lista = r.rows.map(u => `• *${u.nombre}* (${u.correo}) — ${u.nombre_local || 'sin local'} [ID: ${u.id_usuario}]`).join('\n');
+            return res.json({ respuesta: `⏳ *Usuarios pendientes (${r.rows.length}):*\n\n${lista}\n\nPara aprobar escribe: "aprobar [nombre]"` });
+        }
+
+        // aprobar [nombre]
+        if (mensaje.startsWith('aprobar ')) {
+            const nombre = mensaje.replace('aprobar ', '').trim();
+            const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
+            if (r.rows.length === 0) return res.json({ respuesta: `No se encontró un usuario pendiente con "${nombre}".` });
+            if (r.rows.length > 1) {
+                const lista = r.rows.map(u => `• ${u.nombre} [ID: ${u.id_usuario}]`).join('\n');
+                return res.json({ respuesta: `Se encontraron varios. Especifica cuál:\n\n${lista}` });
+            }
+            await db.query('UPDATE usuarios SET aprobado_por_admin = true WHERE id_usuario = $1', [r.rows[0].id_usuario]);
+            return res.json({ respuesta: `✅ *${r.rows[0].nombre}* ha sido aprobado correctamente.` });
+        }
+
+        // rechazar [nombre]
+        if (mensaje.startsWith('rechazar ')) {
+            const nombre = mensaje.replace('rechazar ', '').trim();
+            const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
+            if (r.rows.length === 0) return res.json({ respuesta: `No se encontró un usuario pendiente con "${nombre}".` });
+            await db.query('DELETE FROM usuarios WHERE id_usuario = $1', [r.rows[0].id_usuario]);
+            return res.json({ respuesta: `❌ *${r.rows[0].nombre}* ha sido rechazado/eliminado.` });
+        }
+
+        // ver tickets / tickets abiertos
+        if (mensaje === 'ver tickets' || mensaje === 'tickets' || mensaje === 'tickets abiertos') {
+            const abierto = mensaje.includes('abiertos');
+            const query = abierto
+                ? "SELECT * FROM tickets_soporte WHERE estado = 'Abierto' ORDER BY created_at DESC LIMIT 10"
+                : 'SELECT * FROM tickets_soporte ORDER BY created_at DESC LIMIT 10';
+            const r = await db.query(query);
+            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay tickets de soporte.' });
+            const lista = r.rows.map(t => `• *#${t.id_ticket}* ${t.asunto || 'Consulta'} — ${t.nombre} [${t.estado}]`).join('\n');
+            return res.json({ respuesta: `🎫 *Tickets${abierto ? ' abiertos' : ''} (${r.rows.length}):*\n\n${lista}` });
+        }
+
+        // reporte semanal / mensual
+        if (mensaje === 'reporte semanal' || mensaje === 'reporte se' || mensaje === 'semanal') {
+            const resultado = await enviarReporteAutomatico('semanal');
+            return res.json({ respuesta: resultado.enviado
+                ? '✅ Reporte semanal enviado a tu correo.'
+                : '⚠️ Reporte generado, pero no se pudo enviar el correo (revisa SMTP).'
+            });
+        }
+        if (mensaje === 'reporte mensual' || mensaje === 'mensual') {
+            const resultado = await enviarReporteAutomatico('mensual');
+            return res.json({ respuesta: resultado.enviado
+                ? '✅ Reporte mensual enviado a tu correo.'
+                : '⚠️ Reporte generado, pero no se pudo enviar el correo (revisa SMTP).'
+            });
+        }
+
+        // actualizar / versión
+        if (mensaje === 'actualizar' || mensaje === 'version' || mensaje === 'versión') {
+            return res.json({ respuesta: `🔄 *Versión actual:* ${APP_VERSION}\n\nPara actualizar, descarga la última versión desde GitHub Releases.` });
+        }
+
+        // estado del servidor
+        if (mensaje === 'estado' || mensaje === 'status') {
+            const uptime = Math.floor(process.uptime());
+            const min = Math.floor(uptime / 60);
+            const hrs = Math.floor(min / 60);
+            return res.json({ respuesta: `🟢 *Servidor activo*\n\n⏱️ Tiempo activo: ${hrs}h ${min % 60}m\n📊 Versión: ${APP_VERSION}\n💾 Puerto: 3000` });
+        }
+
+        // Comando no reconocido
+        return res.json({ respuesta: `❓ No entendí "${req.body.mensaje}". Escribe "ayuda" para ver los comandos disponibles.` });
+
+    } catch (err) {
+        console.error('Error en bot:', err);
+        res.status(500).json({ respuesta: '❌ Error interno del servidor.' });
+    }
+});
+
 // Cron: reporte semanal (lunes 8am) y mensual (día 1, 8am)
 function programarReportes() {
     const check = () => {
