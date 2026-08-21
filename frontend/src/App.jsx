@@ -47,11 +47,14 @@ import UpdateNotification from './components/UpdateNotification';
 import { formatearFechaHoraCO, formatearFechaLargaCO } from './utils/dateCO';
 
 /* ─────────────────────────────────────────────────────────
-   ErrorBoundary — v1.5.4
-   Antes, cualquier ReferenceError o TypeError dejaba la app
-   en blanco. Ahora mostramos un fallback con detalles y un
-   botón para recargar.
+   Liquid Glass — efecto Apple "frosted glass"
    ───────────────────────────────────────────────────────── */
+  const glassStyle = {
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    background: 'rgba(255, 255, 255, 0.02)',
+  };
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
