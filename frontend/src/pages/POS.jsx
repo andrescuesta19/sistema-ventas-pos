@@ -154,12 +154,12 @@ const POS = ({ user }) => {
   };
 
   const fetchTurno = async () => {
-    const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user?.id_local}`);
     setTurno(data.turno_abierto ? data.turno : null);
   };
 
   const fetchAllProductos = async () => {
-    const data = await apiGet(`${API_URL}/api/productos?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/productos?id_local=${user?.id_local}`);
     setTodosProductos(data);
     setProductos(data);
   };
@@ -311,7 +311,7 @@ const POS = ({ user }) => {
 
     const payload = {
       id_usuario: user.id_usuario,
-      id_local: user.id_local,
+      id_local: user?.id_local,
       id_cliente: id_cliente,
       id_turno: turno.id_turno,
       subtotal: Math.round(totales.subtotal),

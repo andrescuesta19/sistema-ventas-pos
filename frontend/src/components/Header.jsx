@@ -85,7 +85,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
 
   const cargarAlertas = async () => {
     try {
-      const r = await apiGet(`${API_URL}/api/productos/alertas?id_local=${user.id_local}`);
+      const r = await apiGet(`${API_URL}/api/productos/alertas?id_local=${user?.id_local}`);
       setAlertas(r || []);
       setNotifCount((r || []).length);
     } catch {}

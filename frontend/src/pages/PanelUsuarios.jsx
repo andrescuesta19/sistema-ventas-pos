@@ -31,7 +31,7 @@ const PanelUsuarios = ({ user }) => {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGet(`${API_URL}/api/usuarios/local?id_local=${user.id_local}`);
+      const data = await apiGet(`${API_URL}/api/usuarios/local?id_local=${user?.id_local}`);
       setUsuarios(data);
     } catch (err) {
       setError(err.message);

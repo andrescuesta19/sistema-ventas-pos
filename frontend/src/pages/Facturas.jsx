@@ -15,7 +15,7 @@ const Facturas = ({ user }) => {
   }, []);
 
   const fetchFacturas = async () => {
-    const data = await apiGet(`${API_URL}/api/ventas/historial?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/ventas/historial?id_local=${user?.id_local}`);
     setFacturas(data);
   };
 

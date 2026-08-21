@@ -27,7 +27,7 @@ const Inventario = ({ user }) => {
   }, []);
 
   const fetchProductos = async () => {
-    const data = await apiGet(`${API_URL}/api/productos?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/productos?id_local=${user?.id_local}`);
     setProductos(data);
   };
 
@@ -41,7 +41,7 @@ const Inventario = ({ user }) => {
     e.preventDefault();
     const payload = {
       ...formData,
-      id_local: user.id_local,
+      id_local: user?.id_local,
       precio_compra: parseFloat(formData.precio_compra),
       precio_venta: parseFloat(formData.precio_venta),
       stock_actual: parseInt(formData.stock_actual),

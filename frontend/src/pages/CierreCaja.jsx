@@ -20,7 +20,7 @@ const CierreCaja = ({ user, onLogout }) => {
 
   const fetchTurno = async () => {
     try {
-      const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
+      const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user?.id_local}`);
       if (data.turno_abierto) {
         const repData = await apiGet(`${API_URL}/api/turnos/reporte?id_turno=${data.turno.id_turno}`);
         setReporte(repData);

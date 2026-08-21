@@ -171,44 +171,44 @@ const Dashboard = ({ user }) => {
   const [loadingResumen, setLoadingResumen] = useState(true);
 
   const fetchTurno = useCallback(async () => {
-    const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/turnos/estado?id_local=${user?.id_local}`);
     setTurno(data.turno_abierto ? data.turno : null);
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchAlertas = useCallback(async () => {
-    const data = await apiGet(`${API_URL}/api/productos/alertas?id_local=${user.id_local}`);
+    const data = await apiGet(`${API_URL}/api/productos/alertas?id_local=${user?.id_local}`);
     setAlertas(data);
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchResumenDia = useCallback(async () => {
     setLoadingResumen(true);
     try {
-      const data = await apiGet(`${API_URL}/api/ventas/resumen-dia?id_local=${user.id_local}`);
+      const data = await apiGet(`${API_URL}/api/ventas/resumen-dia?id_local=${user?.id_local}`);
       setResumenDia(data);
     } catch {
       setResumenDia(null);
     } finally {
       setLoadingResumen(false);
     }
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchResumenAyer = useCallback(async () => {
     try {
-      const data = await apiGet(`${API_URL}/api/ventas/resumen-dia?id_local=${user.id_local}&ayer=1`);
+      const data = await apiGet(`${API_URL}/api/ventas/resumen-dia?id_local=${user?.id_local}&ayer=1`);
       setResumenAyer(data);
     } catch {
       setResumenAyer(null);
     }
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchProductos = useCallback(async () => {
     try {
-      const data = await apiGet(`${API_URL}/api/productos?id_local=${user.id_local}`);
+      const data = await apiGet(`${API_URL}/api/productos?id_local=${user?.id_local}`);
       setProductosTotal(Array.isArray(data) ? data.length : (data.total ?? null));
     } catch {
       setProductosTotal(null);
     }
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchClientes = useCallback(async () => {
     try {
@@ -225,21 +225,21 @@ const Dashboard = ({ user }) => {
 
   const fetchVentasPorDia = useCallback(async () => {
     try {
-      const data = await apiGet(`${API_URL}/api/ventas/por-dia?id_local=${user.id_local}&dias=7`);
+      const data = await apiGet(`${API_URL}/api/ventas/por-dia?id_local=${user?.id_local}&dias=7`);
       setVentasPorDia(Array.isArray(data) ? data : []);
     } catch {
       setVentasPorDia([]);
     }
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   const fetchActividad = useCallback(async () => {
     try {
-      const data = await apiGet(`${API_URL}/api/actividad-reciente?id_local=${user.id_local}&limite=8`);
+      const data = await apiGet(`${API_URL}/api/actividad-reciente?id_local=${user?.id_local}&limite=8`);
       setActividad(Array.isArray(data) ? data : []);
     } catch {
       setActividad([]);
     }
-  }, [user.id_local]);
+  }, [user?.id_local]);
 
   useEffect(() => {
     fetchTurno();
@@ -275,7 +275,7 @@ const Dashboard = ({ user }) => {
   const abrirTurno = async (e) => {
     e.preventDefault();
     const monto = montoApertura === '' ? 0 : (parseFloat(montoApertura) || 0);
-    const res = await apiPost(`${API_URL}/api/turnos/abrir`, { id_usuario: user.id_usuario, id_local: user.id_local, monto_apertura: monto });
+    const res = await apiPost(`${API_URL}/api/turnos/abrir`, { id_usuario: user?.id_usuario, id_local: user?.id_local, monto_apertura: monto });
     if (res.ok) {
       setShowApertura(false);
       fetchTurno();
