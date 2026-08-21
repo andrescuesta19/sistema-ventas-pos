@@ -211,10 +211,9 @@ const SuperAdmin = () => {
         minHeight: '100vh', background: '#0a1a0e', color: '#fff',
         fontFamily: 'Inter, system-ui, sans-serif',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem',
-        backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: '1px solid rgba(255, 255, 255, 0.1)',
       }}>
         <div style={{
-          background: 'rgba(20, 40, 25, 0.6)', backdropFilter: 'blur(16px)',
+          background: 'rgba(20, 40, 25, 0.6)',
           border: '1px solid rgba(126, 217, 87, 0.2)', borderRadius: '20px',
           padding: '2.5rem', maxWidth: '420px', width: '100%',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
@@ -343,7 +342,7 @@ const SuperAdmin = () => {
 
       {/* Header */}
       <div style={{
-        background: 'rgba(20, 40, 25, 0.8)', backdropFilter: 'blur(12px)',
+        background: 'rgba(20, 40, 25, 0.8)',
         borderBottom: '1px solid rgba(126, 217, 87, 0.15)',
         padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem',
       }}>
