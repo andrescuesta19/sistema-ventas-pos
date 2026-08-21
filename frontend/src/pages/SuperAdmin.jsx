@@ -17,7 +17,7 @@ const SuperAdmin = () => {
   const [metricas, setMetricas] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState('solicitudes');
-  const [loginForm, setLoginForm] = useState({ correo: '', contrasena: '' });
+  const [loginForm, setLoginForm] = useState({ correo: '', contrasena: '', codigo: '' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [feedback, setFeedback] = useState({}); // { idUsuario: 'aprobando' }
@@ -102,6 +102,7 @@ const SuperAdmin = () => {
         body: JSON.stringify({
           correo: loginForm.correo.trim(),
           contrasena: loginForm.contrasena,  // NO trim aquí para no romper contraseñas con espacios intencionales
+          codigo: loginForm.codigo.trim(),
         }),
       });
       const data = await r.json();
@@ -205,13 +206,36 @@ const SuperAdmin = () => {
 
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: '0.85rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Código de acceso</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={loginForm.codigo}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setLoginForm({ ...loginForm, codigo: val });
+                }}
+                required
+                autoFocus
+                placeholder="4 dígitos"
+                style={{
+                  width: '100%', padding: '0.75rem 0.9rem',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1.5px solid rgba(126, 217, 87, 0.15)',
+                  borderRadius: '10px', color: '#fff', fontSize: '1.2rem',
+                  fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                  letterSpacing: '0.5rem', textAlign: 'center',
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '0.85rem' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Correo</label>
               <input
                 type="email"
                 value={loginForm.correo}
                 onChange={e => setLoginForm({ ...loginForm, correo: e.target.value })}
                 required
-                autoFocus
                 placeholder="super@posmaster.com"
                 style={{
                   width: '100%', padding: '0.75rem 0.9rem',
@@ -230,7 +254,7 @@ const SuperAdmin = () => {
                   value={loginForm.contrasena}
                   onChange={e => setLoginForm({ ...loginForm, contrasena: e.target.value })}
                   required
-                  placeholder="SuperPOS2024!Admin"
+                  placeholder="Contraseña"
                   style={{
                     width: '100%', padding: '0.75rem 2.6rem 0.75rem 0.9rem',
                     background: 'rgba(255, 255, 255, 0.05)',
