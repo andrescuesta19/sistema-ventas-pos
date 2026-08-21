@@ -50,10 +50,8 @@ import { formatearFechaHoraCO, formatearFechaLargaCO } from './utils/dateCO';
    Liquid Glass — efecto Apple "frosted glass"
    ───────────────────────────────────────────────────────── */
   const glassStyle = {
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    background: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid var(--border-soft)',
+    background: 'var(--bg-card)',
   };
 class ErrorBoundary extends React.Component {
   constructor(props) {

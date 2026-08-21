@@ -97,10 +97,8 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
 
   // Liquid Glass effect for header/sidebar
   const headerGlassStyle = {
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    background: 'rgba(20, 40, 25, 0.6)',
+    borderBottom: '1px solid var(--border-soft)',
+    background: 'var(--bg-topbar)',
   };
 
   const irAResultado = (tipo, id) => {
