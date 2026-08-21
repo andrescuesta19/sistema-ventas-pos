@@ -2983,172 +2983,342 @@ app.post('/api/super/reporte', requireSuperAdmin, async (req, res) => {
     }
 });
 
-// POST /api/super/bot — chat de comandos para el super-admin
+// POST /api/super/bot — chat inteligente con lenguaje natural para el super-admin
 app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
     try {
-        const mensaje = (req.body.mensaje || '').trim().toLowerCase();
+        const msg = (req.body.mensaje || '').trim().toLowerCase();
+        if (!msg) return res.json({ respuesta: '¿En qué te puedo ayudar? Escribe tu pregunta o solicitud.' });
 
-        if (!mensaje) {
-            return res.json({ respuesta: 'Escribe un comando. Escribe "ayuda" para ver los disponibles.' });
-        }
+        const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
+        const fmtNum = (v) => new Intl.NumberFormat('es-CO').format(Number(v) || 0);
 
-        ///ayuda
-        if (mensaje === 'ayuda' || mensaje === 'help' || mensaje === '?') {
-            return res.json({ respuesta:
-                '🤖 *Comandos disponibles:*\n\n' +
-                '📊 *Reportes:*\n' +
-                '• "reporte semanal" — Envía el reporte semanal\n' +
-                '• "reporte mensual" — Envía el reporte mensual\n\n' +
-                '🏪 *Locales:*\n' +
-                '• "ver locales" — Lista todos los locales\n' +
-                '• "locales pendientes" — Locales con usuarios sin aprobar\n\n' +
-                '👥 *Usuarios:*\n' +
-                '• "ver usuarios" — Lista todos los usuarios\n' +
-                '• "usuarios pendientes" — Usuarios esperando aprobación\n' +
-                '• "aprobar [nombre]" — Aprobar un usuario pendiente\n' +
-                '• "rechazar [nombre]" — Rechazar un usuario pendiente\n\n' +
-                '🎫 *Soporte:*\n' +
-                '• "ver tickets" — Tickets de soporte abiertos\n' +
-                '• "tickets abiertos" — Solo los que están abiertos\n\n' +
-                '📈 *Métricas:*\n' +
-                '• "métricas" — Resumen del sistema\n' +
-                '• "resumen" — Lo mismo que métricas\n\n' +
-                '🔄 *Sistema:*\n' +
-                '• "actualizar" — Info de la versión actual\n' +
-                '• "estado" — Estado del servidor'
-            });
-        }
-
-        // métricas / resumen
-        if (mensaje === 'metricas' || mensaje === 'métricas' || mensaje === 'resumen') {
-            const [locales, usuarios, ventas, tickets] = await Promise.all([
+        // ── Funciones de datos ─────────────────────────────────────────────
+        async function getMetricas() {
+            const [locales, usuarios, ventas, tickets, productos] = await Promise.all([
                 db.query('SELECT COUNT(*)::int AS n FROM locales'),
                 db.query('SELECT COUNT(*)::int AS n FROM usuarios'),
                 db.query("SELECT COUNT(*)::int AS n, COALESCE(SUM(total_neto),0)::numeric AS total FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '30 days'"),
                 db.query("SELECT COUNT(*)::int AS n FROM tickets_soporte WHERE estado = 'Abierto'"),
+                db.query('SELECT COUNT(*)::int AS n FROM productos'),
             ]);
-            const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
-            return res.json({ respuesta:
-                `📈 *Resumen del sistema:*\n\n` +
-                `🏪 Locales: ${locales.rows[0].n}\n` +
-                `👥 Usuarios: ${usuarios.rows[0].n}\n` +
-                `💰 Ventas (30 días): ${fmtCOP(ventas.rows[0].total)} (${ventas.rows[0].n} ventas)\n` +
-                `🎫 Tickets abiertos: ${tickets.rows[0].n}`
-            });
+            return {
+                locales: locales.rows[0].n,
+                usuarios: usuarios.rows[0].n,
+                ventas_total: ventas.rows[0].total,
+                ventas_cantidad: ventas.rows[0].n,
+                tickets: tickets.rows[0].n,
+                productos: productos.rows[0].n,
+            };
         }
 
-        // ver locales
-        if (mensaje === 'ver locales' || mensaje === 'locales') {
-            const r = await db.query('SELECT id_local, nombre_local, ciudad, nit FROM locales ORDER BY id_local');
-            if (r.rows.length === 0) return res.json({ respuesta: 'No hay locales registrados.' });
-            const lista = r.rows.map(l => `• *${l.nombre_local}* (ID ${l.id_local})${l.ciudad ? ' — ' + l.ciudad : ''}${l.nit ? ' | NIT: ' + l.nit : ''}`).join('\n');
-            return res.json({ respuesta: `🏪 *Locales registrados (${r.rows.length}):*\n\n${lista}` });
-        }
-
-        // locales pendientes
-        if (mensaje === 'locales pendientes') {
+        async function getLocales() {
             const r = await db.query(`
-                SELECT l.nombre_local, COUNT(u.id_usuario)::int AS pendientes
+                SELECT l.id_local, l.nombre_local, l.ciudad,
+                    (SELECT COUNT(*) FROM usuarios u WHERE u.id_local = l.id_local) as total_usuarios,
+                    (SELECT COALESCE(SUM(v.total_neto),0)::numeric FROM ventas v WHERE v.id_local = l.id_local) as total_ventas
+                FROM locales l ORDER BY l.id_local
+            `);
+            return r.rows;
+        }
+
+        async function getVentasLocal(nombreLocal) {
+            const r = await db.query(`
+                SELECT l.nombre_local,
+                    COUNT(v.id_venta)::int as num_ventas,
+                    COALESCE(SUM(v.total_neto),0)::numeric as total,
+                    COALESCE(SUM(v.subtotal),0)::numeric as subtotal
                 FROM locales l
-                LEFT JOIN usuarios u ON u.id_local = l.id_local AND u.aprobado_por_admin = false
+                LEFT JOIN ventas v ON v.id_local = l.id_local
+                WHERE LOWER(l.nombre_local) LIKE $1
                 GROUP BY l.id_local, l.nombre_local
-                HAVING COUNT(u.id_usuario) > 0
-            `);
-            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay locales con usuarios pendientes.' });
-            const lista = r.rows.map(l => `• *${l.nombre_local}*: ${l.pendientes} pendiente(s)`).join('\n');
-            return res.json({ respuesta: `⏳ *Locales con usuarios pendientes:*\n\n${lista}` });
+            `, [`%${nombreLocal}%`]);
+            return r.rows[0] || null;
         }
 
-        // ver usuarios
-        if (mensaje === 'ver usuarios' || mensaje === 'usuarios') {
+        async function getVentasRecientes() {
             const r = await db.query(`
-                SELECT u.nombre, u.correo, l.nombre_local, u.aprobado_por_admin
-                FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local
-                ORDER BY u.id_usuario
+                SELECT v.id_venta, v.total_neto, v.fecha_venta, l.nombre_local
+                FROM ventas v JOIN locales l ON v.id_local = l.id_local
+                ORDER BY v.fecha_venta DESC LIMIT 5
             `);
-            if (r.rows.length === 0) return res.json({ respuesta: 'No hay usuarios registrados.' });
-            const lista = r.rows.map(u => `• *${u.nombre}* (${u.correo}) — ${u.nombre_local || 'sin local'} ${u.aprobado_por_admin ? '✅' : '⏳'}`).join('\n');
-            return res.json({ respuesta: `👥 *Usuarios (${r.rows.length}):*\n\n${lista}` });
+            return r.rows;
         }
 
-        // usuarios pendientes
-        if (mensaje === 'usuarios pendientes' || mensaje === 'pendientes') {
+        async function getPendientes() {
             const r = await db.query(`
                 SELECT u.id_usuario, u.nombre, u.correo, l.nombre_local
                 FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local
                 WHERE u.aprobado_por_admin = false
                 ORDER BY u.created_at
             `);
-            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay usuarios pendientes de aprobación.' });
-            const lista = r.rows.map(u => `• *${u.nombre}* (${u.correo}) — ${u.nombre_local || 'sin local'} [ID: ${u.id_usuario}]`).join('\n');
-            return res.json({ respuesta: `⏳ *Usuarios pendientes (${r.rows.length}):*\n\n${lista}\n\nPara aprobar escribe: "aprobar [nombre]"` });
+            return r.rows;
         }
 
-        // aprobar [nombre]
-        if (mensaje.startsWith('aprobar ')) {
-            const nombre = mensaje.replace('aprobar ', '').trim();
+        async function getProductos() {
+            const r = await db.query('SELECT COUNT(*)::int AS total, COUNT(CASE WHEN stock_actual <= stock_minimo THEN 1 END)::int AS bajo_stock FROM productos');
+            return r.rows[0];
+        }
+
+        async function getTicketRecientes() {
+            const r = await db.query("SELECT * FROM tickets_soporte WHERE estado = 'Abierto' ORDER BY created_at DESC LIMIT 5");
+            return r.rows;
+        }
+
+        // ── Detección de intención ─────────────────────────────────────────
+        // Palabras clave para cada intención
+        const intenciones = {
+            locales: ['local', 'locales', 'tienda', 'tiendas', 'sucursal', 'sucursales'],
+            usuarios: ['usuario', 'usuarios', 'empleado', 'empleados', 'gente', 'personas', 'cuenta', 'cuentas'],
+            ventas: ['venta', 'ventas', 'vendió', 'vendio', 'facturó', 'facturado', 'ingreso', 'ingresos', 'dinero', 'ganancia', 'facturación'],
+            productos: ['producto', 'productos', 'artículo', 'articulos', 'inventario', 'stock'],
+            pendientes: ['pendiente', 'pendientes', 'espera', 'aprobar', 'aprobación', 'aprobacion', 'nuevo', 'nueva', 'registro', 'registrado'],
+            tickets: ['ticket', 'tickets', 'soporte', 'ayuda', 'problema', 'consulta', 'reclamo'],
+            reportes: ['reporte', 'reportes', 'resumen', 'informe', 'estadística', 'estadisticas', 'gráfica'],
+            metricas: ['métricas', 'metricas', 'resumen', 'total', 'cuántos', 'cuantos', 'cuántas', 'cuantas', 'cantidad', 'cómo va', 'como va', 'qué tal', 'que tal'],
+            estado: ['estado', 'status', 'servidor', 'sistema', 'activo', 'funcionando'],
+            version: ['versión', 'version', 'actualizar', 'actualización', 'actualizacion', 'v1', 'v2'],
+            ayuda: ['ayuda', 'help', 'comandos', 'opciones', 'qué puedo', 'que puedo'],
+        };
+
+        function detectarIntencion(msg) {
+            for (const [intencion, palabras] of Object.entries(intenciones)) {
+                if (palabras.some(p => msg.includes(p))) return intencion;
+            }
+            return null;
+        }
+
+        // Detectar si es una acción (aprobar/rechazar)
+        function detectarAccion(msg) {
+            if (msg.includes('aprobar') || msg.includes('aceptar') || msg.includes('activar') || msg.includes('habilitar')) return 'aprobar';
+            if (msg.includes('rechazar') || msg.includes('eliminar') || msg.includes('borrar') || msg.includes('denegar')) return 'rechazar';
+            if (msg.includes('enviar') || msg.includes('mandar') || msg.includes('correo') || msg.includes('email')) return 'enviar';
+            return null;
+        }
+
+        // Extraer nombre de local del mensaje
+        function extraerLocal(msg) {
+            const locales = ['istore', 'techshop', 'gabo', 'mi tienda'];
+            for (const l of locales) {
+                if (msg.includes(l)) return l;
+            }
+            // Buscar después de "de", "en", "para"
+            const match = msg.match(/(?:de|en|para|el)\s+(.+?)(?:\s|$|\?|¿)/);
+            return match ? match[1].trim() : null;
+        }
+
+        // Extraer nombre de usuario del mensaje
+        function extraerNombre(msg) {
+            const match = msg.match(/(?:aprobar|rechazar|aceptar|eliminar|borrar)\s+(?:a\s+)?(.+?)(?:\s|$|\?|¿)/);
+            return match ? match[1].trim() : null;
+        }
+
+        // ── Respuestas ─────────────────────────────────────────────────────
+
+        // Detectar intención
+        const intencion = detectarIntencion(msg);
+        const accion = detectarAccion(msg);
+
+        // Saludos
+        if (msg.match(/^(hola|buenos|buenas|hey|qué tal|que tal|saludos|bienvenido)/)) {
+            const m = await getMetricas();
+            return res.json({ respuesta:
+                `¡Hola! 👋 Soy tu asistente del POS. Aquí un rápido vistazo:\n\n` +
+                `🏪 ${m.locales} locales activos\n` +
+                `👥 ${m.usuarios} usuarios registrados\n` +
+                `💰 ${fmtCOP(m.ventas_total)} en ventas (30 días)\n` +
+                `🎫 ${m.tickets} tickets abiertos\n\n` +
+                `¿Qué necesitas? Pregúntame lo que quieras.`
+            });
+        }
+
+        // Ayuda
+        if (intencion === 'ayuda' || msg === '?') {
+            return res.json({ respuesta:
+                `🤖 *Puedo ayudarte con estas cosas:*\n\n` +
+                `🏪 *"¿Cuántos locales hay?"* — Te doy el total y detalle\n` +
+                `💰 *"¿Cuánto vendió iStore?"* — Ventas de un local\n` +
+                `👥 *"¿Quiénes están pendientes?"* — Usuarios sin aprobar\n` +
+                `✅ *"Aprobar a Juan"* — Aprueba un usuario\n` +
+                `❌ *"Rechazar a Pedro"* — Rechaza un usuario\n` +
+                `📊 *"¿Cómo va el mes?"* — Resumen de ventas\n` +
+                `📈 *"Dame un reporte"* — Genera reporte semanal\n` +
+                `🎫 *"¿Hay tickets?"* — Tickets de soporte abiertos\n` +
+                `📦 *"¿Cuántos productos hay?"* — Inventario\n` +
+                `🔄 *"¿Qué versión tenemos?"* — Info del sistema\n` +
+                `🟢 *"¿El sistema está bien?"* — Estado del servidor\n\n` +
+                `_Puedes escribirme en natural, no necesitas comandos exactos._`
+            });
+        }
+
+        // Locales
+        if (intencion === 'locales' && !accion) {
+            const locales = await getLocales();
+            if (locales.length === 0) return res.json({ respuesta: 'No hay locales registrados.' });
+
+            let respuesta = `🏪 *Tienes ${locales.length} locale${locales.length > 1 ? 's' : ''} registrado${locales.length > 1 ? 's' : ''}:*\n\n`;
+            for (const l of locales) {
+                respuesta += `• *${l.nombre_local}* — ${l.total_usuarios} usuario${l.total_usuarios !== 1 ? 's' : ''}`;
+                if (l.ciudad) respuesta += ` · ${l.ciudad}`;
+                if (Number(l.total_ventas) > 0) respuesta += ` · ${fmtCOP(l.total_ventas)} en ventas`;
+                respuesta += '\n';
+            }
+            return res.json({ respuesta });
+        }
+
+        // Ventas de un local específico
+        if (intencion === 'ventas') {
+            const nombreLocal = extraerLocal(msg);
+            if (nombreLocal) {
+                const v = await getVentasLocal(nombreLocal);
+                if (!v) return res.json({ respuesta: `No encontré un local con "${nombreLocal}". ¿Puedes verificar el nombre?` });
+                return res.json({ respuesta:
+                    `💰 *Ventas de ${v.nombre_local}:*\n\n` +
+                    `📊 Total facturado: *${fmtCOP(v.total)}*\n` +
+                    `🧾 Número de ventas: *${v.num_ventas}*\n` +
+                    `💵 Subtotal (sin impuestos): ${fmtCOP(v.subtotal)}`
+                });
+            }
+
+            // Ventas recientes
+            const recientes = await getVentasRecientes();
+            if (recientes.length === 0) return res.json({ respuesta: 'No hay ventas registradas aún.' });
+
+            let respuesta = `💰 *Últimas ventas:*\n\n`;
+            for (const v of recientes) {
+                respuesta += `• Venta #${v.id_venta} — ${fmtCOP(v.total_neto)} en *${v.nombre_local}*\n  ${new Date(v.fecha_venta).toLocaleString('es-CO')}\n`;
+            }
+            return res.json({ respuesta });
+        }
+
+        // Métricas / resumen
+        if (intencion === 'metricas' || intencion === 'reportes' || msg.includes('cómo va') || msg.includes('como va') || msg.includes('qué tal') || msg.includes('que tal') || msg.includes('cómo estamos') || msg.includes('como estamos')) {
+            const m = await getMetricas();
+            const productos = await getProductos();
+            return res.json({ respuesta:
+                `📈 *Resumen del sistema:*\n\n` +
+                `🏪 Locales: *${m.locales}*\n` +
+                `👥 Usuarios: *${m.usuarios}*\n` +
+                `📦 Productos: *${productos.total}* (${productos.bajo_stock} con stock bajo)\n` +
+                `💰 Ventas (30 días): *${fmtCOP(m.ventas_total)}* (${m.ventas_cantidad} transacciones)\n` +
+                `🎫 Tickets abiertos: *${m.tickets}*\n\n` +
+                `_¿Quieres ver más detalle de algo específico?_`
+            });
+        }
+
+        // Usuarios / pendientes
+        if (intencion === 'usuarios' || intencion === 'pendientes') {
+            const pendientes = await getPendientes();
+            if (pendientes.length === 0) return res.json({ respuesta: '✅ No hay usuarios pendientes de aprobación. Todos están aprobados.' });
+
+            let respuesta = `👥 *${pendientes.length} usuario${pendientes.length > 1 ? 's' : ''} esperando aprobación:*\n\n`;
+            for (const u of pendientes) {
+                respuesta += `• *${u.nombre}* — ${u.correo}\n  Local: ${u.nombre_local || 'sin asignar'} · ID: ${u.id_usuario}\n`;
+            }
+            respuesta += `\n_Para aprobar, escribe: "aprobar [nombre]"_`;
+            return res.json({ respuesta });
+        }
+
+        // Aprobar usuario
+        if (accion === 'aprobar') {
+            const nombre = extraerNombre(msg);
+            if (!nombre) return res.json({ respuesta: '¿A quién quieres aprobar? Escribe "aprobar [nombre del usuario]".' });
             const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
-            if (r.rows.length === 0) return res.json({ respuesta: `No se encontró un usuario pendiente con "${nombre}".` });
+            if (r.rows.length === 0) return res.json({ respuesta: `No encontré un usuario pendiente llamado "${nombre}".` });
             if (r.rows.length > 1) {
                 const lista = r.rows.map(u => `• ${u.nombre} [ID: ${u.id_usuario}]`).join('\n');
-                return res.json({ respuesta: `Se encontraron varios. Especifica cuál:\n\n${lista}` });
+                return res.json({ respuesta: `Encontré varios. ¿A cuál?\n\n${lista}` });
             }
             await db.query('UPDATE usuarios SET aprobado_por_admin = true WHERE id_usuario = $1', [r.rows[0].id_usuario]);
-            return res.json({ respuesta: `✅ *${r.rows[0].nombre}* ha sido aprobado correctamente.` });
+            return res.json({ respuesta: `✅ *${r.rows[0].nombre}* aprobado. Ya puede usar el sistema.` });
         }
 
-        // rechazar [nombre]
-        if (mensaje.startsWith('rechazar ')) {
-            const nombre = mensaje.replace('rechazar ', '').trim();
+        // Rechazar usuario
+        if (accion === 'rechazar') {
+            const nombre = extraerNombre(msg);
+            if (!nombre) return res.json({ respuesta: '¿A quién quieres rechazar? Escribe "rechazar [nombre del usuario]".' });
             const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
-            if (r.rows.length === 0) return res.json({ respuesta: `No se encontró un usuario pendiente con "${nombre}".` });
+            if (r.rows.length === 0) return res.json({ respuesta: `No encontré un usuario pendiente llamado "${nombre}".` });
             await db.query('DELETE FROM usuarios WHERE id_usuario = $1', [r.rows[0].id_usuario]);
-            return res.json({ respuesta: `❌ *${r.rows[0].nombre}* ha sido rechazado/eliminado.` });
+            return res.json({ respuesta: `❌ *${r.rows[0].nombre}* rechazado y eliminado.` });
         }
 
-        // ver tickets / tickets abiertos
-        if (mensaje === 'ver tickets' || mensaje === 'tickets' || mensaje === 'tickets abiertos') {
-            const abierto = mensaje.includes('abiertos');
-            const query = abierto
-                ? "SELECT * FROM tickets_soporte WHERE estado = 'Abierto' ORDER BY created_at DESC LIMIT 10"
-                : 'SELECT * FROM tickets_soporte ORDER BY created_at DESC LIMIT 10';
-            const r = await db.query(query);
-            if (r.rows.length === 0) return res.json({ respuesta: '✅ No hay tickets de soporte.' });
-            const lista = r.rows.map(t => `• *#${t.id_ticket}* ${t.asunto || 'Consulta'} — ${t.nombre} [${t.estado}]`).join('\n');
-            return res.json({ respuesta: `🎫 *Tickets${abierto ? ' abiertos' : ''} (${r.rows.length}):*\n\n${lista}` });
+        // Tickets
+        if (intencion === 'tickets') {
+            const tickets = await getTicketRecientes();
+            if (tickets.length === 0) return res.json({ respuesta: '✅ No hay tickets de soporte abiertos. Todo tranquilo.' });
+            let respuesta = `🎫 *${tickets.length} ticket${tickets.length > 1 ? 's' : ''} abierto${tickets.length > 1 ? 's' : ''}:*\n\n`;
+            for (const t of tickets) {
+                respuesta += `• *#${t.id_ticket}* ${t.asunto || 'Consulta'}\n  ${t.nombre} — ${t.mensaje?.substring(0, 80) || 'Sin detalle'}...\n`;
+            }
+            return res.json({ respuesta });
         }
 
-        // reporte semanal / mensual
-        if (mensaje === 'reporte semanal' || mensaje === 'reporte se' || mensaje === 'semanal') {
-            const resultado = await enviarReporteAutomatico('semanal');
-            return res.json({ respuesta: resultado.enviado
-                ? '✅ Reporte semanal enviado a tu correo.'
-                : '⚠️ Reporte generado, pero no se pudo enviar el correo (revisa SMTP).'
-            });
-        }
-        if (mensaje === 'reporte mensual' || mensaje === 'mensual') {
-            const resultado = await enviarReporteAutomatico('mensual');
-            return res.json({ respuesta: resultado.enviado
-                ? '✅ Reporte mensual enviado a tu correo.'
-                : '⚠️ Reporte generado, pero no se pudo enviar el correo (revisa SMTP).'
+        // Productos / inventario
+        if (intencion === 'productos') {
+            const p = await getProductos();
+            return res.json({ respuesta:
+                `📦 *Inventario:*\n\n` +
+                `• Total productos: *${p.total}*\n` +
+                `• Stock bajo: *${p.bajo_stock}* producto${p.bajo_stock !== 1 ? 's' : ''} ${p.bajo_stock > 0 ? '⚠️' : '✅'}\n\n` +
+                `_¿Quieres ver el detalle de algún producto o local específico?_`
             });
         }
 
-        // actualizar / versión
-        if (mensaje === 'actualizar' || mensaje === 'version' || mensaje === 'versión') {
+        // Versión
+        if (intencion === 'version') {
             return res.json({ respuesta: `🔄 *Versión actual:* ${APP_VERSION}\n\nPara actualizar, descarga la última versión desde GitHub Releases.` });
         }
 
-        // estado del servidor
-        if (mensaje === 'estado' || mensaje === 'status') {
+        // Estado del servidor
+        if (intencion === 'estado' || msg.includes('está bien') || msg.includes('esta bien') || msg.includes('funciona')) {
             const uptime = Math.floor(process.uptime());
-            const min = Math.floor(uptime / 60);
-            const hrs = Math.floor(min / 60);
-            return res.json({ respuesta: `🟢 *Servidor activo*\n\n⏱️ Tiempo activo: ${hrs}h ${min % 60}m\n📊 Versión: ${APP_VERSION}\n💾 Puerto: 3000` });
+            const hrs = Math.floor(uptime / 3600);
+            const min = Math.floor((uptime % 3600) / 60);
+            return res.json({ respuesta:
+                `🟢 *Sistema funcionando correctamente*\n\n` +
+                `⏱️ Tiempo activo: ${hrs}h ${min}m\n` +
+                `📊 Versión: ${APP_VERSION}\n` +
+                `💾 Puerto: 3000\n` +
+                `🟢 Base de datos: conectada`
+            });
         }
 
-        // Comando no reconocido
-        return res.json({ respuesta: `❓ No entendí "${req.body.mensaje}". Escribe "ayuda" para ver los comandos disponibles.` });
+        // Reporte
+        if (accion === 'enviar' || msg.includes('reporte') || msg.includes('informe')) {
+            const tipo = msg.includes('mensual') ? 'mensual' : 'semanal';
+            const resultado = await enviarReporteAutomatico(tipo);
+            return res.json({ respuesta: resultado.enviado
+                ? `✅ Reporte ${tipo} enviado a tu correo.`
+                : `⚠️ Reporte generado, pero no se pudo enviar el correo (revisa la configuración SMTP).`
+            });
+        }
+
+        // ── Respuesta por defecto (intenta ayudar) ──────────────────────────
+        // Si el mensaje contiene palabras clave sueltas, intentar responder
+        if (msg.includes('local') || msg.includes('tienda')) {
+            const locales = await getLocales();
+            return res.json({ respuesta: `Tienes *${locales.length} locales*. ¿Quieres ver el detalle de alguno específico?` });
+        }
+        if (msg.includes('usuario') || msg.includes('empleado')) {
+            const pendientes = await getPendientes();
+            const total = await db.query('SELECT COUNT(*)::int AS n FROM usuarios');
+            return res.json({ respuesta: `Hay *${total.rows[0].n} usuarios* en total. ${pendientes.length > 0 ? `${pendientes.length} pendiente(s) de aprobación.` : 'Todos aprobados.'}` });
+        }
+        if (msg.includes('venta') || msg.includes('dinero') || msg.includes('factura')) {
+            const m = await getMetricas();
+            return res.json({ respuesta: `En los últimos 30 días: *${fmtCOP(m.ventas_total)}* en ${m.ventas_cantidad} ventas.` });
+        }
+
+        return res.json({ respuesta:
+            `🤔 No estoy seguro de entender. Puedo ayudarte con:\n\n` +
+            `• Locales — "¿Cuántos locales hay?"\n` +
+            `• Usuarios — "¿Quiénes están pendientes?"\n` +
+            `• Ventas — "¿Cuánto vendió iStore?"\n` +
+            `• Aprobar — "Aprobar a [nombre]"\n` +
+            `• Tickets — "¿Hay tickets?"\n` +
+            `• Reporte — "Dame un reporte"\n\n` +
+            `Escribe "ayuda" para ver todo lo que puedo hacer.`
+        });
 
     } catch (err) {
         console.error('Error en bot:', err);
