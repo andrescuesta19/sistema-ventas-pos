@@ -535,9 +535,7 @@ function App() {
     // Si la sesión expira mientras la app está abierta, redirigir al login
     const onLogout = () => {
       clearSession();
-      // setTimeout: diferir navigate hasta que el event handler actual termine.
-      // Así React desmonta los componentes antes de navegar, evitando crashes.
-      setTimeout(() => navigate('/login', { replace: true }), 0);
+      setUser(null);
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -550,7 +548,8 @@ function App() {
 
   const handleLogout = () => {
     clearSession();
-    setTimeout(() => navigate('/login', { replace: true }), 0);
+    setUser(null);
+    navigate('/login', { replace: true });
   };
 
   if (loading) {
