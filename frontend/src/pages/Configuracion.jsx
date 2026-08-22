@@ -307,11 +307,11 @@ const Configuracion = ({ user }) => {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>Correo (no editable)</label>
-              <FieldInput icon={Mail} type="email" value={user.correo} disabled />
+              <FieldInput icon={Mail} type="email" value={user?.correo} disabled />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.3rem', color: 'var(--text-primary)' }}>Rol</label>
-              <FieldInput icon={UserCog} type="text" value={user.rol} disabled />
+              <FieldInput icon={UserCog} type="text" value={user?.rol} disabled />
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
               <button type="submit" style={btnPrimary} disabled={perfilSaving}>
@@ -423,11 +423,11 @@ const Configuracion = ({ user }) => {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-app)', borderRadius: 8 }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Usuario actual</span>
-              <strong style={{ fontSize: '0.88rem' }}>{user.nombre} ({user.rol})</strong>
+              <strong style={{ fontSize: '0.88rem' }}>{user?.nombre} ({user?.rol})</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-app)', borderRadius: 8 }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Local</span>
-              <strong style={{ fontSize: '0.88rem' }}>{user.nombre_local}</strong>
+              <strong style={{ fontSize: '0.88rem' }}>{user?.nombre_local}</strong>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-app)', borderRadius: 8 }}>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Desarrollado por</span>
@@ -645,8 +645,8 @@ const AvatarUploader = ({ user, onUpdate }) => {
     setSubiendo(true);
     try {
       await apiPut(`${API_URL}/api/auth/mi-perfil`, {
-        nombre: user.nombre,
-        telefono: user.telefono || '',
+        nombre: user?.nombre,
+        telefono: user?.telefono || '',
         avatar_url: dataUri,
       });
       const updated = { ...user, avatar_url: dataUri };
@@ -667,8 +667,8 @@ const AvatarUploader = ({ user, onUpdate }) => {
     setSubiendo(true);
     try {
       await apiPut(`${API_URL}/api/auth/mi-perfil`, {
-        nombre: user.nombre,
-        telefono: user.telefono || '',
+        nombre: user?.nombre,
+        telefono: user?.telefono || '',
         avatar_url: null,
       });
       const updated = { ...user, avatar_url: null };
@@ -698,7 +698,7 @@ const AvatarUploader = ({ user, onUpdate }) => {
         boxShadow: '0 0 0 2px var(--green-primary)',
       }}>
         {preview ? (
-          <img src={preview} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={preview} alt={user?.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           (user?.nombre || 'U')[0].toUpperCase()
         )}

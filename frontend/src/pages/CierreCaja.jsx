@@ -91,7 +91,7 @@ const CierreCaja = ({ user, onLogout }) => {
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <CheckCircle size={56} color="var(--primary-color)" style={{ marginBottom: '1rem' }} />
             <h2 style={{ color: 'var(--secondary-color)' }}>¡Caja Cerrada Exitosamente!</h2>
-            <p style={{ color: 'var(--text-light)' }}>Turno #{turno.id_turno} — {user.nombre_local}</p>
+            <p style={{ color: 'var(--text-light)' }}>Turno #{turno.id_turno} — {user?.nombre_local}</p>
             <p style={{ color: 'var(--text-light)', fontSize: '0.9rem' }}>
               Cerrado el {formatearFechaHoraCO(new Date())}
             </p>

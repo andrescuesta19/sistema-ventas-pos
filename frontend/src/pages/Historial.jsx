@@ -24,7 +24,7 @@ const Historial = ({ user }) => {
     <div className="page-content" style={{ padding: '2rem' }}>
       <div className="flex-between" style={{ marginBottom: '2rem' }}>
         <h2>Historial de Ventas</h2>
-        <span style={{ color: 'var(--text-light)' }}>Todas las ventas registradas de {user.nombre_local}</span>
+        <span style={{ color: 'var(--text-light)' }}>Todas las ventas registradas de {user?.nombre_local}</span>
       </div>
 
       <div className="card" style={{ padding: '0' }}>

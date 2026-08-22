@@ -310,7 +310,7 @@ const POS = ({ user }) => {
     }
 
     const payload = {
-      id_usuario: user.id_usuario,
+      id_usuario: user?.id_usuario,
       id_local: user?.id_local,
       id_cliente: id_cliente,
       id_turno: turno.id_turno,
@@ -382,7 +382,7 @@ const POS = ({ user }) => {
             precio_unitario: c.precio_venta,
             subtotal: c.subtotal
           })),
-          nombre_local: user.nombre_local || 'Sistema Integral de Ventas',
+          nombre_local: user?.nombre_local || 'Sistema Integral de Ventas',
           metodo_pago: metodoPago
         });
       } catch (err) {
@@ -1015,7 +1015,7 @@ const POS = ({ user }) => {
         <div className={`print-container print-${printFormat}`}>
           {printFormat === 'tirilla' ? (
             <div style={{ textAlign: 'center', fontFamily: 'monospace' }}>
-              <h2 style={{ fontSize: '1.2rem', marginBottom: '5px' }}>{user.nombre_local}</h2>
+              <h2 style={{ fontSize: '1.2rem', marginBottom: '5px' }}>{user?.nombre_local}</h2>
               <p>NIT: 900.123.456-7</p>
               <p>================================</p>
               <p>FACTURA DE VENTA {ultimoRecibo.tipo === 'DIAN_Enviado' ? 'ELECTRÓNICA' : 'POS'} NO. {ultimoRecibo.id_venta}</p>
@@ -1061,7 +1061,7 @@ const POS = ({ user }) => {
             <div style={{ padding: '2rem', border: '1px solid #ccc' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '1rem', marginBottom: '2rem' }}>
                 <div>
-                  <h1 style={{ margin: 0 }}>{user.nombre_local}</h1>
+                  <h1 style={{ margin: 0 }}>{user?.nombre_local}</h1>
                   <p>NIT: 900.123.456-7</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
