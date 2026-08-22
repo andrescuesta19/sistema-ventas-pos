@@ -535,9 +535,9 @@ function App() {
     // Si la sesión expira mientras la app está abierta, redirigir al login
     const onLogout = () => {
       clearSession();
-      setUser(null);
-      // No llamar navigate aquí — las rutas ya manejan redirect a /login
-      // cuando user es null. navigate() durante unmount puede causar crashes.
+      // Usar window.location para un redirect limpio sin React render.
+      // Evita que cualquier componente intente acceder a user durante unmount.
+      window.location.href = '/login';
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -550,9 +550,8 @@ function App() {
 
   const handleLogout = () => {
     clearSession();
-    setUser(null);
-    // navigate se ejecuta vía las rutas: cuando user es null, todas las rutas
-    // renderizan <Navigate to="/login" />
+    // Redirect limpio sin React render para evitar crashes durante unmount
+    window.location.href = '/login';
   };
 
   if (loading) {
