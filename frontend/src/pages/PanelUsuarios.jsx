@@ -113,7 +113,7 @@ const PanelUsuarios = ({ user }) => {
   };
 
   const handleEliminar = async (u) => {
-    if (u.id_usuario === user.id_usuario) {
+    if (u.id_usuario === user?.id_usuario) {
       alert('No puedes eliminar tu propia cuenta.');
       return;
     }
@@ -318,7 +318,7 @@ const PanelUsuarios = ({ user }) => {
           </div>
         ) : (
           usuariosFiltrados.map(u => {
-            const esActual = u.id_usuario === user.id_usuario;
+            const esActual = u.id_usuario === user?.id_usuario;
             const rolClass = u.rol === 'Administrador' ? 'admin' : u.rol === 'Cajero' ? 'cajero' : 'supervisor';
             return (
               <div key={u.id_usuario} className="users-row">

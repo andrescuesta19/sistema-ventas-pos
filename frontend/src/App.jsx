@@ -479,7 +479,7 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
         <div className="sidebar-user-card" onClick={onLogout} title="Cerrar sesión">
           <div className="user-avatar" style={{ overflow: 'hidden' }}>
             {user?.avatar_url ? (
-              <img src={user.avatar_url} alt={user.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={user?.avatar_url} alt={user?.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
               (user?.nombre || 'U')[0].toUpperCase()
             )}
@@ -536,7 +536,8 @@ function App() {
     const onLogout = () => {
       clearSession();
       setUser(null);
-      navigate('/login');
+      // No llamar navigate aquí — las rutas ya manejan redirect a /login
+      // cuando user es null. navigate() durante unmount puede causar crashes.
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -550,7 +551,8 @@ function App() {
   const handleLogout = () => {
     clearSession();
     setUser(null);
-    navigate('/login');
+    // navigate se ejecuta vía las rutas: cuando user es null, todas las rutas
+    // renderizan <Navigate to="/login" />
   };
 
   if (loading) {
