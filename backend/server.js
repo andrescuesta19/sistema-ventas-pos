@@ -3540,6 +3540,89 @@ app.get('/api/ecommerce/integraciones', requireAuth, requireAprobado, async (req
 });
 
 // POST /api/ecommerce/conectar — conectar tienda por URL (todas las plataformas)
+
+// Función helper: sincronizar productos POS → e-commerce
+async function sincronizarProductosEcommerce(idLocal, plataforma, domain, credenciales) {
+    // Obtener productos del local (con stock > 0)
+    const prodR = await db.query(
+        `SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.stock_actual, p.imagen_url,
+                c.nombre_categoria
+         FROM productos p
+         LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+         WHERE p.id_local=$1 AND p.stock_actual > 0`,
+        [idLocal]
+    );
+
+    if (prodR.rows.length === 0) return { sincronizados: 0, total: 0, errores: [] };
+
+    let sincronizados = 0;
+    const errores = [];
+
+    if (plataforma === 'shopify' && credenciales) {
+        for (const prod of prodR.rows) {
+            try {
+                const body = {
+                    product: {
+                        title: prod.nombre_producto,
+                        product_type: prod.nombre_categoria || 'General',
+                        variants: [{
+                            price: String(prod.precio_venta),
+                            inventory_quantity: prod.stock_actual,
+                            inventory_management: 'shopify'
+                        }]
+                    }
+                };
+                if (prod.imagen_url) {
+                    body.product.images = [{ src: prod.imagen_url }];
+                }
+                const r = await fetch(`https://${domain}/admin/api/2024-01/products.json`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': credenciales },
+                    body: JSON.stringify(body)
+                });
+                if (r.ok) sincronizados++;
+                else errores.push(`${prod.nombre_producto}: ${r.status}`);
+            } catch (e) {
+                errores.push(`${prod.nombre_producto}: ${e.message}`);
+            }
+        }
+    }
+
+    if (plataforma === 'woocommerce' && credenciales) {
+        let creds;
+        try { creds = JSON.parse(credenciales); } catch { creds = null; }
+        if (creds?.consumer_key && creds?.consumer_secret) {
+            const auth = 'Basic ' + Buffer.from(creds.consumer_key + ':' + creds.consumer_secret).toString('base64');
+            for (const prod of prodR.rows) {
+                try {
+                    const body = {
+                        name: prod.nombre_producto,
+                        type: 'simple',
+                        regular_price: String(prod.precio_venta),
+                        manage_stock: true,
+                        stock_quantity: prod.stock_actual,
+                        categories: prod.nombre_categoria ? [{ name: prod.nombre_categoria }] : []
+                    };
+                    if (prod.imagen_url) {
+                        body.images = [{ src: prod.imagen_url }];
+                    }
+                    const r = await fetch(`https://${domain}/wp-json/wc/v3/products`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': auth },
+                        body: JSON.stringify(body)
+                    });
+                    if (r.ok) sincronizados++;
+                    else errores.push(`${prod.nombre_producto}: ${r.status}`);
+                } catch (e) {
+                    errores.push(`${prod.nombre_producto}: ${e.message}`);
+                }
+            }
+        }
+    }
+
+    return { sincronizados, total: prodR.rows.length, errores };
+}
+
 app.post('/api/ecommerce/conectar', requireAuth, requireAprobado, async (req, res) => {
     try {
         const idLocal = Number(req.user.id_local);
@@ -3601,7 +3684,24 @@ app.post('/api/ecommerce/conectar', requireAuth, requireAprobado, async (req, re
             DO UPDATE SET nombre_tienda=$3, access_token=$5, activa=true, fecha_conexion=NOW()
         `, [idLocal, plataforma, tiendaNombre, domain, credenciales]);
 
-        res.json({ success: true, nombre_tienda: tiendaNombre });
+        // ── Sincronización automática de productos ─────────────────────────
+        // Después de conectar, publicar todos los productos del local en la tienda
+        let syncResultado = null;
+        try {
+            syncResultado = await sincronizarProductosEcommerce(idLocal, plataforma, domain, credenciales);
+        } catch (syncErr) {
+            console.error('Error en sync automática:', syncErr.message);
+        }
+
+        res.json({
+            success: true,
+            nombre_tienda: tiendaNombre,
+            sync: syncResultado ? {
+                productos_sincronizados: syncResultado.sincronizados,
+                productos_total: syncResultado.total,
+                errores: syncResultado.errores?.length || 0,
+            } : null,
+        });
     } catch (err) {
         console.error('Error conectando tienda:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
