@@ -64,7 +64,19 @@ const Ecommerce = ({ user }) => {
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      if (res.ok) { showToast("Tienda conectada exitosamente."); setShowConectar(false); fetchIntegraciones(); }
+      if (res.ok) {
+        setShowConectar(false);
+        fetchIntegraciones();
+        // Mostrar resultado de sincronización automática
+        if (data.sync && data.sync.productos_total > 0) {
+          showToast(`Tienda conectada. ${data.sync.productos_sincronizados}/${data.sync.productos_total} productos sincronizados.`);
+          if (data.sync.errores > 0) {
+            setTimeout(() => showToast(`${data.sync.errores} productos tuvieron error al sincronizar.`, "warning"), 1500);
+          }
+        } else {
+          showToast("Tienda conectada exitosamente.");
+        }
+      }
       else showToast(data.error || "Error al conectar", "error");
     } catch { showToast("Error de conexion", "error"); }
     finally { setConectando(false); }
