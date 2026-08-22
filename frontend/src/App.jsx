@@ -535,9 +535,9 @@ function App() {
     // Si la sesión expira mientras la app está abierta, redirigir al login
     const onLogout = () => {
       clearSession();
-      // Usar window.location para un redirect limpio sin React render.
-      // Evita que cualquier componente intente acceder a user durante unmount.
-      window.location.href = '/login';
+      // setTimeout: diferir navigate hasta que el event handler actual termine.
+      // Así React desmonta los componentes antes de navegar, evitando crashes.
+      setTimeout(() => navigate('/login', { replace: true }), 0);
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -550,8 +550,7 @@ function App() {
 
   const handleLogout = () => {
     clearSession();
-    // Redirect limpio sin React render para evitar crashes durante unmount
-    window.location.href = '/login';
+    setTimeout(() => navigate('/login', { replace: true }), 0);
   };
 
   if (loading) {
