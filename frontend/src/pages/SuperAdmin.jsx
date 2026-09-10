@@ -22,6 +22,7 @@ const SuperAdmin = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [feedback, setFeedback] = useState({}); // { idUsuario: 'aprobando' }
   const [showPwd, setShowPwd] = useState(false); // v1.5.5: mostrar/ocultar contraseña
+  const [showCodigo, setShowCodigo] = useState(false); // mostrar/ocultar código de acceso
   const [tickets, setTickets] = useState([]); // v1.9.0: tickets de soporte
   const [reporteEnviando, setReporteEnviando] = useState(false); // v1.9.0: bot automatizaciones
   const [reporteMsg, setReporteMsg] = useState(null);
@@ -239,30 +240,41 @@ const SuperAdmin = () => {
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: '0.85rem' }}>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Código de acceso</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={loginForm.codigo}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                  setLoginForm({ ...loginForm, codigo: val });
-                }}
-                required
-                autoFocus
-                placeholder="4 dígitos"
-                style={{
-                  width: '100%', padding: '0.75rem 0.9rem',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1.5px solid rgba(126, 217, 87, 0.15)',
-                  borderRadius: '10px', color: '#fff', fontSize: '1.2rem',
-                  fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
-                  letterSpacing: '0.5rem', textAlign: 'center',
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showCodigo ? 'text' : 'password'}
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={loginForm.codigo}
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setLoginForm({ ...loginForm, codigo: val });
+                  }}
+                  required
+                  autoFocus
+                  placeholder="4 dígitos"
+                  style={{
+                    width: '100%', padding: '0.75rem 2.6rem 0.75rem 0.9rem',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1.5px solid rgba(126, 217, 87, 0.15)',
+                    borderRadius: '10px', color: '#fff', fontSize: '1.2rem',
+                    fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                    letterSpacing: '0.5rem', textAlign: 'center',
+                  }}
+                />
+                <button type="button" onClick={() => setShowCodigo(v => !v)}
+                  style={{
+                    position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(255,255,255,0.5)', padding: '0.4rem',
+                  }}
+                  title={showCodigo ? 'Ocultar código' : 'Mostrar código'}>
+                  {showCodigo ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <div style={{ marginBottom: '0.85rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Correo <span style={{ opacity: 0.5, fontWeight: 400 }}>(opcional)</span></label>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Correo <span style={{ color: '#ff6b6b' }}>*</span></label>
               <input
                 type="email"
                 value={loginForm.correo}
@@ -278,7 +290,7 @@ const SuperAdmin = () => {
               />
             </div>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Contraseña <span style={{ opacity: 0.5, fontWeight: 400 }}>(opcional)</span></label>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.85)', marginBottom: '0.35rem' }}>Contraseña <span style={{ color: '#ff6b6b' }}>*</span></label>
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPwd ? 'text' : 'password'}
@@ -321,8 +333,7 @@ const SuperAdmin = () => {
           </form>
 
           <p style={{ marginTop: '1rem', textAlign: 'center', color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.78rem', lineHeight: 1.5 }}>
-            Solo necesitas el código de 4 dígitos para ingresar.<br/>
-            Correo y contraseña son opcionales.
+            Acceso exclusivo para administradores autorizados.
           </p>
 
           <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', textAlign: 'center' }}>
