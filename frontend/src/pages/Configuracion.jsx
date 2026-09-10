@@ -652,7 +652,14 @@ const AvatarUploader = ({ user, onUpdate }) => {
       const updated = { ...user, avatar_url: dataUri };
       try {
         localStorage.setItem('pos_user', JSON.stringify(updated));
-      } catch {}
+      } catch (storageErr) {
+        // Si localStorage está lleno (base64 muy grande), guardamos sin avatar en localStorage
+        console.warn('No se pudo guardar avatar en localStorage:', storageErr.message);
+        try {
+          const userWithoutAvatar = { ...updated, avatar_url: null };
+          localStorage.setItem('pos_user', JSON.stringify(userWithoutAvatar));
+        } catch {}
+      }
       setMsg({ type: 'success', text: 'Foto de perfil actualizada.' });
       if (onUpdate) onUpdate(updated);
     } catch (err) {

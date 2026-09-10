@@ -339,7 +339,12 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
         >
           <div style={styles.avatarCircle(liveUser?.avatar_url)}>
             {liveUser?.avatar_url ? (
-              <img src={liveUser?.avatar_url} alt={liveUser?.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img
+                src={liveUser?.avatar_url}
+                alt={liveUser?.nombre}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
             ) : (
               (liveUser?.nombre || 'U')[0].toUpperCase()
             )}

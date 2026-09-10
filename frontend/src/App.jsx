@@ -56,16 +56,23 @@ import { formatearFechaHoraCO, formatearFechaLargaCO } from './utils/dateCO';
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null, info: null };
+    this.state = { error: null, info: null, retryCount: 0 };
   }
   static getDerivedStateFromError(error) {
     return { error };
   }
   componentDidCatch(error, info) {
-    // v1.5.4: el detalle técnico (stack, rutas) solo va a consola —
-    // no se muestra al usuario. Evita info disclosure (rutas internas).
     console.error('[ErrorBoundary] Crash capturado:', error, info);
     this.setState({ error });
+    // Auto-recuperar después de 2 segundos (evita pantalla de error por crashes menores)
+    setTimeout(() => {
+      this.setState((prev) => {
+        if (prev.retryCount < 2) {
+          return { error: null, retryCount: prev.retryCount + 1 };
+        }
+        return {};
+      });
+    }, 2000);
   }
   render() {
     if (!this.state.error) return this.props.children;
@@ -479,7 +486,12 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
         <div className="sidebar-user-card" onClick={onLogout} title="Cerrar sesión">
           <div className="user-avatar" style={{ overflow: 'hidden' }}>
             {user?.avatar_url ? (
-              <img src={user?.avatar_url} alt={user?.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img
+                src={user?.avatar_url}
+                alt={user?.nombre}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
             ) : (
               (user?.nombre || 'U')[0].toUpperCase()
             )}
@@ -547,7 +559,9 @@ function App() {
   };
 
   const handleLogout = () => {
-    clearSession();
+    try {
+      clearSession();
+    } catch {}
     setUser(null);
     navigate('/login', { replace: true });
   };
