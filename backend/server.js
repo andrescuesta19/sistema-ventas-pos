@@ -39,14 +39,25 @@ const uploadProducto = multer({
 });
 
 // === A3-fix: CORS con whitelist ===
-// Solo permitimos orígenes conocidos. En producción el frontend siempre
-// es la app Electron local o localhost, así que la lista es cerrada.
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,capacitor://localhost').split(',');
+// Permitimos localhost (Electron/dev), GitHub Pages y túneles cloudflare
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'capacitor://localhost',
+  'https://andrescuesta19.github.io',
+  // Túnel cloudflare (cambia al reiniciar)
+  ...(process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
+];
+// Permitir cualquier origen *.trycloudflare.com
+const isCloudflareTunnel = (origin) => origin && origin.includes('.trycloudflare.com');
+
 app.use(cors({
     origin: (origin, callback) => {
         // Permitir requests sin origin (Electron, curl, health checks)
         if (!origin) return callback(null, true);
         if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        if (isCloudflareTunnel(origin)) return callback(null, true);
         return callback(new Error(`Origen no permitido: ${origin}`));
     },
     credentials: true,

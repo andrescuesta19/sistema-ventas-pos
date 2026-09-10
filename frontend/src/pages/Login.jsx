@@ -595,8 +595,7 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
         </div>
 
         {/* CARD INFERIOR — Flujo de 2 pasos */}
-<motion.div
-              style={styles.cardWrap}
+        <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
