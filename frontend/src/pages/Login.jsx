@@ -18,8 +18,9 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import { API_URL } from '../config';
+import { API_URL, DEMO_MODE } from '../config';
 import { setSession } from '../api';
+import { DEMO_USER, DEMO_TOKEN } from '../demoData';
 
 /* ─────────────────────────────────────────────────────────
    Validación
@@ -141,6 +142,15 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
     setStep('loading');
 
     try {
+      // Modo demo: login instantáneo con datos mock
+      if (DEMO_MODE) {
+        await new Promise(r => setTimeout(r, 500)); // Simular delay
+        setSession(DEMO_TOKEN, DEMO_USER);
+        setSuccess(true);
+        setTimeout(() => onLogin(DEMO_USER), 450);
+        return;
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
 

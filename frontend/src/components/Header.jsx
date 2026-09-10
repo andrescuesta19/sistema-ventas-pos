@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Sun, Moon, Search, ChevronDown, LogOut, User, KeyRound, X } from 'lucide-react';
-import { API_URL } from '../config';
+import { Bell, Sun, Moon, Search, ChevronDown, LogOut, User, KeyRound, X, Monitor } from 'lucide-react';
+import { API_URL, DEMO_MODE } from '../config';
 import { apiGet, clearSession } from '../api';
 import { useTheme } from '../ThemeContext';
 
@@ -165,6 +165,18 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
 
   return (
     <div style={{ ...styles.header, ...headerGlassStyle }}>
+      {/* Banner de modo demo */}
+      {DEMO_MODE && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          background: 'linear-gradient(90deg, #f59e0b, #f97316)',
+          color: 'white', textAlign: 'center', padding: '4px 8px',
+          fontSize: '0.75rem', fontWeight: 600, zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+        }}>
+          <Monitor size={14} /> MODO DEMO — Datos simulados, sin conexión al backend
+        </div>
+      )}
       {/* Buscador global */}
       <div style={styles.searchWrap} ref={searchRef}>
         <Search size={16} style={styles.searchIcon} />

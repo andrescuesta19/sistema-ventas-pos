@@ -1,6 +1,9 @@
 // Helper para hacer fetch con JWT automáticamente
 // Si el token expira (401), limpia la sesión para forzar re-login.
 
+import { DEMO_MODE } from './config';
+import { DEMO_USER, DEMO_TOKEN, DEMO_PRODUCTOS, DEMO_TURNOS, DEMO_VENTAS, demoFetch } from './demoData';
+
 const TOKEN_KEY = 'pos_token';
 const USER_KEY = 'pos_user';
 
@@ -31,8 +34,14 @@ export function clearSession() {
  * fetchAuth: wrapper de fetch que añade Authorization automáticamente.
  * Si recibe 401, limpia la sesión y dispara un evento global para que
  * la app redirija al login.
+ * En modo demo, retorna datos mock sin hacer llamadas reales.
  */
 export async function fetchAuth(url, options = {}) {
+  // Modo demo: interceptar llamadas y retornar datos mock
+  if (DEMO_MODE) {
+    return demoFetch(getMockData(url));
+  }
+
   const token = getToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -55,6 +64,21 @@ export async function fetchAuth(url, options = {}) {
   }
 
   return res;
+}
+
+/**
+ * Datos mock para cada endpoint en modo demo
+ */
+function getMockData(url) {
+  if (url.includes('/api/auth/login')) return { token: DEMO_TOKEN, ...DEMO_USER };
+  if (url.includes('/api/productos')) return DEMO_PRODUCTOS;
+  if (url.includes('/api/turnos/estado')) return DEMO_TURNOS;
+  if (url.includes('/api/turnos/reporte')) return { articulos: [], metodos_pago: [] };
+  if (url.includes('/api/ventas/historial')) return DEMO_VENTAS;
+  if (url.includes('/api/ventas/procesar')) return { success: true, id_venta: 999 };
+  if (url.includes('/api/productos/alertas')) return DEMO_PRODUCTOS.filter(p => p.stock_actual <= p.stock_minimo);
+  if (url.includes('/api/dashboard/resumen')) return { ventas_hoy: { total_ventas: 3, ingresos: 449900 }, productos_bajo_stock: 2, turno_actual: DEMO_TURNOS.turno };
+  return {};
 }
 
 /**
