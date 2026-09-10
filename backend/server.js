@@ -15,18 +15,24 @@ const dian = require('./dian'); // v1.9.1: facturación electrónica DIAN
 const app = express();
 
 // === Servir imágenes de productos ===
-const uploadsDir = path.join(__dirname, 'uploads', 'productos');
+// En producción (Render), el filesystem es efímero — usamos memoria para uploads.
+const isProduction = process.env.NODE_ENV === 'production';
+const uploadsDir = isProduction
+  ? path.join('/tmp', 'uploads', 'productos')
+  : path.join(__dirname, 'uploads', 'productos');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // === Configuración de multer para imágenes ===
-const storageProductos = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
-    filename: (req, file, cb) => {
+const storageProductos = isProduction
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (req, file, cb) => cb(null, uploadsDir),
+      filename: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
         cb(null, `producto_${req.params.id}_${Date.now()}${ext}`);
-    }
-});
+      }
+    });
 const uploadProducto = multer({
     storage: storageProductos,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
@@ -39,25 +45,26 @@ const uploadProducto = multer({
 });
 
 // === A3-fix: CORS con whitelist ===
-// Permitimos localhost (Electron/dev), GitHub Pages y túneles cloudflare
+// Permitimos localhost (Electron/dev), GitHub Pages, Render y túneles cloudflare
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'capacitor://localhost',
   'https://andrescuesta19.github.io',
-  // Túnel cloudflare (cambia al reiniciar)
+  // Render (se actualiza después del deploy)
   ...(process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
 ];
-// Permitir cualquier origen *.trycloudflare.com
-const isCloudflareTunnel = (origin) => origin && origin.includes('.trycloudflare.com');
+// Permitir cualquier origen *.trycloudflare.com y *.onrender.com
+const isAllowedTunnel = (origin) =>
+  origin && (origin.includes('.trycloudflare.com') || origin.includes('.onrender.com'));
 
 app.use(cors({
     origin: (origin, callback) => {
         // Permitir requests sin origin (Electron, curl, health checks)
         if (!origin) return callback(null, true);
         if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-        if (isCloudflareTunnel(origin)) return callback(null, true);
+        if (isAllowedTunnel(origin)) return callback(null, true);
         return callback(new Error(`Origen no permitido: ${origin}`));
     },
     credentials: true,
