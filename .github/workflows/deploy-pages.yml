@@ -37,7 +37,7 @@ jobs:
         run: npm run build
         env:
           VITE_DEMO_MODE: 'false'
-          VITE_API_URL: ${{ vars.API_URL || 'https://powerpoint-gale-advocacy-readily.trycloudflare.com' }}
+          VITE_API_URL: 'https://sistema-ventas-pos-aeka.onrender.com'
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
