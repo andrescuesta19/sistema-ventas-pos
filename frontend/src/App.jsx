@@ -651,7 +651,7 @@ function App() {
           <Route path="/super-admin" element={<SuperAdmin />} />
           {/* v1.5.5: Proveedores y Nómina ahora son funcionales */}
           <Route path="/proveedores" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Proveedores user={user} /></AppLayout> : <Navigate to="/login" />} />
-          <Route path="/caja" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Caja /></AppLayout> : <Navigate to="/login" />} />
+          <Route path="/caja" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Caja user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/nomina" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Nomina user={user} /></AppLayout> : <Navigate to="/login" />} />
           {/* v1.7.2: E-commerce restaurado (existía Ecommerce.jsx pero no estaba registrado) */}
           <Route path="/ecommerce" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Ecommerce user={user} /></AppLayout> : <Navigate to="/login" />} />
