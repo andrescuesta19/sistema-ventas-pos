@@ -281,3 +281,161 @@ tr:last-child td { border-bottom: none; }
 body, .app-container, .main-content, .card, input, select, textarea, button {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
+
+/* ============================================================
+   RESPONSIVE MÓVIL — iPhone, Android, tablets
+   ============================================================ */
+
+/* Menú hamburguesa (oculto en desktop) */
+.mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  color: var(--text-primary);
+  z-index: 200;
+}
+
+/* Overlay del sidebar en móvil */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 99;
+}
+
+/* ─── Móvil: hasta 768px ─── */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 100;
+    transition: left 0.3s ease;
+    box-shadow: none;
+  }
+  .sidebar.open {
+    left: 0;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.2);
+  }
+  .sidebar-overlay.active {
+    display: block;
+  }
+  .main-content {
+    width: 100%;
+    min-width: 0;
+  }
+  .top-bar {
+    padding: 0.65rem 1rem !important;
+    min-height: 56px !important;
+  }
+  .top-bar-welcome span.greet {
+    font-size: 0.85rem !important;
+  }
+  .top-bar-welcome .date-line {
+    font-size: 0.7rem !important;
+  }
+  .search-box {
+    min-width: 0 !important;
+    max-width: 160px !important;
+  }
+  .page-content {
+    padding: 1rem !important;
+  }
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .dashboard-grid-2col { grid-template-columns: 1fr !important; }
+  .card table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .card table thead,
+  .card table tbody,
+  .card table tr {
+    display: table;
+    width: 100%;
+    min-width: 600px;
+  }
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+  .modal-content {
+    max-width: 100% !important;
+    max-height: 95vh !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 1.25rem !important;
+  }
+  .btn-primary, .btn-secondary {
+    padding: 0.75rem 1.2rem !important;
+    font-size: 0.9rem !important;
+    min-height: 44px;
+  }
+  input, select, textarea {
+    font-size: 16px !important;
+    padding: 0.75rem !important;
+    min-height: 44px;
+  }
+  .top-bar-right {
+    gap: 0.4rem !important;
+  }
+  .sidebar-user-card {
+    margin: 0.5rem !important;
+    padding: 0.6rem !important;
+  }
+  .sidebar-logo-area {
+    padding: 1rem 0.75rem !important;
+  }
+  .sidebar-logo-text .t1 { font-size: 0.85rem !important; }
+  .sidebar-logo-text .t2 { font-size: 0.75rem !important; }
+  .sidebar-nav {
+    padding: 0.75rem 0.5rem !important;
+    gap: 2px !important;
+  }
+  .nav-link {
+    padding: 0.65rem 0.75rem !important;
+    font-size: 0.85rem !important;
+  }
+}
+
+/* ─── Móvil pequeño: hasta 480px ─── */
+@media (max-width: 480px) {
+  .top-bar {
+    padding: 0.5rem 0.75rem !important;
+  }
+  .top-bar-welcome span.greet {
+    font-size: 0.78rem !important;
+  }
+  .page-content {
+    padding: 0.75rem !important;
+  }
+  .card {
+    padding: 1rem !important;
+    border-radius: 12px !important;
+  }
+  .modal-content {
+    padding: 1rem !important;
+    border-radius: 12px 12px 0 0 !important;
+  }
+}
+
+/* ─── Tablet: 769px a 1024px ─── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+  .nav-link {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.85rem;
+  }
+}

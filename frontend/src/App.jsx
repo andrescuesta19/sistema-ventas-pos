@@ -176,6 +176,12 @@ const Reloj = () => {
 
 const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) => {
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Cerrar sidebar al navegar (móvil)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   // v1.5.4: código muerto del modal de relevo eliminado (logout ahora está en
   // el header global). Si en el futuro se quiere restaurar, buscar en git
@@ -456,7 +462,13 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
         }
       `}</style>
 
-      <div className="sidebar">
+      {/* Overlay del sidebar en móvil */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`} 
+        onClick={() => setSidebarOpen(false)} 
+      />
+
+      <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo-area">
           <Logo size={60} glow={false} />
           <div className="sidebar-logo-text">
@@ -505,8 +517,16 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
       </div>
 
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* Botón hamburguesa para móvil */}
+        <div className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </div>
         {/* v1.5.3: Header global con buscador, tema, notificaciones, avatar */}
-        <Header user={user} notifCount={notifCount} />
+        <Header user={user} notifCount={notifCount} onLogout={onLogout} />
         {children}
       </div>
 

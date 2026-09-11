@@ -1,19 +1,17 @@
-// Detecta automáticamente el entorno de ejecución
+// Detecta automáticamente el entorno de ejecución (iOS Capacitor, Electron de Escritorio o Navegador Web)
 const isCapacitor = typeof window !== 'undefined' && window.location.protocol === 'capacitor:';
 const isElectron = typeof window !== 'undefined' && (window.electronAPI?.isElectron || window.navigator.userAgent.includes('Electron'));
 
-// Modo demo: sin backend, solo para previsualización web
-export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
+// v2.0.1: En web (GitHub Pages), usar el backend de Render
+const isWeb = !isCapacitor && !isElectron;
 
-// URL del backend API:
-// - Variable de entorno VITE_API_URL (para deploy web / producción)
-// - Capacitor: IP local del desarrollador
-// - Electron / Browser: localhost
-export const API_URL = DEMO_MODE ? '' : (
-  import.meta.env.VITE_API_URL
-  || (isCapacitor ? 'http://192.168.1.58:3000' : 'http://localhost:3000')
-);
+export const API_URL = isCapacitor 
+  ? 'http://192.168.1.58:3000'
+  : isWeb
+    ? 'https://sistema-ventas-pos-aeka.onrender.com'
+    : 'http://localhost:3000';
 
-console.log('[Config] Entorno:', isCapacitor ? '📱 iOS' : isElectron ? '💻 Electron' : '🌐 Web');
-console.log('[Config] API:', API_URL || '(modo demo)');
-console.log('[Config] Demo:', DEMO_MODE ? '✅ Activado' : '❌ Desactivado');
+export const DEMO_MODE = false;
+
+console.log('[Config] Entorno detectado:', isCapacitor ? '📱 iOS Nativo' : isElectron ? '💻 Electron Escritorio' : '🌐 Navegador Web (Render)');
+console.log('[Config] Servidor API:', API_URL);
