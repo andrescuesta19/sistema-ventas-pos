@@ -18,7 +18,8 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowDown,
-  Activity
+  Activity,
+  User
 } from 'lucide-react';
 import { formatearFechaHoraCO, formatearFechaLargaCO } from '../utils/dateCO';
 import Logo from '../components/Logo';
@@ -669,14 +670,14 @@ const Dashboard = ({ user }) => {
             <p style={{ color: '#b34a32', marginBottom: '0.3rem', fontWeight: 600 }}>No hay un turno de caja abierto</p>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Debes abrir un turno para poder registrar ventas.</p>
           </div>
-          <button className="btn-primary" onClick={() => setShowApertura(true)}>Abrir Turno de Caja</button>
+          <button className="btn-primary" onClick={() => navigate('/caja')}>Abrir Turno de Caja</button>
         </div>
       ) : (
         <div className="card banner-caja open">
           <div>
             <p style={{ color: 'var(--green-primary)', marginBottom: '0.3rem', fontWeight: 600 }}>Caja abierta</p>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-              Desde {formatearFechaHoraCO(turno.fecha_apertura)} — Base: {formatearCOP(turno.monto_apertura)}
+              Abierto por <strong>{turno.nombre_usuario_apertura || 'Usuario'}</strong> — {formatearFechaHoraCO(turno.fecha_apertura)} — Base: {formatearCOP(turno.monto_apertura)}
             </p>
           </div>
           <span className="pill pill-open">Turno #{turno.id_turno}</span>
@@ -691,6 +692,15 @@ const Dashboard = ({ user }) => {
               <button className="close-btn" onClick={() => setShowApertura(false)}>×</button>
             </div>
             <form onSubmit={abrirTurno}>
+              <div style={{
+                background: 'rgba(96, 165, 250, 0.08)', borderRadius: 10, padding: '0.75rem 1rem',
+                marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem'
+              }}>
+                <User size={16} color="#60a5fa" />
+                <span style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  Abriendo como: <strong style={{ color: 'var(--text-primary)' }}>{user?.nombre || 'Usuario'}</strong>
+                </span>
+              </div>
               <div style={{ marginBottom: '0.5rem' }}>
                 <label>
                   Monto base en efectivo (opcional)

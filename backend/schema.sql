@@ -57,9 +57,11 @@ CREATE TABLE IF NOT EXISTS turnos_caja (
     fecha_cierre TIMESTAMP NULL,
     monto_cierre_real DECIMAL(10,2) NULL,
     monto_cierre_calculado DECIMAL(10,2) NULL,
+    id_usuario_cierre INTEGER NULL,
     estado_turno VARCHAR(10) DEFAULT 'Abierto' CHECK(estado_turno IN ('Abierto', 'Cerrado')),
     FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
-    FOREIGN KEY (id_local) REFERENCES locales(id_local)
+    FOREIGN KEY (id_local) REFERENCES locales(id_local),
+    FOREIGN KEY (id_usuario_cierre) REFERENCES usuarios(id_usuario)
 );
 
 CREATE TABLE IF NOT EXISTS ventas (

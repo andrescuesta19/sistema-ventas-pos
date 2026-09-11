@@ -968,8 +968,15 @@ app.get('/api/turnos/estado', requireAuth, requireAprobado, async (req, res) => 
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { rows } = await db.query(`SELECT * FROM turnos_caja WHERE estado_turno = 'Abierto' AND id_local = $1 ORDER BY id_turno DESC LIMIT 1`, [id_local]);
-        res.json({ turno_abierto: rows.length > 0, turno: rows[0] });
+        // v2.0.1: JOIN con usuarios para mostrar nombre de quien abrió el turno
+        const { rows } = await db.query(`
+            SELECT t.*, u.nombre AS nombre_usuario_apertura
+            FROM turnos_caja t
+            LEFT JOIN usuarios u ON t.id_usuario = u.id_usuario
+            WHERE t.estado_turno = 'Abierto' AND t.id_local = $1
+            ORDER BY t.id_turno DESC LIMIT 1
+        `, [id_local]);
+        res.json({ turno_abierto: rows.length > 0, turno: rows[0] || null });
     } catch (err) {
         console.error('Error en /turnos/estado:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
@@ -1006,8 +1013,8 @@ app.post('/api/turnos/cerrar', requireAuth, requireAprobado, async (req, res) =>
             return res.status(403).json({ error: 'No autorizado.' });
         }
         await db.query(
-            `UPDATE turnos_caja SET estado_turno = 'Cerrado', fecha_cierre = CURRENT_TIMESTAMP, monto_cierre_real = $1, monto_cierre_calculado = $2 WHERE id_turno = $3`,
-            [real, calc, id_turno]
+            `UPDATE turnos_caja SET estado_turno = 'Cerrado', fecha_cierre = CURRENT_TIMESTAMP, monto_cierre_real = $1, monto_cierre_calculado = $2, id_usuario_cierre = $3 WHERE id_turno = $4`,
+            [real, calc, Number(req.user.id_usuario), id_turno]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1048,6 +1055,30 @@ app.get('/api/turnos/reporte', requireAuth, requireAprobado, async (req, res) =>
         res.json(report);
     } catch (err) {
         console.error('Error en reporte de turno:', err);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// v2.0.1: Historial de turnos de caja (últimos 20)
+app.get('/api/turnos/historial', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const { id_local } = req.query;
+        if (Number(id_local) !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        const { rows } = await db.query(`
+            SELECT t.*, u.nombre AS nombre_usuario_apertura,
+                   uc.nombre AS nombre_usuario_cierre
+            FROM turnos_caja t
+            LEFT JOIN usuarios u ON t.id_usuario = u.id_usuario
+            LEFT JOIN usuarios uc ON t.id_usuario_cierre = uc.id_usuario
+            WHERE t.id_local = $1
+            ORDER BY t.id_turno DESC
+            LIMIT 20
+        `, [id_local]);
+        res.json(rows);
+    } catch (err) {
+        console.error('Error en historial de turnos:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
