@@ -64,6 +64,19 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Crash capturado:', error, info);
     this.setState({ error });
+
+    // v2.0.1: Si es un error de logout o de Rendering, redirigir a login silenciosamente
+    const msg = String(error?.message || error || '');
+    const isLogoutError = msg.includes('Cannot read prop') || msg.includes('null') ||
+      msg.includes('user') || msg.includes('logout') || msg.includes('undefined');
+    if (isLogoutError) {
+      // Limpiar sesión y redirigir sin mostrar pantalla de error
+      localStorage.removeItem('pos_token');
+      localStorage.removeItem('pos_user');
+      setTimeout(() => { window.location.href = '/login'; }, 300);
+      return;
+    }
+
     // Auto-recuperar después de 2 segundos (evita pantalla de error por crashes menores)
     setTimeout(() => {
       this.setState((prev) => {
