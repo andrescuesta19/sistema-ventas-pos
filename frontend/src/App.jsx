@@ -68,24 +68,9 @@ class ErrorBoundary extends React.Component {
     window.location.href = '/login';
   }
   render() {
-    // Si hay error, mostramos loading mientras redirige
     if (this.state.hasError) {
-      return (
-        <div style={{
-          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#0a1a0e', color: '#7ed957',
-          fontFamily: 'Inter, system-ui, sans-serif',
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: 48, height: 48, margin: '0 auto 1rem',
-              border: '3px solid rgba(126,217,87,0.15)', borderTopColor: '#7ed957',
-              borderRadius: '50%', animation: 'spin 0.8s linear infinite',
-            }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        </div>
-      );
+      // Mostrar nada — el redirect ya está en course
+      return null;
     }
     return this.props.children;
   }
@@ -503,9 +488,7 @@ function App() {
         setUser(fresh);
         setLoading(false);
       }).catch(() => {
-        // Token inválido — limpiar y mostrar login directamente
         try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-        setUser(null);
         setLoading(false);
       });
     } else {
@@ -516,8 +499,9 @@ function App() {
   // Escuchar evento de sesión expirada (401 desde api.js)
   useEffect(() => {
     const onLogout = () => {
+      // Hard redirect — nunca usar React state para logout
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-      setUser(null);
+      window.location.href = '/login';
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -530,8 +514,8 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    setUser(null);
-    // navigate no se necesita: las rutas con user=null redirigen a /login automáticamente
+    // Hard redirect — nunca React state, nunca spinner verde
+    window.location.href = '/login';
   };
 
   if (loading) {
@@ -542,21 +526,21 @@ function App() {
         alignItems: 'center',
         justifyContent: 'center',
         background: '#0a1a0e',
-        color: '#7ed957',
+        color: '#ffffff',
         fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: '1.1rem',
-        fontWeight: 600,
+        fontSize: '1rem',
+        fontWeight: 500,
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            width: 56, height: 56, margin: '0 auto 1.25rem',
-            border: '4px solid rgba(126, 217, 87, 0.15)',
-            borderTopColor: '#7ed957',
+            width: 40, height: 40, margin: '0 auto 1rem',
+            border: '3px solid rgba(255,255,255,0.1)',
+            borderTopColor: '#ffffff',
             borderRadius: '50%',
-            animation: 'spin 0.9s linear infinite'
+            animation: 'spin 0.8s linear infinite'
           }} />
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          Cargando sesión...
+          <div style={{ opacity: 0.6 }}>Cargando...</div>
         </div>
       </div>
     );

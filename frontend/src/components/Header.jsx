@@ -92,7 +92,8 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
   };
 
   const handleLogout = () => {
-    window.dispatchEvent(new CustomEvent('auth:logout'));
+    try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+    window.location.href = '/login';
   };
 
   // Liquid Glass effect for header/sidebar
