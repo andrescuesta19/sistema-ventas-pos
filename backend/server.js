@@ -3248,6 +3248,90 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             return res.json({ respuesta });
         }
 
+        // ── PUBLICAR ACTUALIZACIÓN (el bot lo hace todo) ──────────────
+        // DEBE IR ANTES de detección de ventas/locales/etc.
+        if (msg.includes('publicar actualización') || msg.includes('publicar actualizacion') ||
+            msg.includes('nueva versión') || msg.includes('nueva version') ||
+            msg.includes('hacer una actualización') || msg.includes('hacer una actualizacion') ||
+            msg.includes('sacar actualización') || msg.includes('lanzar actualización') ||
+            msg.includes('push update') || msg.includes('publish update') ||
+            (msg.includes('actualiz') && (msg.includes('publicar') || msg.includes('crear') || msg.includes('sacar') || msg.includes('lanzar')))) {
+
+            // Extraer changelog del mensaje
+            let changelog = msg
+                .replace(/publicar\s+(la\s+)?actualizaci[oó]n/gi, '')
+                .replace(/nueva\s+versi[oó]n/gi, '')
+                .replace(/hacer\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/sacar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/lanzar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/con\s+los?\s+cambios?:?/gi, '')
+                .replace(/con\s+estos?\s+cambios?:?/gi, '')
+                .replace(/que\s+(?:tenga|contenga|incluya)/gi, '')
+                .replace(/push\s+update/gi, '')
+                .replace(/publish\s+update/gi, '')
+                .trim();
+
+            if (!changelog || changelog.length < 3) {
+                return res.json({ respuesta:
+                    `🔄 *¿Publicar actualización?*\n\n` +
+                    `Escríbeme así:\n` +
+                    `_"publicar actualización con corrección de errores en el POS, mejor rendimiento"_\n\n` +
+                    `Yo automáticamente:\n` +
+                    `1️⃣ Incremento la versión (ej: 2.1.1 → 2.1.2)\n` +
+                    `2️⃣ Registro los cambios\n` +
+                    `3️⃣ Publico la actualización\n` +
+                    `4️⃣ Todos los clientes la verán al reiniciar\n\n` +
+                    `_¿Qué cambios quieres incluir?_`
+                });
+            }
+
+            // Obtener última versión y generar la siguiente
+            const ultimaUpd = await db.query('SELECT version FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 1');
+            let nuevaVersion = '2.1.2';
+            if (ultimaUpd.rows.length > 0) {
+                const parts = ultimaUpd.rows[0].version.split('.').map(Number);
+                parts[2] = (parts[2] || 0) + 1;
+                nuevaVersion = parts.join('.');
+            }
+
+            // Crear la actualización automáticamente
+            await db.query('UPDATE actualizaciones SET activa = false');
+            await db.query(
+                'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3) RETURNING *',
+                [nuevaVersion, changelog, '']
+            );
+
+            console.log(`🤖 Bot: Actualización v${nuevaVersion} publicada automáticamente`);
+
+            return res.json({ respuesta:
+                `✅ *¡Actualización publicada!*\n\n` +
+                `📦 *Versión:* v${nuevaVersion}\n` +
+                `📝 *Cambios:* ${changelog}\n` +
+                `📅 *Fecha:* ${new Date().toLocaleString('es-CO')}\n\n` +
+                `🔄 Todos los clientes recibirán la notificación al reiniciar la aplicación.\n\n` +
+                `_¿Necesitas algo más?_`
+            });
+        }
+
+        // Ver actualizaciones publicadas
+        if (msg.includes('ver actualización') || msg.includes('ver actualizacion') ||
+            msg.includes('historial de actualización') || msg.includes('actualizaciones publicadas')) {
+            const upds = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 5');
+            if (upds.rows.length === 0) return res.json({ respuesta: 'No hay actualizaciones publicadas aún.' });
+            let respuesta = `📋 *Últimas actualizaciones:*\n\n`;
+            for (const u of upds.rows) {
+                respuesta += `• *v${u.version}* — ${u.activa ? '🟢 Activa' : '⚪ Inactiva'}\n  ${u.changelog || 'Sin cambios'}\n  ${new Date(u.fecha_publicacion).toLocaleString('es-CO')}\n\n`;
+            }
+            return res.json({ respuesta });
+        }
+
+        // Versión
+        if (intencion === 'version') {
+            const ultimaVer = await db.query('SELECT version FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1');
+            const ver = ultimaVer.rows[0]?.version || APP_VERSION;
+            return res.json({ respuesta: `🔄 *Versión actual:* ${ver}\n\nPara actualizar, escribe "publicar actualización con [cambios]" y yo me encargo del resto.` });
+        }
+
         // Ventas de un local específico
         if (intencion === 'ventas') {
             const nombreLocal = extraerLocal(msg);
@@ -3352,82 +3436,6 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             const ultimaUpd = await db.query('SELECT version FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1');
             const ver = ultimaUpd.rows[0]?.version || APP_VERSION;
             return res.json({ respuesta: `🔄 *Versión actual:* ${ver}\n\nPara actualizar, escribe "publicar actualización con [cambios]" y yo me encargo del resto.` });
-        }
-
-        // ── PUBLICAR ACTUALIZACIÓN (el bot lo hace todo) ──────────────
-        if (msg.includes('publicar actualización') || msg.includes('publicar actualizacion') ||
-            msg.includes('nueva versión') || msg.includes('nueva version') ||
-            msg.includes('hacer una actualización') || msg.includes('hacer una actualizacion') ||
-            msg.includes('sacar actualización') || msg.includes('lanzar actualización') ||
-            msg.includes('push update') || msg.includes('publish update') ||
-            (msg.includes('actualiz') && (msg.includes('publicar') || msg.includes('crear') || msg.includes('sacar') || msg.includes('lanzar')))) {
-
-            // Extraer changelog del mensaje
-            let changelog = msg
-                .replace(/publicar\s+(la\s+)?actualizaci[oó]n/gi, '')
-                .replace(/nueva\s+versi[oó]n/gi, '')
-                .replace(/hacer\s+(una\s+)?actualizaci[oó]n/gi, '')
-                .replace(/sacar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                .replace(/lanzar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                .replace(/con\s+los?\s+cambios?:?/gi, '')
-                .replace(/con\s+estos?\s+cambios?:?/gi, '')
-                .replace(/que\s+(?:tenga|contenga|incluya)/gi, '')
-                .replace(/push\s+update/gi, '')
-                .replace(/publish\s+update/gi, '')
-                .trim();
-
-            if (!changelog || changelog.length < 3) {
-                return res.json({ respuesta:
-                    `🔄 *¿Publicar actualización?*\n\n` +
-                    `Escríbeme así:\n` +
-                    `_"publicar actualización con corrección de errores en el POS, mejor rendimiento"_\n\n` +
-                    `Yo automáticamente:\n` +
-                    `1️⃣ Incremento la versión (ej: 2.1.1 → 2.1.2)\n` +
-                    `2️⃣ Registro los cambios\n` +
-                    `3️⃣ Publico la actualización\n` +
-                    `4️⃣ Todos los clientes la verán al reiniciar\n\n` +
-                    `_¿Qué cambios quieres incluir?_`
-                });
-            }
-
-            // Obtener última versión y generar la siguiente
-            const ultima = await db.query('SELECT version FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 1');
-            let nuevaVersion = '2.1.2';
-            if (ultima.rows.length > 0) {
-                const parts = ultima.rows[0].version.split('.').map(Number);
-                parts[2] = (parts[2] || 0) + 1;
-                nuevaVersion = parts.join('.');
-            }
-
-            // Crear la actualización automáticamente
-            await db.query('UPDATE actualizaciones SET activa = false');
-            const result = await db.query(
-                'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3) RETURNING *',
-                [nuevaVersion, changelog, '']
-            );
-
-            console.log(`🤖 Bot: Actualización v${nuevaVersion} publicada automáticamente`);
-
-            return res.json({ respuesta:
-                `✅ *¡Actualización publicada!*\n\n` +
-                `📦 *Versión:* v${nuevaVersion}\n` +
-                `📝 *Cambios:* ${changelog}\n` +
-                `📅 *Fecha:* ${new Date().toLocaleString('es-CO')}\n\n` +
-                `🔄 Todos los clientes recibirán la notificación al reiniciar la aplicación.\n\n` +
-                `_¿Necesitas algo más?_`
-            });
-        }
-
-        // Ver actualizaciones publicadas
-        if (msg.includes('ver actualización') || msg.includes('ver actualizacion') ||
-            msg.includes('historial de actualización') || msg.includes('actualizaciones publicadas')) {
-            const upds = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 5');
-            if (upds.rows.length === 0) return res.json({ respuesta: 'No hay actualizaciones publicadas aún.' });
-            let respuesta = `📋 *Últimas actualizaciones:*\n\n`;
-            for (const u of upds.rows) {
-                respuesta += `• *v${u.version}* — ${u.activa ? '🟢 Activa' : '⚪ Inactiva'}\n  ${u.changelog || 'Sin cambios'}\n  ${new Date(u.fecha_publicacion).toLocaleString('es-CO')}\n\n`;
-            }
-            return res.json({ respuesta });
         }
 
         // Estado del servidor
