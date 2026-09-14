@@ -37,6 +37,7 @@ const SuperAdmin = () => {
   const [actualizaciones, setActualizaciones] = useState([]);
   const [nuevaActualizacion, setNuevaActualizacion] = useState({ version: '', changelog: '', url_descarga: '' });
   const [updateMsg, setUpdateMsg] = useState(null);
+  const [archivoUpdate, setArchivoUpdate] = useState(null);
 
   // Estilos compartidos
   const thStyle = { textAlign: 'left', padding: '0.6rem 0.75rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' };
@@ -56,14 +57,21 @@ const SuperAdmin = () => {
 
   // Cargar datos cuando está logueado
   useEffect(() => {
-    if (loggedIn) cargarDatos();
+    if (loggedIn) {
+      cargarDatos();
+      // Auto-refresh cada 30s para ver nuevos registros
+      const interval = setInterval(cargarDatos, 30000);
+      return () => clearInterval(interval);
+    }
   }, [loggedIn]);
 
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [s, l, m, t, inst, upd] = await Promise.all([
+      // Usar token directo de localStorage (evita stale closure)
+      const t = token || localStorage.getItem('super_admin_token');
+      const headers = { Authorization: `Bearer ${t}` };
+      const [s, l, m, tk, inst, upd] = await Promise.all([
         fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.json()),
@@ -74,7 +82,7 @@ const SuperAdmin = () => {
       setSolicitudes(Array.isArray(s) ? s : []);
       setLocales(Array.isArray(l) ? l : []);
       setMetricas(m);
-      setTickets(Array.isArray(t) ? t : []);
+      setTickets(Array.isArray(tk) ? tk : []);
       setInstalaciones(Array.isArray(inst) ? inst : []);
       setActualizaciones(Array.isArray(upd) ? upd : []);
     } catch (err) {
@@ -716,22 +724,80 @@ const SuperAdmin = () => {
               <textarea placeholder="Cambios de esta versión (changelog)" value={nuevaActualizacion.changelog}
                 onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, changelog: e.target.value })}
                 rows={4} style={{ ...inputDarkStyle, resize: 'vertical' }} />
-              <input type="text" placeholder="URL de descarga (opcional)" value={nuevaActualizacion.url_descarga}
-                onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, url_descarga: e.target.value })}
-                style={inputDarkStyle} />
+
+              {/* Zona de arrastrar/subir archivo */}
+              <div style={{
+                border: `2px dashed ${archivoUpdate ? 'rgba(126,217,87,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                borderRadius: 12, padding: '1.2rem', textAlign: 'center',
+                background: archivoUpdate ? 'rgba(126,217,87,0.06)' : 'rgba(255,255,255,0.02)',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+                onClick={() => document.getElementById('file-update-input').click()}
+                onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'rgba(126,217,87,0.5)'; }}
+                onDragLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setArchivoUpdate(f); }}
+              >
+                <input id="file-update-input" type="file" accept=".exe,.dmg,.zip,.msi"
+                  style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files[0]) setArchivoUpdate(e.target.files[0]); }} />
+                {archivoUpdate ? (
+                  <div>
+                    <Upload size={24} color="#7ed957" />
+                    <div style={{ color: '#7ed957', fontSize: '0.85rem', fontWeight: 600, marginTop: '0.4rem' }}>{archivoUpdate.name}</div>
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{(archivoUpdate.size / 1024 / 1024).toFixed(1)} MB</div>
+                    <button onClick={e => { e.stopPropagation(); setArchivoUpdate(null); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', cursor: 'pointer', marginTop: 4, fontFamily: 'inherit' }}>✕ Quitar archivo</button>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload size={24} color="rgba(255,255,255,0.3)" />
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: '0.4rem' }}>
+                      <strong>Arrastra un archivo aquí</strong> o haz clic para seleccionar
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                      .exe (Windows), .dmg (Mac), .zip — Máx 500 MB
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!archivoUpdate && (
+                <>
+                  <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.78rem', textAlign: 'center' }}>— o ingresa una URL manualmente —</div>
+                  <input type="text" placeholder="URL de descarga (opcional)" value={nuevaActualizacion.url_descarga}
+                    onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, url_descarga: e.target.value })}
+                    style={inputDarkStyle} />
+                </>
+              )}
+
               <button onClick={async () => {
                 if (!nuevaActualizacion.version.trim()) return setUpdateMsg({ ok: false, text: 'La versión es requerida.' });
                 setUpdateMsg(null);
                 try {
-                  const r = await fetch(`${API_URL}/api/actualizaciones/crear`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify(nuevaActualizacion),
-                  });
+                  let r;
+                  if (archivoUpdate) {
+                    // Subir archivo con FormData
+                    const fd = new FormData();
+                    fd.append('version', nuevaActualizacion.version);
+                    fd.append('changelog', nuevaActualizacion.changelog);
+                    fd.append('archivo', archivoUpdate);
+                    r = await fetch(`${API_URL}/api/actualizaciones/crear`, {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` },
+                      body: fd,
+                    });
+                  } else {
+                    // Sin archivo, JSON normal
+                    r = await fetch(`${API_URL}/api/actualizaciones/crear`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify(nuevaActualizacion),
+                    });
+                  }
                   const data = await r.json();
                   if (r.ok) {
                     setUpdateMsg({ ok: true, text: `✅ Actualización v${nuevaActualizacion.version} publicada. Los clientes la verán al reiniciar.` });
                     setNuevaActualizacion({ version: '', changelog: '', url_descarga: '' });
+                    setArchivoUpdate(null);
                     cargarDatos();
                   } else {
                     setUpdateMsg({ ok: false, text: data.error || 'Error al publicar.' });

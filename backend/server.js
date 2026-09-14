@@ -21,6 +21,13 @@ const uploadsDir = isProduction
   ? path.join('/tmp', 'uploads', 'productos')
   : path.join(__dirname, 'uploads', 'productos');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+// v2.1.1: Directorio para actualizaciones
+const updatesDir = isProduction
+  ? path.join('/tmp', 'uploads', 'actualizaciones')
+  : path.join(__dirname, 'uploads', 'actualizaciones');
+if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // === Configuración de multer para imágenes ===
@@ -2003,6 +2010,30 @@ function requireSuperAdmin(req, res, next) {
         return res.status(401).json({ error: 'Sesión inválida o expirada.' });
     }
 }
+
+// v2.1.1: Upload de archivos de actualización
+const storageUpdates = isProduction
+  ? multer.memoryStorage()
+  : multer.diskStorage({
+      destination: (req, file, cb) => cb(null, updatesDir),
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `update_${Date.now()}${ext}`);
+      }
+    });
+const uploadUpdate = multer({
+    storage: storageUpdates,
+    limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB máximo
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.exe', '.dmg', '.zip', '.msi'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) cb(null, true);
+        else cb(new Error('Tipo de archivo no permitido. Use .exe, .dmg o .zip'));
+    }
+});
+
+// Servir archivos de actualización
+app.use('/updates', express.static(updatesDir));
 
 // Login de super-admin (separado del login de locales)
 app.post('/api/super/login', loginLimiter, async (req, res) => {
@@ -4286,15 +4317,25 @@ app.get('/api/actualizaciones/ultima', async (req, res) => {
     }
 });
 
-app.post('/api/actualizaciones/crear', async (req, res) => {
+app.post('/api/actualizaciones/crear', uploadUpdate.single('archivo'), async (req, res) => {
     try {
         const { version, changelog, url_descarga } = req.body;
         if (!version) return res.status(400).json({ error: 'Versión requerida' });
+
+        // Si se subió un archivo, generar la URL de descarga
+        let downloadUrl = url_descarga || '';
+        if (req.file) {
+            const baseUrl = isProduction
+                ? 'https://sistema-ventas-pos-aeka.onrender.com'
+                : `http://localhost:${process.env.PORT || 3000}`;
+            downloadUrl = `${baseUrl}/updates/${req.file.filename}`;
+        }
+
         // Desactivar anteriores
         await db.query('UPDATE actualizaciones SET activa = false');
         const result = await db.query(
             'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3) RETURNING *',
-            [version, changelog || '', url_descarga || '']
+            [version, changelog || '', downloadUrl]
         );
         res.json({ success: true, actualizacion: result.rows[0] });
     } catch (err) {
