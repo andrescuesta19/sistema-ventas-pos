@@ -423,32 +423,35 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
               </Link>
             );
           })}
-        </nav>
 
-        <Link
-          to="/configuracion"
-          className="sidebar-user-card"
-          title="Mi perfil"
-          onClick={() => setSidebarOpen(false)}
-        >
-          <div className="user-avatar" style={{ overflow: 'hidden' }}>
-            {user?.avatar_url ? (
-              <img
-                src={user?.avatar_url}
-                alt={user?.nombre}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              (user?.nombre || 'U')[0].toUpperCase()
-            )}
-          </div>
-          <div className="user-info">
-            <div className="greeting">¡Hola, {user?.nombre?.split(' ')[0] || 'Usuario'}!</div>
-            <div className="role">{user?.rol || 'usuario'}</div>
-          </div>
-          <Settings size={16} color="var(--text-muted)" />
-        </Link>
+          {/* Separator */}
+          <div style={{ height: 1, background: 'var(--border-light)', margin: '0.4rem 0.5rem' }} />
+
+          {/* User card — al final del nav, antes de Configuración */}
+          <Link
+            to="/configuracion"
+            className="nav-link"
+            title="Mi perfil"
+            onClick={() => setSidebarOpen(false)}
+            style={{ gap: '0.65rem' }}
+          >
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+              background: 'var(--green-light)', color: 'var(--green-primary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: '0.8rem', overflow: 'hidden',
+            }}>
+              {user?.avatar_url ? (
+                <img src={user?.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                (user?.nombre || 'U')[0].toUpperCase()
+              )}
+            </div>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {user?.nombre || 'Usuario'}
+            </span>
+          </Link>
+        </nav>
       </div>
 
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -499,7 +502,6 @@ function App() {
   // Escuchar evento de sesión expirada (401 desde api.js)
   useEffect(() => {
     const onLogout = () => {
-      // Hard redirect — nunca usar React state para logout
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
       window.location.href = '/login';
     };
@@ -514,37 +516,11 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    // Hard redirect — nunca React state, nunca spinner verde
     window.location.href = '/login';
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#0a1a0e',
-        color: '#ffffff',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: '1rem',
-        fontWeight: 500,
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: 40, height: 40, margin: '0 auto 1rem',
-            border: '3px solid rgba(255,255,255,0.1)',
-            borderTopColor: '#ffffff',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite'
-          }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <div style={{ opacity: 0.6 }}>Cargando...</div>
-        </div>
-      </div>
-    );
-  }
+  // Durante loading, no mostrar nada (evita flash de spinner verde)
+  if (loading) return null;
 
   return (
     <ThemeProvider>
@@ -554,7 +530,6 @@ function App() {
           <Route path="/registro" element={!user ? <Registro onRegister={handleLogin} onSwitchToLogin={() => navigate('/login')} /> : <Navigate to="/dashboard" />} />
           <Route path="/dashboard" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Dashboard user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/pos" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><POS user={user} /></AppLayout> : <Navigate to="/login" />} />
-          {/* v1.5.4: ternario redundante simplificado */}
           <Route path="/inventario" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Inventario user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/historial" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Historial user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/cotizaciones" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Cotizaciones user={user} /></AppLayout> : <Navigate to="/login" />} />
@@ -566,13 +541,10 @@ function App() {
           <Route path="/configuracion" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Configuracion user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/recuperar-password" element={!user ? <RecuperarPassword /> : <Navigate to="/dashboard" />} />
           <Route path="/terminos" element={<Terminos />} />
-          {/* v1.5.5: /super-admin fuera del layout para que no se monte el Header del cliente */}
           <Route path="/super-admin" element={<SuperAdmin />} />
-          {/* v1.5.5: Proveedores y Nómina ahora son funcionales */}
           <Route path="/proveedores" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Proveedores user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/caja" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Caja user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/nomina" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Nomina user={user} /></AppLayout> : <Navigate to="/login" />} />
-          {/* v1.7.2: E-commerce restaurado (existía Ecommerce.jsx pero no estaba registrado) */}
           <Route path="/ecommerce" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Ecommerce user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
         </Routes>
