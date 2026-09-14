@@ -595,7 +595,6 @@ if (autoUpdater) {
 // ─────────────────────────────────────────────────────────
 // v2.1.1: TRACKING DE INSTALACIÓN + CHECK DE ACTUALIZACIONES
 // ─────────────────────────────────────────────────────────
-const os = require('os');
 
 async function reportarInstalacion() {
   try {
