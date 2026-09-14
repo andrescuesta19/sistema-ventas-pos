@@ -6,14 +6,11 @@ const WelcomeModal = () => {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const firstInstall = localStorage.getItem('pos_first_install');
-    if (!firstInstall) {
-      setShow(true);
-    }
+    // Siempre mostrar al abrir la app
+    setShow(true);
   }, []);
 
   const handleContinue = () => {
-    localStorage.setItem('pos_first_install', 'true');
     setShow(false);
   };
 
