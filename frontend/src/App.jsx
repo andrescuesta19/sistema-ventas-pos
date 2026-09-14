@@ -503,8 +503,7 @@ function App() {
   useEffect(() => {
     const onLogoutEvent = () => {
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-      setUser(null);
-      navigate('/login'); // Navegación explícita
+      window.location.href = '/#/login';
     };
     window.addEventListener('auth:logout', onLogoutEvent);
     return () => window.removeEventListener('auth:logout', onLogoutEvent);
@@ -517,8 +516,7 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    setUser(null);
-    navigate('/login'); // Navegación explícita — no depender de <Navigate> en el render
+    window.location.href = '/#/login';
   };
 
   // Durante loading, no mostrar nada (evita flash de spinner verde)
