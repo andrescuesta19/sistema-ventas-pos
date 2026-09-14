@@ -760,13 +760,27 @@ const SuperAdmin = () => {
         {/* Tab Actualizar Sistema */}
         {tab === 'actualizar' && (
           <div>
-            <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>
+            <h3 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '1.1rem' }}>
               <Upload size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
               Publicar Actualización Remota
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-              Al publicar una actualización, todos los clientes recibirán una notificación al iniciar la app.
-            </p>
+
+            {/* Info: cómo funciona */}
+            <div style={{
+              background: 'rgba(126,217,87,0.06)', border: '1px solid rgba(126,217,87,0.15)',
+              borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem',
+            }}>
+              <div style={{ color: '#7ed957', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                💡 ¿Cómo funciona?
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.82rem', lineHeight: 1.6 }}>
+                <strong>Opción 1 (Recomendada):</strong> Escríbele al Bot 🤖<br />
+                <em>"publicar actualización con corrección de bugs en el POS"</em><br />
+                El bot crea todo automáticamente. <strong>No necesitas subir archivos.</strong><br /><br />
+                <strong>Opción 2:</strong> Llena el formulario de abajo.<br />
+                Los archivos .exe/.dmg son <strong>opcionales</strong> — solo necesitas versión + cambios.
+              </div>
+            </div>
 
             {updateMsg && (
               <div style={{ padding: '0.75rem 1rem', borderRadius: 10, marginBottom: '1rem', background: updateMsg.ok ? 'rgba(126,217,87,0.12)' : 'rgba(255,100,100,0.12)', color: updateMsg.ok ? '#7ed957' : '#ff6b6b', border: `1px solid ${updateMsg.ok ? 'rgba(126,217,87,0.3)' : 'rgba(255,100,100,0.3)'}`, fontSize: '0.85rem' }}>
@@ -811,7 +825,7 @@ const SuperAdmin = () => {
                       <strong>Arrastra un archivo aquí</strong> o haz clic para seleccionar
                     </div>
                     <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                      .exe (Windows), .dmg (Mac), .zip — Máx 500 MB
+                      .exe (Windows), .dmg (Mac), .zip — Máx 500 MB · <em>Opcional</em>
                     </div>
                   </div>
                 )}

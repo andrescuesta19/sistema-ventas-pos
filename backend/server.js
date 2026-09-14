@@ -3823,18 +3823,26 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
         // Preguntas sobre versiones / releases
         if (msg.includes('qué versión') || msg.includes('que version') ||
             msg.includes('versión actual') || msg.includes('última versión') ||
-            msg.includes('release') || msg.includes('changelog')) {
+            msg.includes('release') || msg.includes('changelog') ||
+            msg.includes('cómo funcionan las actualizaciones') || msg.includes('cómo funciona la actualización')) {
             const ultimaUpd = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 3');
             let respuesta = `🔄 *Sistema — Versión ${CONTEXTO_SISTEMA.version_actual}*\n\n`;
             respuesta += `📊 *Versión actual:* ${CONTEXTO_SISTEMA.version_actual}\n`;
             respuesta += `👤 *Desarrollador:* ${CONTEXTO_SISTEMA.autor}\n\n`;
+
+            respuesta += `📡 *Cómo funcionan las actualizaciones:*\n\n` +
+                `1️⃣ *Tú me dices* qué cambios quieres (ej: "publicar actualización con fecha y hora en el header")\n` +
+                `2️⃣ *Yo creo* el registro en la base de datos automáticamente\n` +
+                `3️⃣ *Los clientes* reciben la notificación al reiniciar la app\n` +
+                `4️⃣ *No necesitas* subir archivos .exe ni .dm — solo yo y tú hablamos\n\n` +
+                `_Ejemplo: "publicar actualización con corrección de bugs en el POS"_\n\n`;
+
             if (ultimaUpd.rows.length > 0) {
                 respuesta += `📋 *Últimas actualizaciones:*\n`;
                 for (const u of ultimaUpd.rows) {
                     respuesta += `• v${u.version} — ${u.activa ? '🟢' : '⚪'} ${u.changelog || 'Sin changelog'}\n`;
                 }
             }
-            respuesta += `\n_Escribe "publicar actualización con [cambios]" para crear una nueva._`;
             return res.json({ respuesta });
         }
 
