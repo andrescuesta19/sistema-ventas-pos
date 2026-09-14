@@ -289,7 +289,6 @@ const Configuracion = ({ user }) => {
               } catch {}
               // Emitir evento para que el Header se actualice en vivo
               window.dispatchEvent(new CustomEvent('user:updated', { detail: { user: newUser } }));
-              if (onUpdateUser) onUpdateUser(newUser);
             }}
           />
 
