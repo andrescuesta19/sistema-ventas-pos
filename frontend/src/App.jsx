@@ -65,7 +65,8 @@ class ErrorBoundary extends React.Component {
     console.error('[ErrorBoundary] Crash:', error, info);
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
     // Redirect al login — usa hash para HashRouter
-    window.location.href = '/#/login';
+    window.location.hash = '#/login';
+    window.location.reload();
   }
   render() {
     if (this.state.hasError) {
@@ -503,7 +504,8 @@ function App() {
   useEffect(() => {
     const onLogoutEvent = () => {
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-      window.location.href = '/#/login';
+      window.location.hash = '#/login';
+      window.location.reload();
     };
     window.addEventListener('auth:logout', onLogoutEvent);
     return () => window.removeEventListener('auth:logout', onLogoutEvent);
@@ -516,7 +518,8 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    window.location.href = '/#/login';
+    window.location.hash = '#/login';
+    window.location.reload();
   };
 
   // Durante loading, no mostrar nada (evita flash de spinner verde)
