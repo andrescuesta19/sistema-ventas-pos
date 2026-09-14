@@ -593,6 +593,60 @@ if (autoUpdater) {
 }
 
 // ─────────────────────────────────────────────────────────
+// v2.1.1: TRACKING DE INSTALACIÓN + CHECK DE ACTUALIZACIONES
+// ─────────────────────────────────────────────────────────
+const os = require('os');
+
+async function reportarInstalacion() {
+  try {
+    const markerPath = path.join(app.getPath('userData'), '.installed');
+    if (fs.existsSync(markerPath)) return; // Ya reportada
+    const http = require('http');
+    const data = JSON.stringify({
+      ip: 'local',
+      sistema_operativo: `${process.platform} ${os.release()}`,
+      hostname: os.hostname(),
+      version_app: app.getVersion()
+    });
+    await new Promise((resolve, reject) => {
+      const req = http.request(`http://127.0.0.1:${BACKEND_PORT}/api/instalaciones/reportar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }
+      }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
+      req.on('error', reject);
+      req.write(data);
+      req.end();
+    });
+    fs.writeFileSync(markerPath, new Date().toISOString());
+    console.log('✅ Instalación reportada al servidor');
+  } catch (err) {
+    console.warn('⚠ No se pudo reportar instalación:', err.message);
+  }
+}
+
+async function checkActualizaciones() {
+  try {
+    const http = require('http');
+    const result = await new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${BACKEND_PORT}/api/actualizaciones/ultima?version=${app.getVersion()}`, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
+      }).on('error', reject);
+    });
+    if (result.disponible && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update:remote-available', {
+        version: result.version,
+        changelog: result.changelog,
+        url_descarga: result.url_descarga
+      });
+      console.log(`🔔 Actualización remota disponible: v${result.version}`);
+    }
+  } catch (err) {
+    console.warn('⚠ Check de actualizaciones falló:', err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // App lifecycle
 // ─────────────────────────────────────────────────────────
 const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === 'true';
@@ -646,6 +700,10 @@ app.whenReady().then(async () => {
           // El handler de exit lo va a detectar y reiniciar
         }
       }, 10000);
+
+      // v2.1.1: Reportar instalación + check de actualizaciones remotas
+      reportarInstalacion();
+      setTimeout(() => checkActualizaciones(), 5000);
 
     } else {
       console.error(`❌ Backend no respondió en ${BACKEND_PORT} después de 25s`);

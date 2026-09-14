@@ -44,6 +44,7 @@ import AtencionCliente from './pages/AtencionCliente';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
+import WelcomeModal from './components/WelcomeModal';
 import { formatearFechaHoraCO, formatearFechaLargaCO } from './utils/dateCO';
 
 /* ─────────────────────────────────────────────────────────
@@ -528,6 +529,7 @@ function App() {
   return (
     <ThemeProvider>
       <ErrorBoundary>
+        <WelcomeModal />
         <Routes>
           <Route path="/login" element={!user ? <Login onLogin={handleLogin} onSwitchToRegister={() => navigate('/registro')} /> : <Navigate to="/dashboard" />} />
           <Route path="/registro" element={!user ? <Registro onRegister={handleLogin} onSwitchToLogin={() => navigate('/login')} /> : <Navigate to="/dashboard" />} />

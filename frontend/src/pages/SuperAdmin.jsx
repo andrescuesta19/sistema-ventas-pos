@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { Shield, Check, X, LogOut, RefreshCw, Store, Users,
   TrendingUp, CheckCircle2, AlertCircle, Clock, ShieldCheck, Eye, EyeOff,
-  Bot, Send, Ticket, MessageCircle
+  Bot, Send, Ticket, MessageCircle, Download, Upload, Monitor, Globe
 } from 'lucide-react';
 import Logo from '../components/Logo';
 
@@ -32,6 +32,16 @@ const SuperAdmin = () => {
   ]);
   const [botInput, setBotInput] = useState('');
   const [botLoading, setBotLoading] = useState(false);
+  // v2.1.1: Instalaciones y actualizaciones
+  const [instalaciones, setInstalaciones] = useState([]);
+  const [actualizaciones, setActualizaciones] = useState([]);
+  const [nuevaActualizacion, setNuevaActualizacion] = useState({ version: '', changelog: '', url_descarga: '' });
+  const [updateMsg, setUpdateMsg] = useState(null);
+
+  // Estilos compartidos
+  const thStyle = { textAlign: 'left', padding: '0.6rem 0.75rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const tdStyle = { padding: '0.6rem 0.75rem', color: 'rgba(255,255,255,0.8)' };
+  const inputDarkStyle = { width: '100%', padding: '0.7rem 1rem', background: 'rgba(255,255,255,0.05)', border: '1.5px solid rgba(126,217,87,0.15)', borderRadius: 10, color: '#fff', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' };
 
   // Recuperar sesión del super-admin
   useEffect(() => {
@@ -53,16 +63,20 @@ const SuperAdmin = () => {
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [s, l, m, t] = await Promise.all([
+      const [s, l, m, t, inst, upd] = await Promise.all([
         fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/tickets`, { headers }).then(r => r.json()),
+        fetch(`${API_URL}/api/instalaciones`, { headers }).then(r => r.json()).catch(() => []),
+        fetch(`${API_URL}/api/actualizaciones`, { headers }).then(r => r.json()).catch(() => []),
       ]);
       setSolicitudes(Array.isArray(s) ? s : []);
       setLocales(Array.isArray(l) ? l : []);
       setMetricas(m);
       setTickets(Array.isArray(t) ? t : []);
+      setInstalaciones(Array.isArray(inst) ? inst : []);
+      setActualizaciones(Array.isArray(upd) ? upd : []);
     } catch (err) {
       console.error('Error cargando datos:', err);
     } finally {
@@ -398,6 +412,8 @@ const SuperAdmin = () => {
           {[
             { id: 'solicitudes', label: 'Solicitudes Pendientes', count: solicitudes.length },
             { id: 'locales', label: 'Todos los Locales', count: locales.length },
+            { id: 'instalaciones', label: 'Instalaciones', count: instalaciones.length },
+            { id: 'actualizar', label: 'Actualizar Sistema', count: 0 },
             { id: 'bot', label: '🤖 Bot', count: 0 },
             { id: 'automatizaciones', label: 'Automatizaciones', count: tickets.filter(t => t.estado === 'Abierto').length },
           ].map(t => (
@@ -635,6 +651,124 @@ const SuperAdmin = () => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Tab Instalaciones */}
+        {tab === 'instalaciones' && (
+          <div>
+            <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>
+              <Download size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+              Instalaciones reportadas ({instalaciones.length})
+            </h3>
+            {instalaciones.length === 0 ? (
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '2rem' }}>No hay instalaciones reportadas aún.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <th style={thStyle}>Fecha</th>
+                      <th style={thStyle}>IP</th>
+                      <th style={thStyle}>Sistema</th>
+                      <th style={thStyle}>Hostname</th>
+                      <th style={thStyle}>Versión</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {instalaciones.map(inst => (
+                      <tr key={inst.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={tdStyle}>{new Date(inst.fecha).toLocaleString('es-CO')}</td>
+                        <td style={tdStyle}>{inst.ip}</td>
+                        <td style={tdStyle}><Monitor size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />{inst.sistema_operativo}</td>
+                        <td style={tdStyle}><Globe size={13} style={{ marginRight: 4, verticalAlign: 'middle' }} />{inst.hostname}</td>
+                        <td style={tdStyle}><span style={{ background: 'rgba(126,217,87,0.15)', color: '#7ed957', padding: '0.15rem 0.5rem', borderRadius: 6, fontWeight: 700 }}>v{inst.version_app}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Actualizar Sistema */}
+        {tab === 'actualizar' && (
+          <div>
+            <h3 style={{ color: '#fff', margin: '0 0 1rem', fontSize: '1.1rem' }}>
+              <Upload size={20} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+              Publicar Actualización Remota
+            </h3>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              Al publicar una actualización, todos los clientes recibirán una notificación al iniciar la app.
+            </p>
+
+            {updateMsg && (
+              <div style={{ padding: '0.75rem 1rem', borderRadius: 10, marginBottom: '1rem', background: updateMsg.ok ? 'rgba(126,217,87,0.12)' : 'rgba(255,100,100,0.12)', color: updateMsg.ok ? '#7ed957' : '#ff6b6b', border: `1px solid ${updateMsg.ok ? 'rgba(126,217,87,0.3)' : 'rgba(255,100,100,0.3)'}`, fontSize: '0.85rem' }}>
+                {updateMsg.text}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gap: '0.85rem', maxWidth: 500 }}>
+              <input type="text" placeholder="Versión (ej: 2.1.2)" value={nuevaActualizacion.version}
+                onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, version: e.target.value })}
+                style={inputDarkStyle} />
+              <textarea placeholder="Cambios de esta versión (changelog)" value={nuevaActualizacion.changelog}
+                onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, changelog: e.target.value })}
+                rows={4} style={{ ...inputDarkStyle, resize: 'vertical' }} />
+              <input type="text" placeholder="URL de descarga (opcional)" value={nuevaActualizacion.url_descarga}
+                onChange={e => setNuevaActualizacion({ ...nuevaActualizacion, url_descarga: e.target.value })}
+                style={inputDarkStyle} />
+              <button onClick={async () => {
+                if (!nuevaActualizacion.version.trim()) return setUpdateMsg({ ok: false, text: 'La versión es requerida.' });
+                setUpdateMsg(null);
+                try {
+                  const r = await fetch(`${API_URL}/api/actualizaciones/crear`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify(nuevaActualizacion),
+                  });
+                  const data = await r.json();
+                  if (r.ok) {
+                    setUpdateMsg({ ok: true, text: `✅ Actualización v${nuevaActualizacion.version} publicada. Los clientes la verán al reiniciar.` });
+                    setNuevaActualizacion({ version: '', changelog: '', url_descarga: '' });
+                    cargarDatos();
+                  } else {
+                    setUpdateMsg({ ok: false, text: data.error || 'Error al publicar.' });
+                  }
+                } catch { setUpdateMsg({ ok: false, text: 'Error de conexión.' }); }
+              }} style={{ background: '#1a8a4a', color: '#fff', border: 'none', padding: '0.75rem 1.5rem', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem', fontFamily: 'inherit' }}>
+                <Upload size={16} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Publicar Actualización
+              </button>
+            </div>
+
+            {actualizaciones.length > 0 && (
+              <>
+                <h4 style={{ color: '#fff', margin: '2rem 0 0.75rem', fontSize: '0.95rem' }}>Historial de actualizaciones</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                        <th style={thStyle}>Fecha</th>
+                        <th style={thStyle}>Versión</th>
+                        <th style={thStyle}>Cambios</th>
+                        <th style={thStyle}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actualizaciones.map(a => (
+                        <tr key={a.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={tdStyle}>{new Date(a.fecha_publicacion).toLocaleString('es-CO')}</td>
+                          <td style={tdStyle}><span style={{ background: 'rgba(126,217,87,0.15)', color: '#7ed957', padding: '0.15rem 0.5rem', borderRadius: 6, fontWeight: 700 }}>v{a.version}</span></td>
+                          <td style={tdStyle}>{a.changelog || '—'}</td>
+                          <td style={tdStyle}>{a.activa ? <span style={{ color: '#7ed957' }}>● Activa</span> : <span style={{ color: 'rgba(255,255,255,0.3)' }}>○ Inactiva</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 

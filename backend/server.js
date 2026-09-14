@@ -4238,6 +4238,81 @@ app.use((err, req, res, next) => {
     res.status(err.status || 500).json({ error: 'Error interno del servidor.' });
 });
 
+// ─────────────────────────────────────────────────────────
+// v2.1.1: TRACKING DE INSTALACIONES
+// ─────────────────────────────────────────────────────────
+app.post('/api/instalaciones/reportar', async (req, res) => {
+    try {
+        const { ip, sistema_operativo, hostname, version_app } = req.body;
+        await db.query(
+            'INSERT INTO instalaciones (ip, sistema_operativo, hostname, version_app) VALUES ($1, $2, $3, $4)',
+            [ip || 'desconocida', sistema_operativo || 'desconocido', hostname || 'desconocido', version_app || 'desconocida']
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[Instalaciones] Error reportando:', err.message);
+        res.status(500).json({ error: 'Error al reportar instalación' });
+    }
+});
+
+app.get('/api/instalaciones', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM instalaciones ORDER BY fecha DESC LIMIT 100');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[Instalaciones] Error consultando:', err.message);
+        res.status(500).json({ error: 'Error al consultar instalaciones' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────
+// v2.1.1: ACTUALIZACIONES REMOTAS
+// ─────────────────────────────────────────────────────────
+app.get('/api/actualizaciones/ultima', async (req, res) => {
+    try {
+        const result = await db.query(
+            "SELECT * FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1"
+        );
+        if (result.rows.length === 0) {
+            return res.json({ disponible: false });
+        }
+        const ultima = result.rows[0];
+        const clientVersion = req.query.version || '0.0.0';
+        const disponible = ultima.version !== clientVersion;
+        res.json({ disponible, version: ultima.version, changelog: ultima.changelog, url_descarga: ultima.url_descarga, fecha: ultima.fecha_publicacion });
+    } catch (err) {
+        console.error('[Actualizaciones] Error:', err.message);
+        res.status(500).json({ error: 'Error al verificar actualizaciones' });
+    }
+});
+
+app.post('/api/actualizaciones/crear', async (req, res) => {
+    try {
+        const { version, changelog, url_descarga } = req.body;
+        if (!version) return res.status(400).json({ error: 'Versión requerida' });
+        // Desactivar anteriores
+        await db.query('UPDATE actualizaciones SET activa = false');
+        const result = await db.query(
+            'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3) RETURNING *',
+            [version, changelog || '', url_descarga || '']
+        );
+        res.json({ success: true, actualizacion: result.rows[0] });
+    } catch (err) {
+        console.error('[Actualizaciones] Error creando:', err.message);
+        res.status(500).json({ error: 'Error al crear actualización' });
+    }
+});
+
+app.get('/api/actualizaciones', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 20');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('[Actualizaciones] Error listando:', err.message);
+        res.status(500).json({ error: 'Error al listar actualizaciones' });
+    }
+});
+
 // 404 para rutas no definidas (después de todas las rutas)
 app.use((req, res) => {
     res.status(404).json({ error: 'Ruta no encontrada.' });
