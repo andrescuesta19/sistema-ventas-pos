@@ -38,6 +38,9 @@ const SuperAdmin = () => {
   const [nuevaActualizacion, setNuevaActualizacion] = useState({ version: '', changelog: '', url_descarga: '' });
   const [updateMsg, setUpdateMsg] = useState(null);
   const [archivoUpdate, setArchivoUpdate] = useState(null);
+  // v2.2.0: Notificaciones en tiempo real
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [notifCount, setNotifCount] = useState(0);
 
   // Estilos compartidos
   const thStyle = { textAlign: 'left', padding: '0.6rem 0.75rem', color: 'rgba(255,255,255,0.5)', fontWeight: 600, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' };
@@ -71,13 +74,14 @@ const SuperAdmin = () => {
       // Usar token directo de localStorage (evita stale closure)
       const t = token || localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${t}` };
-      const [s, l, m, tk, inst, upd] = await Promise.all([
+      const [s, l, m, tk, inst, upd, notif] = await Promise.all([
         fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/super/tickets`, { headers }).then(r => r.json()),
         fetch(`${API_URL}/api/instalaciones`, { headers }).then(r => r.json()).catch(() => []),
         fetch(`${API_URL}/api/actualizaciones`, { headers }).then(r => r.json()).catch(() => []),
+        fetch(`${API_URL}/api/super/notificaciones`, { headers }).then(r => r.json()).catch(() => []),
       ]);
       setSolicitudes(Array.isArray(s) ? s : []);
       setLocales(Array.isArray(l) ? l : []);
@@ -85,6 +89,8 @@ const SuperAdmin = () => {
       setTickets(Array.isArray(tk) ? tk : []);
       setInstalaciones(Array.isArray(inst) ? inst : []);
       setActualizaciones(Array.isArray(upd) ? upd : []);
+      setNotificaciones(Array.isArray(notif) ? notif : []);
+      setNotifCount(Array.isArray(notif) ? notif.filter(n => !n.leida).length : 0);
     } catch (err) {
       console.error('Error cargando datos:', err);
     } finally {
@@ -421,6 +427,7 @@ const SuperAdmin = () => {
             { id: 'solicitudes', label: 'Solicitudes Pendientes', count: solicitudes.length },
             { id: 'locales', label: 'Todos los Locales', count: locales.length },
             { id: 'instalaciones', label: 'Instalaciones', count: instalaciones.length },
+            { id: 'notificaciones', label: '🔔 Notificaciones', count: notifCount },
             { id: 'actualizar', label: 'Actualizar Sistema', count: 0 },
             { id: 'bot', label: '🤖 Bot', count: 0 },
             { id: 'automatizaciones', label: 'Automatizaciones', count: tickets.filter(t => t.estado === 'Abierto').length },
@@ -695,6 +702,56 @@ const SuperAdmin = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Notificaciones */}
+        {tab === 'notificaciones' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ color: '#fff', margin: 0, fontSize: '1.1rem' }}>
+                🔔 Notificaciones ({notifCount} sin leer)
+              </h3>
+              {notifCount > 0 && (
+                <button onClick={async () => {
+                  const t = token || localStorage.getItem('super_admin_token');
+                  await fetch(`${API_URL}/api/super/notificaciones/leer-todas`, {
+                    method: 'PUT', headers: { Authorization: `Bearer ${t}` }
+                  });
+                  cargarDatos();
+                }} style={{ background: 'rgba(126,217,87,0.15)', color: '#7ed957', border: '1px solid rgba(126,217,87,0.3)', borderRadius: 8, padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit' }}>
+                  Marcar todo como leído
+                </button>
+              )}
+            </div>
+            {notificaciones.length === 0 ? (
+              <p style={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '2rem' }}>No hay notificaciones.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {notificaciones.map(n => (
+                  <div key={n.id} style={{
+                    padding: '0.75rem 1rem', borderRadius: 10,
+                    background: n.leida ? 'rgba(255,255,255,0.03)' : 'rgba(126,217,87,0.06)',
+                    border: `1px solid ${n.leida ? 'rgba(255,255,255,0.06)' : 'rgba(126,217,87,0.15)'}`,
+                    display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+                  }}>
+                    <div style={{ fontSize: '1.2rem', flexShrink: 0 }}>
+                      {n.tipo === 'instalacion' ? '📱' : '🔔'}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#fff', fontSize: '0.85rem', fontWeight: n.leida ? 400 : 600 }}>{n.titulo}</div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem', marginTop: 2 }}>{n.mensaje}</div>
+                      <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', marginTop: 4 }}>
+                        {new Date(n.created_at).toLocaleString('es-CO')}
+                      </div>
+                    </div>
+                    {!n.leida && (
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#7ed957', flexShrink: 0, marginTop: 6 }} />
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
