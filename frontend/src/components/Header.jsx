@@ -6,7 +6,7 @@ import { API_URL, DEMO_MODE } from '../config';
 import { apiGet, clearSession } from '../api';
 import { useTheme } from '../ThemeContext';
 
-const Header = ({ user, notifCount: notifCountProp = 0 }) => {
+const Header = ({ user, notifCount: notifCountProp = 0, onLogout }) => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [search, setSearch] = useState('');
@@ -91,10 +91,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
     } catch {}
   };
 
-  const handleLogout = () => {
-    try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    window.location.href = '/login';
-  };
+  // Logout manejado por el prop onLogout del componente padre (App.jsx)
 
   // Liquid Glass effect for header/sidebar
   const headerGlassStyle = {
@@ -370,7 +367,7 @@ const Header = ({ user, notifCount: notifCountProp = 0 }) => {
             }}>
               <User size={14} /> Mi cuenta
             </button>
-            <button onClick={handleLogout} style={{
+            <button onClick={onLogout} style={{
               width: '100%', textAlign: 'left', background: 'transparent', border: 'none',
               padding: '0.6rem 0.85rem', borderRadius: 6, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem',

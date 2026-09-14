@@ -64,8 +64,8 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Crash:', error, info);
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    // Forzar recarga solo como último recurso del ErrorBoundary
-    window.location.href = '/login';
+    // Redirect al login — usa hash para HashRouter
+    window.location.href = '/#/login';
   }
   render() {
     if (this.state.hasError) {
@@ -501,12 +501,12 @@ function App() {
 
   // Escuchar evento de sesión expirada (401 desde api.js)
   useEffect(() => {
-    const onLogout = () => {
+    const onLogoutEvent = () => {
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-      window.location.href = '/login';
+      setUser(null); // React Router redirige a /login via <Navigate to="/login" />
     };
-    window.addEventListener('auth:logout', onLogout);
-    return () => window.removeEventListener('auth:logout', onLogout);
+    window.addEventListener('auth:logout', onLogoutEvent);
+    return () => window.removeEventListener('auth:logout', onLogoutEvent);
   }, []);
 
   const handleLogin = (userData) => {
@@ -516,7 +516,7 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    window.location.href = '/login';
+    setUser(null); // React Router redirige a /login via <Navigate to="/login" />
   };
 
   // Durante loading, no mostrar nada (evita flash de spinner verde)

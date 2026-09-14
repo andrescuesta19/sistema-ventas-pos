@@ -211,7 +211,7 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
     },
     autoHideMenuBar: false,
     show: false,
-    backgroundColor: '#0a1a0e' // evita flash blanco al cargar
+    backgroundColor: '#f6f8f7' // color neutro para evitar flash verde al recargar
   });
 
   // Splash screen: mientras el backend arranca, mostramos un HTML inline
