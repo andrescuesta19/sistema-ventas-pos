@@ -56,106 +56,41 @@ import { formatearFechaHoraCO, formatearFechaLargaCO } from './utils/dateCO';
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null, info: null, retryCount: 0 };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error) {
-    return { error };
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
   componentDidCatch(error, info) {
-    console.error('[ErrorBoundary] Crash capturado:', error, info);
-    this.setState({ error });
-
-    // v2.0.1: Si es un error de logout o de Rendering, redirigir a login silenciosamente
-    const msg = String(error?.message || error || '');
-    const isLogoutError = msg.includes('Cannot read prop') || msg.includes('null') ||
-      msg.includes('user') || msg.includes('logout') || msg.includes('undefined');
-    if (isLogoutError) {
-      // Limpiar sesión y redirigir sin mostrar pantalla de error
+    console.error('[ErrorBoundary] Crash:', error, info);
+    // CUALQUIER error → sesión limpia + login inmediato. Sin UI de error.
+    try {
       localStorage.removeItem('pos_token');
       localStorage.removeItem('pos_user');
-      setTimeout(() => { window.location.href = '/login'; }, 300);
-      return;
-    }
-
-    // Auto-recuperar después de 2 segundos (evita pantalla de error por crashes menores)
-    setTimeout(() => {
-      this.setState((prev) => {
-        if (prev.retryCount < 2) {
-          return { error: null, retryCount: prev.retryCount + 1 };
-        }
-        return {};
-      });
-    }, 2000);
+    } catch {}
+    window.location.replace('/login');
   }
   render() {
-    if (!this.state.error) return this.props.children;
-    // v1.5.4: mensaje genérico al usuario. El admin puede ver los detalles
-    // en la consola del navegador (DevTools). En producción iría a Sentry/etc.
-    const devMode = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development';
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: '#0a1a0e', color: '#f8fafc',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        padding: '2rem',
-      }}>
-        <div style={{ maxWidth: 600, width: '100%', textAlign: 'center' }}>
-          <div style={{
-            fontSize: '3rem', marginBottom: '1rem',
-          }}>⚠️</div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#7ed957', margin: '0 0 0.5rem' }}>
-            Algo se rompió en la app
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            No te preocupes: tus datos están guardados. Recarga la página y sigue trabajando.
-            Si el problema persiste, contacta al soporte.
-          </p>
-          {devMode && (
-            <pre style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 8,
-              padding: '1rem',
-              textAlign: 'left',
-              fontSize: '0.78rem',
-              color: '#fca5a5',
-              overflow: 'auto',
-              maxHeight: 200,
-              marginBottom: '1.5rem',
-            }}>
-              {String(this.state.error?.message || this.state.error)}
-            </pre>
-          )}
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                background: '#7ed957', color: '#0a1a0e',
-                border: 'none', padding: '0.75rem 1.5rem',
-                borderRadius: 10, fontSize: '0.95rem',
-                fontWeight: 700, cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              Recargar la app
-            </button>
-            <button
-              onClick={() => { try { localStorage.clear(); } catch {} window.location.href = '/login'; }}
-              style={{
-                background: 'transparent', color: '#7ed957',
-                border: '1px solid #7ed957', padding: '0.75rem 1.5rem',
-                borderRadius: 10, fontSize: '0.95rem',
-                fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              Volver al inicio
-            </button>
+    // Si hay error, mostramos loading mientras redirige
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#0a1a0e', color: '#7ed957',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 48, height: 48, margin: '0 auto 1rem',
+              border: '3px solid rgba(126,217,87,0.15)', borderTopColor: '#7ed957',
+              borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+            }} />
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         </div>
-      </div>
-    );
+      );
+    }
+    return this.props.children;
   }
 }
 const Reloj = () => {
@@ -508,7 +443,12 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
           })}
         </nav>
 
-        <div className="sidebar-user-card" onClick={onLogout} title="Cerrar sesión">
+        <Link
+          to="/configuracion"
+          className="sidebar-user-card"
+          title="Mi perfil"
+          onClick={() => setSidebarOpen(false)}
+        >
           <div className="user-avatar" style={{ overflow: 'hidden' }}>
             {user?.avatar_url ? (
               <img
@@ -525,8 +465,8 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
             <div className="greeting">¡Hola, {user?.nombre?.split(' ')[0] || 'Usuario'}!</div>
             <div className="role">{user?.rol || 'usuario'}</div>
           </div>
-          <ChevronDown size={16} color="var(--text-muted)" />
-        </div>
+          <Settings size={16} color="var(--text-muted)" />
+        </Link>
       </div>
 
       <div className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -569,8 +509,12 @@ function App() {
           setUser(fresh);
         } catch (err) {
           // Token inválido o expirado — limpiamos y mandamos al login
-          clearSession();
-          setUser(null);
+          try {
+            localStorage.removeItem('pos_token');
+            localStorage.removeItem('pos_user');
+          } catch {}
+          window.location.replace('/login');
+          return;
         }
       }
       setLoading(false);
@@ -579,8 +523,11 @@ function App() {
 
     // Si la sesión expira mientras la app está abierta, redirigir al login
     const onLogout = () => {
-      clearSession();
-      setUser(null);
+      try {
+        localStorage.removeItem('pos_token');
+        localStorage.removeItem('pos_user');
+      } catch {}
+      window.location.replace('/login');
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
@@ -593,10 +540,11 @@ function App() {
 
   const handleLogout = () => {
     try {
-      clearSession();
+      localStorage.removeItem('pos_token');
+      localStorage.removeItem('pos_user');
     } catch {}
-    setUser(null);
-    navigate('/login', { replace: true });
+    // Usar window.location para evitar que React re-renderice con user=null
+    window.location.replace('/login');
   };
 
   if (loading) {
