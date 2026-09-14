@@ -512,6 +512,15 @@ function App() {
     return () => window.removeEventListener('auth:logout', onLogoutEvent);
   }, []);
 
+  // v2.1.1: Escuchar actualización remota desde SuperAdmin (solo Electron)
+  const [remoteUpdate, setRemoteUpdate] = useState(null);
+  useEffect(() => {
+    if (!window.electronAPI?.onRemoteUpdateAvailable) return;
+    window.electronAPI.onRemoteUpdateAvailable((info) => {
+      setRemoteUpdate(info);
+    });
+  }, []);
+
   const handleLogin = (userData) => {
     setUser(userData);
     navigate('/dashboard');
@@ -530,6 +539,30 @@ function App() {
     <ThemeProvider>
       <ErrorBoundary>
         <WelcomeModal />
+        {/* v2.1.1: Banner de actualización remota */}
+        {remoteUpdate && (
+          <div style={{
+            position: 'fixed', top: 12, right: 12, zIndex: 9998,
+            background: 'linear-gradient(135deg, #0d2412 0%, #0a1a0e 100%)',
+            border: '1px solid rgba(126,217,87,0.35)', borderRadius: 14, padding: '1rem 1.25rem',
+            maxWidth: 380, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+          }}>
+            <div style={{ fontSize: '1.4rem' }}>🔄</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#7ed957', fontWeight: 700, fontSize: '0.9rem', marginBottom: 2 }}>
+                Nueva versión disponible: v{remoteUpdate.version}
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                {remoteUpdate.changelog || 'Actualización disponible. Cierra y vuelve a abrir la app para instalar.'}
+              </div>
+            </div>
+            <button onClick={() => setRemoteUpdate(null)} style={{
+              background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)',
+              cursor: 'pointer', padding: 4, fontSize: '1rem', lineHeight: 1,
+            }}>✕</button>
+          </div>
+        )}
         <Routes>
           <Route path="/login" element={!user ? <Login onLogin={handleLogin} onSwitchToRegister={() => navigate('/registro')} /> : <Navigate to="/dashboard" />} />
           <Route path="/registro" element={!user ? <Registro onRegister={handleLogin} onSwitchToLogin={() => navigate('/login')} /> : <Navigate to="/dashboard" />} />
