@@ -3064,6 +3064,7 @@ app.post('/api/super/reporte', requireSuperAdmin, async (req, res) => {
 });
 
 // POST /api/super/bot — chat inteligente con lenguaje natural para el super-admin
+// v2.2.0: Bot con contexto completo del sistema (arquitectura, features, stack)
 app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
     try {
         const msg = (req.body.mensaje || '').trim().toLowerCase();
@@ -3071,6 +3072,145 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
 
         const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
         const fmtNum = (v) => new Intl.NumberFormat('es-CO').format(Number(v) || 0);
+
+        // ═══════════════════════════════════════════════════════════════
+        // BASE DE CONOCIMIENTO COMPLETA DEL SISTEMA
+        // Esto es como tener al ingeniero Senior dentro del bot
+        // ═══════════════════════════════════════════════════════════════
+        const CONTEXTO_SISTEMA = {
+            nombre: 'Sistema Integral de Ventas POS',
+            version_actual: APP_VERSION,
+            autor: 'Andrés Cuesta',
+            fecha_creacion: 'Agosto 2026',
+
+            // Stack tecnológico completo
+            stack: {
+                frontend: 'React 19 + Vite + Electron 35 + Capacitor 7',
+                backend: 'Node.js 22 + Express 5',
+                base_datos: 'PostgreSQL 16 (Neon)',
+                hosting_frontend: 'GitHub Pages (https://andrescuesta19.github.io/sistema-ventas-pos/)',
+                hosting_backend: 'Render (https://sistema-ventas-pos-aeka.onrender.com)',
+                auth: 'JWT (jsonwebtoken)',
+                email: 'Nodemailer + Gmail SMTP (pendiente configurar)',
+                ui_css: 'CSS custom variables, glassmorphism, responsive',
+                desktop: 'Electron (Windows NSIS + macOS ARM64)',
+                mobile: 'Capacitor (iOS + Android)',
+            },
+
+            // Arquitectura de archivos
+            archivos: {
+                frontend: {
+                    principal: 'frontend/src/App.jsx (rutas + layout principal)',
+                    paginas: [
+                        'Dashboard.jsx — Panel principal con métricas, gráficos, actividad reciente',
+                        'POS.jsx — Punto de venta, carrito, checkout, métodos de pago',
+                        'Inventario.jsx — CRUD productos, categorías, stock, imágenes',
+                        'Historial.jsx — Ventas pasadas, filtros, reimpresión',
+                        'Clientes.jsx — CRUD clientes con geolocalización (lat/lng/dirección)',
+                        'Cotizaciones.jsx — Crear/enviar cotizaciones, convertir a venta',
+                        'Facturas.jsx — Gestión de facturación DIAN',
+                        'AtencionCliente.jsx — Tickets de soporte, chat con clientes',
+                        'Configuracion.jsx — Perfil, foto, datos del local, prefers',
+                        'PanelUsuarios.jsx — CRUD usuarios, roles (Admin/Cajero/Vendedor)',
+                        'CierreCaja.jsx — Cierre de turno, arqueo, resumen del día',
+                        'Caja.jsx — Apertura de caja (estilo Karrot), fondo inicial',
+                        'Nomina.jsx — Gestión de nómina, pagos, empleados',
+                        'Proveedores.jsx — CRUD proveedores, contacto',
+                        'Ecommerce.jsx — Integraciones Shopify/WooCommerce',
+                        'SuperAdmin.jsx — PanelSuper con métricas, locales, bot, updates',
+                        'Login.jsx — Login con código de local + email/password',
+                        'Registro.jsx — Registro de nuevos locales',
+                        'RecuperarPassword.jsx — Reset por email',
+                        'Terminos.jsx — Términos de privacidad (con geolocalización)',
+                        'CodigosPendientes.jsx — Códigos de verificación pendientes',
+                    ],
+                    componentes: [
+                        'Header.jsx — Barra lateral con navegación, usuario, logout',
+                        'Logo.jsx — Logo animado con glow verde',
+                        'WelcomeModal.jsx — Modal de bienvenida (siempre visible al abrir)',
+                        'UpdateNotification.jsx — Notificación de updates remotos',
+                    ],
+                    contextos: ['ThemeContext.jsx — Tema claro/oscuro'],
+                    utilidades: ['api.js — Wrapper fetch con auto-refresh JWT y manejo 401', 'dateCO.jsx — Formato fecha/hora Colombia'],
+                },
+                backend: {
+                    principal: 'backend/server.js (4500+ líneas, todos los endpoints)',
+                    base_datos: 'backend/db.js (pool PostgreSQL con neon)',
+                    migraciones: 'backend/migrations/ (SQL de tablas nuevas)',
+                },
+            },
+
+            // Base de datos - 29 tablas
+            tablas: {
+                locales: 'id_local, nombre_local, direccion, nit, telefono, ciudad, email',
+                usuarios: 'id_usuario, nombre, correo, password_hash, rol (Admin/Cajero/Vendedor), id_local, aprobado_por_admin, foto_perfil',
+                productos: 'id_producto, nombre, descripcion, precio, stock_actual, stock_minimo, id_categoria, imagen_url, codigo_barras',
+                categorias: 'id_categoria, nombre',
+                clientes: 'id_cliente, nombre, correo, telefono, direccion, latitud, longitud, id_local',
+                ventas: 'id_venta, id_usuario, id_cliente, id_local, subtotal, impuestos, total_neto, metodo_pago, estado',
+                detalle_ventas: 'id_detalle, id_venta, id_producto, cantidad, precio_unitario, subtotal',
+                cotizaciones: 'id_cotizacion, id_cliente, id_usuario, id_local, total, estado (Pendiente/Enviada/Aceptada/Rechazada)',
+                detalle_cotizaciones: 'id_detalle, id_cotizacion, id_producto, cantidad, precio_unitario',
+                turnos_caja: 'id_turno, id_usuario, id_local, fondo_inicial, saldo_esperado, saldo_real, estado (Abierto/Cerrado)',
+                tickets_soporte: 'id_ticket, id_usuario, id_local, asunto, mensaje, estado (Abierto/Respondido/Cerrado), respuesta',
+                super_admins: 'id_super, nombre, correo, codigo_acceso, estado',
+                actualizaciones: 'id, version, changelog, url_descarga, fecha_publicacion, activa',
+                instalaciones: 'id, ip, sistema_operativo, hostname, version_app, fecha, activa',
+                configuracion_sistema: 'Configuración general del sistema',
+                configuracion_dian: 'Certificados DIAN para facturación',
+                configuracion_pago: 'Configuración de pasarela de pagos (Wompi)',
+                pagos_nomina: 'Pagos de nómina registrados',
+                empleados: 'Datos de empleados',
+                proveedores: 'CRUD proveedores',
+                notificaciones: 'Notificaciones del sistema',
+                email_logs: 'Log de emails enviados',
+                producto_imagenes: 'Múltiples imágenes por producto',
+                ecommerce_integraciones: 'Conexiones con Shopify/WooCommerce',
+                respaldos: 'Backups de la base de datos',
+                transacciones_wompi: 'Transacciones de Wompi',
+                pagos_automaticos_programados: 'Pagos recurrentes',
+            },
+
+            // Features principales
+            features: {
+                pos: 'Punto de venta con carrito, descuentos, métodos de pago (efectivo, tarjeta, QR, Wompi)',
+                inventario: 'CRUD productos con imágenes, categorías, código de barras, stock mínimo',
+                clientes: 'Gestión de clientes con geolocalización (OpenStreetMap/Nominatim)',
+                cotizaciones: 'Crear cotizaciones, enviar por email, convertir a venta',
+                facturacion: 'Integración DIAN para facturación electrónica',
+                nomina: 'Gestión de nómina con pagos automáticos programados',
+                caja: 'Apertura de caja estilo Karrot (fondo inicial), cierre con arqueo',
+                dashboard: 'Métricas en tiempo real, gráficos de ventas, actividad reciente',
+                ecommerce: 'Integraciones con Shopify y WooCommerce',
+                soporte: 'Sistema de tickets de soporte',
+                auth: 'Login con código de local + email, registro, recuperación de contraseña',
+                superadmin: 'Panel administrativo con métricas de todos los locales',
+                tracking: 'Tracking de instalaciones y actualizaciones remotas',
+                responsive: 'Diseño responsive para desktop, tablet y móvil',
+                electron: 'App de escritorio para Windows (NSIS) y macOS (ARM64)',
+                welcome: 'Modal de bienvenida siempre visible al abrir la app',
+                bot: 'Asistente inteligente con lenguaje natural',
+            },
+
+            // Errores conocidos y pendientes
+            pendientes: [
+                'Gmail SMTP no funciona (credenciales inválidas) — necesita regenerar contraseña de aplicación',
+                'JWT_SECRET no está configurado en .env (usa aleatorio por sesión)',
+                'La foto de perfil del usuario no se actualiza en tiempo real en el Header (solo en Configuración)',
+                'El bot no tiene memoria entre sesiones',
+                'No hay sistema de notificaciones push para móviles',
+                'La facturación DIAN está en fase de pruebas',
+            ],
+
+            // Cómo publicar actualizaciones
+            flujo_actualizaciones: {
+                paso1: 'El bot detecta "publicar actualización con [cambios]"',
+                paso2: 'Auto-incrementa la versión (patch: 2.1.1 → 2.1.2)',
+                paso3: 'Guarda en tabla actualizaciones con changelog',
+                paso4: 'Los clientes la verán al reiniciar la app (check en electron.cjs)',
+                nota: 'Los archivos .exe/.dmg se suben manualmente desde SuperAdmin pestaña "Actualizar Sistema"',
+            },
+        };
 
         // ── Funciones de datos ─────────────────────────────────────────────
         async function getMetricas() {
@@ -3151,12 +3291,12 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             usuarios: ['usuario', 'usuarios', 'empleado', 'empleados', 'gente', 'personas', 'cuenta', 'cuentas'],
             ventas: ['venta', 'ventas', 'vendió', 'vendio', 'facturó', 'facturado', 'ingreso', 'ingresos', 'dinero', 'ganancia', 'facturación'],
             productos: ['producto', 'productos', 'artículo', 'articulos', 'inventario', 'stock'],
-            pendientes: ['pendiente', 'pendientes', 'espera', 'aprobar', 'aprobación', 'aprobacion', 'nuevo', 'nueva', 'registro', 'registrado'],
-            tickets: ['ticket', 'tickets', 'soporte', 'ayuda', 'problema', 'consulta', 'reclamo'],
+            pendientes: ['pendiente', 'pendientes', 'espera', 'aprobar', 'aprobación', 'aprobacion', 'registro', 'registrado'],
+            tickets: ['ticket', 'tickets', 'soporte', 'problema', 'reclamo'],
             reportes: ['reporte', 'reportes', 'resumen', 'informe', 'estadística', 'estadisticas', 'gráfica'],
-            metricas: ['métricas', 'metricas', 'resumen', 'total', 'cuántos', 'cuantos', 'cuántas', 'cuantas', 'cantidad', 'cómo va', 'como va', 'qué tal', 'que tal'],
-            estado: ['estado', 'status', 'servidor', 'sistema', 'activo', 'funcionando'],
-            version: ['versión', 'version', 'actualizar', 'actualización', 'actualizacion', 'v1', 'v2'],
+            metricas: ['métricas', 'metricas', 'total', 'cuántos', 'cuantos', 'cuántas', 'cuantas', 'cantidad', 'qué tal', 'que tal'],
+            estado: ['estado', 'status', 'servidor', 'activo'],
+            version: ['versión', 'version', 'v1', 'v2'],
             ayuda: ['ayuda', 'help', 'comandos', 'opciones', 'qué puedo', 'que puedo'],
         };
 
@@ -3214,22 +3354,30 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
         // Ayuda
         if (intencion === 'ayuda' || msg === '?') {
             return res.json({ respuesta:
-                `🤖 *Puedo ayudarte con estas cosas:*\n\n` +
-                `🏪 *"¿Cuántos locales hay?"* — Te doy el total y detalle\n` +
-                `💰 *"¿Cuánto vendió iStore?"* — Ventas de un local\n` +
-                `👥 *"¿Quiénes están pendientes?"* — Usuarios sin aprobar\n` +
-                `✅ *"Aprobar a Juan"* — Aprueba un usuario\n` +
-                `❌ *"Rechazar a Pedro"* — Rechaza un usuario\n` +
-                `📊 *"¿Cómo va el mes?"* — Resumen de ventas\n` +
-                `📈 *"Dame un reporte"* — Genera reporte semanal\n` +
-                `🎫 *"¿Hay tickets?"* — Tickets de soporte abiertos\n` +
-                `📦 *"¿Cuántos productos hay?"* — Inventario\n` +
-                `🔄 *"¿Qué versión tenemos?"* — Info del sistema\n` +
-                `🟢 *"¿El sistema está bien?"* — Estado del servidor\n\n` +
-                `🆕 *ACTUALIZACIONES:*\n` +
-                `📝 *"Publicar actualización con [cambios]"* — Yo publico todo\n` +
-                `📋 *"Ver actualizaciones"* — Historial de updates\n\n` +
-                `_Puedes escribirme en natural, no necesitas comandos exactos._`
+                `🤖 *Soy tu asistente técnico del POS v${CONTEXTO_SISTEMA.version_actual}*\n\n` +
+                `📊 *Operaciones:*\n` +
+                `• *"¿Cuántos locales hay?"* — Métricas y detalle\n` +
+                `• *"¿Cuánto vendió iStore?"* — Ventas por local\n` +
+                `• *"¿Quiénes están pendientes?"* — Usuarios sin aprobar\n` +
+                `• *"Aprobar a Juan"* — Aprobar usuario\n` +
+                `• *"Rechazar a Pedro"* — Rechazar usuario\n` +
+                `• *"¿Cómo va el mes?"* — Resumen de ventas\n` +
+                `• *"Dame un reporte"* — Reporte semanal\n` +
+                `• *"¿Hay tickets?"* — Tickets de soporte\n` +
+                `• *"¿Cuántos productos?"* — Inventario\n` +
+                `• *"¿El sistema está bien?"* — Estado del servidor\n\n` +
+                `🔧 *Técnico (¡pregúntame lo que sea!):*\n` +
+                `• *"¿Cómo funciona el sistema?"* — Arquitectura completa\n` +
+                `• *"¿Qué stack usan?"* — Tecnologías\n` +
+                `• *"¿Qué tablas hay?"* — Estructura de BD\n` +
+                `• *"¿Qué errores hay?"* — Issues conocidos\n` +
+                `• *"¿Qué archivos tiene el frontend?"* — Estructura de código\n` +
+                `• *"¿Quién hizo esto?"* — Info del proyecto\n` +
+                `• *"Cuéntame del sistema"* — Todo sobre el POS\n\n` +
+                `🔄 *Actualizaciones:*\n` +
+                `• *"Publicar actualización con [cambios]"* — Yo publico todo\n` +
+                `• *"Ver actualizaciones"* — Historial de updates\n\n` +
+                `_Escríbeme en natural, no necesitas comandos exactos._`
             });
         }
 
@@ -3372,6 +3520,26 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             });
         }
 
+        // Errores / bugs (DEBE ir antes de pendientes para evitar conflictos)
+        if (msg.includes('error') || msg.includes('bug') ||
+            msg.includes('no funciona') || msg.includes('falla') ||
+            (msg.includes('problema') && !msg.includes('ticket'))) {
+            return res.json({ respuesta:
+                `⚠️ *Issues conocidos:*\n\n` +
+                `1. *Gmail SMTP* — Credenciales inválidas\n` +
+                `   → Necesita regenerar contraseña de aplicación en Google\n\n` +
+                `2. *JWT_SECRET* — No configurado en .env\n` +
+                `   → Usa aleatorio por sesión (tokens se invalidan al reiniciar)\n\n` +
+                `3. *Foto de perfil* — No se actualiza en tiempo real en Header\n` +
+                `   → Solo se ve el cambio al recargar la página\n\n` +
+                `4. *Bot* — Sin memoria entre sesiones\n` +
+                `   → Cada conversación empieza de cero\n\n` +
+                `5. *Facturación DIAN* — En fase de pruebas\n\n` +
+                `6. *Notificaciones push* — No implementadas para móviles\n\n` +
+                `_¿Cuál quieres resolver? Puedo crear una actualización si lo solucionas._`
+            });
+        }
+
         // Usuarios / pendientes
         if (intencion === 'usuarios' || intencion === 'pendientes') {
             const pendientes = await getPendientes();
@@ -3438,8 +3606,229 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             return res.json({ respuesta: `🔄 *Versión actual:* ${ver}\n\nPara actualizar, escribe "publicar actualización con [cambios]" y yo me encargo del resto.` });
         }
 
-        // Estado del servidor
-        if (intencion === 'estado' || msg.includes('está bien') || msg.includes('esta bien') || msg.includes('funciona')) {
+        // ══════════════════════════════════════════════════════════════════
+        // INTELIGENCIA TÉCNICA — El bot conoce TODO el sistema
+        // DEBE IR ANTES de detección de estado para evitar conflictos
+        // ══════════════════════════════════════════════════════════════════
+
+        // Preguntas sobre arquitectura / stack / cómo funciona
+        // NO matchea "tablas" ni "base de datos" (eso va en sección de tablas)
+        if (msg.includes('cómo funciona') || msg.includes('como funciona') ||
+            msg.includes('qué tecnología') || msg.includes('que tecnologia') ||
+            msg.includes('qué stack') || msg.includes('qué usa') ||
+            msg.includes('arquitectura') || msg.includes('estructura')) {
+            return res.json({ respuesta:
+                `🏗️ *Arquitectura del Sistema:*\n\n` +
+                `*Frontend:* ${CONTEXTO_SISTEMA.stack.frontend}\n` +
+                `*Backend:* ${CONTEXTO_SISTEMA.stack.backend}\n` +
+                `*Base de datos:* ${CONTEXTO_SISTEMA.stack.base_datos}\n` +
+                `*Hosting:* ${CONTEXTO_SISTEMA.stack.hosting_frontend}\n` +
+                `*API:* ${CONTEXTO_SISTEMA.stack.hosting_backend}\n\n` +
+                `📁 *Estructura:*\n` +
+                `• Frontend: 21 páginas React + 4 componentes\n` +
+                `• Backend: 1 archivo server.js (~4500 líneas)\n` +
+                `• BD: 29 tablas PostgreSQL\n` +
+                `• Desktop: Electron (Windows + macOS)\n` +
+                `• Mobile: Capacitor (iOS + Android)\n\n` +
+                `_¿Qué parte del sistema quieres conocer?_`
+            });
+        }
+
+        // Preguntas sobre features específicas
+        if (msg.includes('qué puede') || msg.includes('que puede') ||
+            msg.includes('qué features') || msg.includes('qué hace') ||
+            msg.includes('qué sabes') || msg.includes('que sabes') ||
+            msg.includes('cuéntame') || msg.includes('cuentame') ||
+            msg.includes('contami') || msg.includes('cuéntame del sistema')) {
+            return res.json({ respuesta:
+                `📋 *Features del Sistema:*\n\n` +
+                `🛒 *POS:* Punto de venta con carrito, descuentos, métodos de pago\n` +
+                `📦 *Inventario:* CRUD productos, imágenes, stock, código de barras\n` +
+                `👥 *Clientes:* Gestión con geolocalización (OpenStreetMap)\n` +
+                `📄 *Cotizaciones:* Crear, enviar, convertir a venta\n` +
+                `🧾 *Facturación:* Integración DIAN\n` +
+                `💰 *Nómina:* Gestión de pagos y empleados\n` +
+                `🏪 *Caja:* Apertura estilo Karrot, cierre con arqueo\n` +
+                `📊 *Dashboard:* Métricas en tiempo real, gráficos\n` +
+                `🌐 *Ecommerce:* Shopify + WooCommerce\n` +
+                `🎫 *Soporte:* Sistema de tickets\n` +
+                `🔄 *Updates:* Actualizaciones remotas + tracking de instalaciones\n` +
+                `🤖 *Bot:* Asistente inteligente (¡soy yo!)\n\n` +
+                `_Pregúntame sobre cualquier feature específica._`
+            });
+        }
+
+        // Preguntas sobre tablas / base de datos
+        if (msg.includes('qué tablas') || msg.includes('que tablas') ||
+            msg.includes('tablas de la') || msg.includes('estructura de la') ||
+            msg.includes('campos') || msg.includes('columnas') ||
+            msg.includes('qué guarda') || msg.includes('qué datos')) {
+            return res.json({ respuesta:
+                `🗄️ *Base de datos — 29 tablas:*\n\n` +
+                `*Core:* locales, usuarios, productos, categorías, clientes\n` +
+                `*Ventas:* ventas, detalle_ventas, cotizaciones, detalle_cotizaciones\n` +
+                `*Caja:* turnos_caja, pagos_nomina, pagos_automaticos_programados\n` +
+                `*Soporte:* tickets_soporte, notificaciones, email_logs\n` +
+                `*Admin:* super_admins, configuracion_sistema, configuracion_dian\n` +
+                `*Ecommerce:* ecommerce_integraciones, integraciones_ecommerce\n` +
+                `*Extras:* producto_imagenes, proveedores, empleados, respaldos\n` +
+                `*Tracking:* instalaciones, actualizaciones\n` +
+                `*Pagos:* configuracion_pago, transacciones_wompi\n\n` +
+                `_¿Quieres saber los campos de alguna tabla específica?_`
+            });
+        }
+
+        // Detalle de una tabla específica
+        if (msg.includes('tabla de usuarios') || msg.includes('usuarios tiene') ||
+            msg.includes('campos de usuario') || msg.includes('qué tiene usuario')) {
+            return res.json({ respuesta:
+                `👤 *Tabla usuarios:*\n\n` +
+                `• id_usuario (serial PK)\n` +
+                `• nombre (varchar)\n` +
+                `• correo (varchar, unique)\n` +
+                `• password_hash (varchar)\n` +
+                `• rol (enum: Admin/Cajero/Vendedor)\n` +
+                `• id_local (FK → locales)\n` +
+                `• aprobado_por_admin (boolean)\n` +
+                `• foto_perfil (text, URL)\n` +
+                `• created_at (timestamp)\n\n` +
+                `_¿Otra tabla?_`
+            });
+        }
+
+        if (msg.includes('tabla de productos') || msg.includes('productos tiene') ||
+            msg.includes('campos de producto')) {
+            return res.json({ respuesta:
+                `📦 *Tabla productos:*\n\n` +
+                `• id_producto (serial PK)\n` +
+                `• nombre (varchar)\n` +
+                `• descripcion (text)\n` +
+                `• precio (numeric)\n` +
+                `• stock_actual (int)\n` +
+                `• stock_minimo (int)\n` +
+                `• id_categoria (FK → categorias)\n` +
+                `• imagen_url (text)\n` +
+                `• codigo_barras (varchar)\n` +
+                `• id_local (FK → locales)\n\n` +
+                `_¿Otra tabla?_`
+            });
+        }
+
+        if (msg.includes('tabla de ventas') || msg.includes('ventas tiene') ||
+            msg.includes('campos de venta')) {
+            return res.json({ respuesta:
+                `💰 *Tabla ventas:*\n\n` +
+                `• id_venta (serial PK)\n` +
+                `• id_usuario (FK → usuarios)\n` +
+                `• id_cliente (FK → clientes)\n` +
+                `• id_local (FK → locales)\n` +
+                `• subtotal (numeric)\n` +
+                `• impuestos (numeric)\n` +
+                `• total_neto (numeric)\n` +
+                `• metodo_pago (varchar)\n` +
+                `• estado (varchar)\n` +
+                `• fecha_venta (timestamp)\n\n` +
+                `_¿Otra tabla?_`
+            });
+        }
+
+        // Preguntas sobre endpoints / API
+        if (msg.includes('endpoint') || msg.includes('api') ||
+            msg.includes('ruta') || msg.includes('rutas') ||
+            msg.includes('qué endpoints') || msg.includes('qué rutas')) {
+            return res.json({ respuesta:
+                `🔌 *Endpoints principales:*\n\n` +
+                `*Auth:* /api/auth/login, /registro, /me, /mi-perfil, /mi-password\n` +
+                `*Productos:* /api/productos, /:id, /:id/imagen, /:id/imagenes\n` +
+                `*Clientes:* /api/clientes, /crear, /buscar, /total\n` +
+                `*Ventas:* /api/ventas, / crear, /historial\n` +
+                `*Cotizaciones:* /api/cotizaciones, /:id, /:id/convertir-venta\n` +
+                `*Caja:* /api/turnos, /apertura, /cierre\n` +
+                `*Tickets:* /api/tickets, /crear, /responder\n` +
+                `*SuperAdmin:* /api/super/login, /solicitudes, /locales, /metricas, /bot\n` +
+                `*Updates:* /api/actualizaciones, /crear, /ultima, /instalaciones\n\n` +
+                `_¿Qué endpoint necesitas consultar?_`
+            });
+        }
+
+        // Preguntas sobre archivos / frontend
+        if (msg.includes('qué archivos') || msg.includes('qué página') ||
+            msg.includes('dónde está') || msg.includes('archivo') ||
+            msg.includes('página de') || msg.includes('componente')) {
+            return res.json({ respuesta:
+                `📁 *Archivos del Frontend:*\n\n` +
+                `• *App.jsx* — Rutas y layout principal\n` +
+                `• *Login.jsx* — Login con código + email\n` +
+                `• *Dashboard.jsx* — Panel principal con métricas\n` +
+                `• *POS.jsx* — Punto de venta\n` +
+                `• *Inventario.jsx* — CRUD productos\n` +
+                `• *Clientes.jsx* — Clientes con geolocalización\n` +
+                `• *Configuracion.jsx* — Perfil y ajustes\n` +
+                `• *SuperAdmin.jsx* — Panel administrativo\n` +
+                `• *Header.jsx* — Barra lateral\n` +
+                `• *WelcomeModal.jsx* — Modal de bienvenida\n` +
+                `• *UpdateNotification.jsx* — Notificación de updates\n\n` +
+                `_¿Qué archivo necesitas revisar?_`
+            });
+        }
+
+        // Preguntas sobre errores / bugs conocidos
+        if (msg.includes('error') || msg.includes('bug') ||
+            msg.includes('no funciona') || msg.includes('falla') ||
+            msg.includes('problema') || msg.includes('pendiente')) {
+            return res.json({ respuesta:
+                `⚠️ *Issues conocidos:*\n\n` +
+                `1. *Gmail SMTP* — Credenciales inválidas\n` +
+                `   → Necesita regenerar contraseña de aplicación en Google\n\n` +
+                `2. *JWT_SECRET* — No configurado en .env\n` +
+                `   → Usa aleatorio por sesión (tokens se invalidan al reiniciar)\n\n` +
+                `3. *Foto de perfil* — No se actualiza en tiempo real en Header\n` +
+                `   → Solo se ve el cambio al recargar la página\n\n` +
+                `4. *Bot* — Sin memoria entre sesiones\n` +
+                `   → Cada conversación empieza de cero\n\n` +
+                `5. *Facturación DIAN* — En fase de pruebas\n\n` +
+                `6. *Notificaciones push* — No implementadas para móviles\n\n` +
+                `_¿Cuál quieres resolver? Puedo crear una actualización si lo solucionas._`
+            });
+        }
+
+        // Preguntas sobre versiones / releases
+        if (msg.includes('qué versión') || msg.includes('que version') ||
+            msg.includes('versión actual') || msg.includes('última versión') ||
+            msg.includes('release') || msg.includes('changelog')) {
+            const ultimaUpd = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 3');
+            let respuesta = `🔄 *Sistema — Versión ${CONTEXTO_SISTEMA.version_actual}*\n\n`;
+            respuesta += `📊 *Versión actual:* ${CONTEXTO_SISTEMA.version_actual}\n`;
+            respuesta += `👤 *Desarrollador:* ${CONTEXTO_SISTEMA.autor}\n\n`;
+            if (ultimaUpd.rows.length > 0) {
+                respuesta += `📋 *Últimas actualizaciones:*\n`;
+                for (const u of ultimaUpd.rows) {
+                    respuesta += `• v${u.version} — ${u.activa ? '🟢' : '⚪'} ${u.changelog || 'Sin changelog'}\n`;
+                }
+            }
+            respuesta += `\n_Escribe "publicar actualización con [cambios]" para crear una nueva._`;
+            return res.json({ respuesta });
+        }
+
+        // Preguntas sobre quién lo hizo / autor
+        if (msg.includes('quién hizo') || msg.includes('quien hizo') ||
+            msg.includes('quién creó') || msg.includes('quien creo') ||
+            msg.includes('desarrollador') || msg.includes('autor') ||
+            msg.includes('programador')) {
+            return res.json({ respuesta:
+                `👨‍💻 *Desarrollador:* ${CONTEXTO_SISTEMA.autor}\n\n` +
+                `📅 *Creación:* ${CONTEXTO_SISTEMA.fecha_creacion}\n` +
+                `🛠️ *Stack:* ${CONTEXTO_SISTEMA.stack.frontend}\n` +
+                `⚙️ *Backend:* ${CONTEXTO_SISTEMA.stack.backend}\n` +
+                `💾 *BD:* ${CONTEXTO_SISTEMA.stack.base_datos}\n\n` +
+                `_¿Qué necesitas del desarrollador? Yo puedo ayudarte con lo que sea._`
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+
+        // Estado del servidor (solo matchea si NO es pregunta de arquitectura)
+        if (intencion === 'estado' || msg.includes('está bien') || msg.includes('esta bien')) {
             const uptime = Math.floor(process.uptime());
             const hrs = Math.floor(uptime / 3600);
             const min = Math.floor((uptime % 3600) / 60);
@@ -3479,14 +3868,21 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
         }
 
         return res.json({ respuesta:
-            `🤔 No estoy seguro de entender. Puedo ayudarte con:\n\n` +
-            `• Locales — "¿Cuántos locales hay?"\n` +
-            `• Usuarios — "¿Quiénes están pendientes?"\n` +
-            `• Ventas — "¿Cuánto vendió iStore?"\n` +
-            `• Aprobar — "Aprobar a [nombre]"\n` +
-            `• Tickets — "¿Hay tickets?"\n` +
-            `• Reporte — "Dame un reporte"\n\n` +
-            `Escribe "ayuda" para ver todo lo que puedo hacer.`
+            `🤔 No estoy seguro de entender. Soy el asistente técnico del *Sistema POS v${CONTEXTO_SISTEMA.version_actual}*.\n\n` +
+            `Puedo ayudarte con:\n\n` +
+            `📊 *Operaciones:*\n` +
+            `• "¿Cuántos locales hay?" — Métricas\n` +
+            `• "Aprobar a Juan" — Gestionar usuarios\n` +
+            `• "¿Cuánto vendió iStore?" — Ventas\n\n` +
+            `🔧 *Técnico:*\n` +
+            `• "¿Cómo funciona el sistema?" — Arquitectura\n` +
+            `• "¿Qué tablas hay?" — Base de datos\n` +
+            `• "¿Qué errores hay?" — Issues conocidos\n` +
+            `• "¿Qué versión tenemos?" — Releases\n\n` +
+            `🔄 *Actualizaciones:*\n` +
+            `• "Publicar actualización con [cambios]" — Yo publico\n` +
+            `• "Ver actualizaciones" — Historial\n\n` +
+            `_Escribe "ayuda" para ver todo lo que puedo hacer._`
         });
 
     } catch (err) {
