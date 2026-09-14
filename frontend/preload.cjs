@@ -16,5 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateChecking: (cb) => ipcRenderer.on('update:checking', () => cb()),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_e, info) => cb(info)),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, progress) => cb(progress)),
-  onUpdateDownloaded: (cb) => ipcRenderer.on('update:downloaded', (_e, info) => cb(info))
+  onUpdateDownloaded: (cb) => ipcRenderer.on('update:downloaded', (_e, info) => cb(info)),
+  // v2.1.1: Actualización remota desde SuperAdmin
+  onRemoteUpdateAvailable: (cb) => ipcRenderer.on('update:remote-available', (_e, info) => cb(info)),
 });
