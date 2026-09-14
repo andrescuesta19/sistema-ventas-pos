@@ -598,8 +598,7 @@ if (autoUpdater) {
 
 async function reportarInstalacion() {
   try {
-    const markerPath = path.join(app.getPath('userData'), '.installed');
-    if (fs.existsSync(markerPath)) return; // Ya reportada
+    // SIEMPRE reportar al abrir (actualiza versión si cambió)
     const http = require('http');
     const data = JSON.stringify({
       ip: 'local',
@@ -609,13 +608,12 @@ async function reportarInstalacion() {
     });
     await new Promise((resolve, reject) => {
       const req = http.request(`http://127.0.0.1:${BACKEND_PORT}/api/instalaciones/reportar`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
       }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
       req.on('error', reject);
       req.write(data);
       req.end();
     });
-    fs.writeFileSync(markerPath, new Date().toISOString());
     console.log('✅ Instalación reportada al servidor');
   } catch (err) {
     console.warn('⚠ No se pudo reportar instalación:', err.message);

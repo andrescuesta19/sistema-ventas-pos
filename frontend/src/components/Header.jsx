@@ -25,6 +25,13 @@ const Header = ({ user, notifCount: notifCountProp = 0, onLogout }) => {
   // v1.8.0: posición del dropdown del buscador (portal en body para que flote
   // sobre el contenido, que tiene overflow-y:auto y recortaba el dropdown)
   const [searchPos, setSearchPos] = useState(null);
+  // v2.2.0: Reloj en tiempo real
+  const [hora, setHora] = useState(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setHora(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     setLiveUser(user);
@@ -327,6 +334,21 @@ const Header = ({ user, notifCount: notifCountProp = 0, onLogout }) => {
             )}
           </div>
         )}
+      </div>
+
+      {/* Reloj en tiempo real */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        padding: '0.4rem 0.8rem', borderRadius: 10,
+        background: 'rgba(126,217,87,0.06)', border: '1px solid rgba(126,217,87,0.12)',
+        marginRight: '0.5rem',
+      }}>
+        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {hora.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
+        </div>
+        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#7ed957', fontVariantNumeric: 'tabular-nums' }}>
+          {hora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </div>
       </div>
 
       {/* Avatar + menú */}
