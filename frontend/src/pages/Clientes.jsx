@@ -1,7 +1,7 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
 import { useState, useEffect, useCallback } from 'react';
-import { Search, UserPlus, Phone, Mail, Award, X, ChevronRight, Edit2, Trash2, Check } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Award, X, ChevronRight, Edit2, Trash2, Check, MapPin, Loader2 } from 'lucide-react';
 
 const Clientes = ({ user }) => {
   const [clientes, setClientes] = useState([]);
@@ -179,19 +179,59 @@ const CrearClienteModal = ({ onClose, onCreado }) => {
     documento_identidad: '',
     nombre_razon_social: '',
     telefono: '',
-    correo: ''
+    correo: '',
+    direccion: '',
+    latitud: null,
+    longitud: null,
   });
   const [loading, setLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Geolocalización: obtener ubicación actual y convertir a dirección
+  const obtenerUbicacion = () => {
+    if (!navigator.geolocation) {
+      setError('Tu navegador no soporta geolocalización');
+      return;
+    }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setForm(prev => ({ ...prev, latitud: latitude, longitud: longitude }));
+        // Reverse geocoding con Nominatim (OpenStreetMap) — gratuito
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&accept-language=es`,
+            { headers: { 'User-Agent': 'SistemaVentasPOS/2.1' } }
+          );
+          const data = await res.json();
+          if (data?.display_name) {
+            // Construir dirección legible desde los componentes
+            const a = data.address || {};
+            const partes = [a.road, a.house_number, a.neighbourhood || a.suburb, a.city || a.town || a.village, a.state].filter(Boolean);
+            const direccion = partes.length > 0 ? partes.join(', ') : data.display_name.split(',').slice(0, 3).join(',');
+            setForm(prev => ({ ...prev, direccion }));
+          }
+        } catch {
+          // Si falla la geocoding, dejamos las coordenadas nada más
+        }
+        setGeoLoading(false);
+      },
+      (err) => {
+        setGeoLoading(false);
+        if (err.code === 1) setError('Permiso de ubicación denegado. Actívalo en la configuración del navegador.');
+        else setError('No se pudo obtener la ubicación. Intenta de nuevo.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      // v1.5.4: apiPost ya devuelve el JSON parseado (no un Response),
-      // así que NO hay `res.ok` aquí. Eso era un ReferenceError que rompía
-      // toda la app al crear un cliente.
       const data = await apiPost(`${API_URL}/api/clientes/crear`, form);
       if (data.success) {
         onCreado();
@@ -256,7 +296,7 @@ const CrearClienteModal = ({ onClose, onCreado }) => {
               placeholder="Opcional"
             />
           </div>
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ marginBottom: '1rem' }}>
             <label>Correo electrónico</label>
             <input
               type="email"
@@ -264,6 +304,39 @@ const CrearClienteModal = ({ onClose, onCreado }) => {
               onChange={e => setForm({ ...form, correo: e.target.value })}
               placeholder="Opcional (para enviar facturas)"
             />
+          </div>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label>Dirección / Barrio</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                value={form.direccion}
+                onChange={e => setForm({ ...form, direccion: e.target.value })}
+                placeholder="Escribe o usa tu ubicación actual"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={obtenerUbicacion}
+                disabled={geoLoading}
+                title="Usar mi ubicación actual"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                  padding: '0.5rem 0.85rem', borderRadius: 8, border: '1px solid var(--green-primary)',
+                  background: 'var(--green-light)', color: 'var(--green-primary)',
+                  fontWeight: 600, fontSize: '0.82rem', cursor: geoLoading ? 'wait' : 'pointer',
+                  whiteSpace: 'nowrap', fontFamily: 'inherit',
+                }}
+              >
+                {geoLoading ? <Loader2 size={15} className="spin" /> : <MapPin size={15} />}
+                {geoLoading ? '...' : 'Ubicación'}
+              </button>
+            </div>
+            {form.latitud && form.longitud && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Coordenadas: {form.latitud.toFixed(5)}, {form.longitud.toFixed(5)}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>

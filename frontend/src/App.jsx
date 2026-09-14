@@ -63,12 +63,9 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Crash:', error, info);
-    // CUALQUIER error → sesión limpia + login inmediato. Sin UI de error.
-    try {
-      localStorage.removeItem('pos_token');
-      localStorage.removeItem('pos_user');
-    } catch {}
-    window.location.replace('/login');
+    try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+    // Forzar recarga solo como último recurso del ErrorBoundary
+    window.location.href = '/login';
   }
   render() {
     // Si hay error, mostramos loading mientras redirige
@@ -499,39 +496,32 @@ function App() {
 
   // Al iniciar la app, verificamos si hay sesión guardada y la validamos
   useEffect(() => {
-    const init = async () => {
-      const token = getToken();
-      const savedUser = getUser();
-      if (token && savedUser) {
-        // Verificamos que el token siga siendo válido pidiendo /me
-        try {
-          const fresh = await apiGet(`${API_URL}/api/auth/me`);
-          setUser(fresh);
-        } catch (err) {
-          // Token inválido o expirado — limpiamos y mandamos al login
-          try {
-            localStorage.removeItem('pos_token');
-            localStorage.removeItem('pos_user');
-          } catch {}
-          window.location.replace('/login');
-          return;
-        }
-      }
+    const token = getToken();
+    const savedUser = getUser();
+    if (token && savedUser) {
+      apiGet(`${API_URL}/api/auth/me`).then(fresh => {
+        setUser(fresh);
+        setLoading(false);
+      }).catch(() => {
+        // Token inválido — limpiar y mostrar login directamente
+        try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+        setUser(null);
+        setLoading(false);
+      });
+    } else {
       setLoading(false);
-    };
-    init();
+    }
+  }, []);
 
-    // Si la sesión expira mientras la app está abierta, redirigir al login
+  // Escuchar evento de sesión expirada (401 desde api.js)
+  useEffect(() => {
     const onLogout = () => {
-      try {
-        localStorage.removeItem('pos_token');
-        localStorage.removeItem('pos_user');
-      } catch {}
-      window.location.replace('/login');
+      try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+      setUser(null);
     };
     window.addEventListener('auth:logout', onLogout);
     return () => window.removeEventListener('auth:logout', onLogout);
-  }, [navigate]);
+  }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -539,12 +529,9 @@ function App() {
   };
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem('pos_token');
-      localStorage.removeItem('pos_user');
-    } catch {}
-    // Usar window.location para evitar que React re-renderice con user=null
-    window.location.replace('/login');
+    try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+    setUser(null);
+    // navigate no se necesita: las rutas con user=null redirigen a /login automáticamente
   };
 
   if (loading) {

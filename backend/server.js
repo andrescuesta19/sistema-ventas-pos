@@ -1392,13 +1392,13 @@ app.get('/api/ventas/por-dia', requireAuth, requireAprobado, async (req, res) =>
 
 app.post('/api/clientes/crear', requireAuth, requireAprobado, async (req, res) => {
     try {
-        const { documento_identidad, nombre_razon_social, telefono, correo } = req.body;
+        const { documento_identidad, nombre_razon_social, telefono, correo, direccion, latitud, longitud } = req.body;
         if (!documento_identidad || !nombre_razon_social) {
             return res.status(400).json({ error: 'documento_identidad y nombre_razon_social son requeridos.' });
         }
         const { rows } = await db.query(
-            `INSERT INTO clientes (documento_identidad, nombre_razon_social, telefono, correo) VALUES ($1, $2, $3, $4) RETURNING id_cliente`,
-            [documento_identidad, nombre_razon_social, telefono || null, correo || null]
+            `INSERT INTO clientes (documento_identidad, nombre_razon_social, telefono, correo, direccion, latitud, longitud) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id_cliente`,
+            [documento_identidad, nombre_razon_social, telefono || null, correo || null, direccion || null, latitud || null, longitud || null]
         );
         res.json({ success: true, id_cliente: rows[0].id_cliente });
     } catch (err) {
