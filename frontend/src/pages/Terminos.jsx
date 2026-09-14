@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, ShieldCheck, FileText, Scale, Lock, Database, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ShieldCheck, FileText, Scale, Lock, Database, AlertTriangle, MapPin } from "lucide-react";
 
 const Terminos = () => {
   const sectionStyle = { marginBottom: "1.5rem" };
@@ -20,7 +20,7 @@ const Terminos = () => {
             </div>
             <div>
               <h1 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 700 }}>Términos y Condiciones</h1>
-              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-light)" }}>Sistema de Ventas POS · Última actualización: 20 de agosto de 2026</p>
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-light)" }}>Sistema de Ventas POS · Última actualización: 14 de septiembre de 2026</p>
             </div>
           </div>
 
@@ -60,7 +60,30 @@ const Terminos = () => {
           </div>
 
           <div style={sectionStyle}>
-            <h2 style={h2Style}><AlertTriangle size={18} color="#7ed957" /> 5. Limitación de responsabilidad</h2>
+            <h2 style={h2Style}><MapPin size={18} color="#7ed957" /> 5. Geolocalización</h2>
+            <p style={pStyle}>
+              El sistema permite opcionalmente registrar la ubicación geográfica (dirección, latitud y longitud) de los clientes
+              como parte de su información de contacto. Esta funcionalidad utiliza el servicio gratuito de geocodificación
+              de OpenStreetMap/Nominatim.
+            </p>
+            <p style={{ ...pStyle, marginTop: "0.75rem" }}>
+              <strong>¿Qué significa esto para usted?</strong>
+            </p>
+            <ul style={{ ...pStyle, paddingLeft: "1.5rem", marginTop: "0.5rem" }}>
+              <li>La geolocalización es <strong>totalmente opcional</strong>. Solo se activa cuando el usuario decide capturar la ubicación de un cliente.</li>
+              <li>Los datos de ubicación se almacenan únicamente en su base de datos privada y <strong>no se comparten con terceros</strong>.</li>
+              <li>No se recopila ubicación del dispositivo del usuario ni se rastrea su posición en tiempo real.</li>
+              <li>El servicio de geocodificación (OpenStreetMap) no almacena ni registra las consultas realizadas.</li>
+              <li>El usuario puede eliminar la información de ubicación de cualquier cliente en cualquier momento desde la sección de Clientes.</li>
+            </ul>
+            <p style={{ ...pStyle, marginTop: "0.75rem" }}>
+              Esta funcionalidad está diseñada exclusivamente para mejorar la gestión de cartera de clientes del establecimiento
+              y <strong>no tiene fines de rastreo, vigilancia ni mercadeo</strong>.
+            </p>
+          </div>
+
+          <div style={sectionStyle}>
+            <h2 style={h2Style}><AlertTriangle size={18} color="#7ed957" /> 6. Limitación de responsabilidad</h2>
             <p style={pStyle}>
               El Sistema de Ventas POS se proporciona "tal cual". No se garantiza que el servicio sea ininterrumpido o libre de errores.
               El sistema no se hace responsable por pérdidas de datos debidas a fallos de conexión, cortes de energía o errores del usuario.
@@ -69,7 +92,7 @@ const Terminos = () => {
           </div>
 
           <div style={sectionStyle}>
-            <h2 style={h2Style}><Scale size={18} color="#7ed957" /> 6. Modificaciones</h2>
+            <h2 style={h2Style}><Scale size={18} color="#7ed957" /> 7. Modificaciones</h2>
             <p style={pStyle}>
               El sistema se reserva el derecho de modificar estos Términos y Condiciones en cualquier momento.
               Los cambios serán efectivos al momento de su publicación. El uso continuado del sistema después de los cambios
