@@ -18,6 +18,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 import { API_URL, DEMO_MODE } from '../config';
 import { setSession } from '../api';
 import { DEMO_USER, DEMO_TOKEN } from '../demoData';
@@ -657,6 +658,32 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                     </motion.button>
                   </div>
                 </div>
+
+                {/* v2.2.2: Separador con línea y texto */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1rem',
+                  margin: '1rem 0',
+                }}>
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+                  <span style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.4)', whiteSpace: 'nowrap' }}>
+                    O continúa con
+                  </span>
+                  <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+                </div>
+
+                {/* v2.2.2: Botón de Google Login */}
+                <GoogleLoginButton
+                  onSuccess={(data) => {
+                    if (data.token && data.user) {
+                      setSession(data.token, data.user);
+                      setSuccess(true);
+                      setTimeout(() => onLogin(data.user), 450);
+                    }
+                  }}
+                  onError={(msg) => setError(msg)}
+                />
 
                 <p style={styles.footer}>
                   ¿No tienes cuenta?{' '}

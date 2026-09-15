@@ -1,8 +1,11 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete } from '../api';
-import { useState, useEffect, useRef } from 'react';
-import { Search, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart, Tag, Percent, DollarSign, User, X, ChevronDown, UserPlus } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Minus, Plus, Trash2, CreditCard, CheckCircle, ShoppingCart, Tag, Percent, DollarSign, User, X, ChevronDown, UserPlus, Eye } from 'lucide-react';
 import { formatearFechaHoraCO, formatearFechaCO } from '../utils/dateCO';
+import { AddToCartButton, AnimatedButton, CartBadge, Toast } from '../components/AnimatedUI';
+import ProductGallery from '../components/ProductGallery';
 
 const POS = ({ user }) => {
   const [turno, setTurno] = useState(null);
@@ -46,6 +49,10 @@ const POS = ({ user }) => {
 
   // v1.7.2: galería de imágenes — índice de imagen activa por producto
   const [imagenActiva, setImagenActiva] = useState({});
+  // v2.2.2: galería de imágenes ampliada y toast de agregado
+  const [galleryProduct, setGalleryProduct] = useState(null);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     fetchTurno();
@@ -186,20 +193,26 @@ const POS = ({ user }) => {
       const existe = prev.find(p => p.id_producto === producto.id_producto);
       if (existe) {
         if (stockDisponible <= 0) {
-          alert('No hay más stock disponible para agregar.');
+          setToastMessage('No hay más stock disponible');
+          setToastVisible(true);
           return prev;
         }
         const nuevaCant = existe.cantidad + 1;
         const descMonto = Math.round((nuevaCant * producto.precio_venta) * (existe.porcentajeDescuento || descuentoGlobalPct) / 100);
+        setToastMessage(`${producto.nombre_producto} agregado al carrito`);
+        setToastVisible(true);
         return prev.map(p => p.id_producto === producto.id_producto
           ? { ...p, cantidad: nuevaCant, descuento: descMonto, subtotal: (nuevaCant * producto.precio_venta) - descMonto }
           : p);
       }
       if (producto.stock_actual <= 0) {
-        alert('Este producto no tiene stock disponible.');
+        setToastMessage('Este producto no tiene stock disponible');
+        setToastVisible(true);
         return prev;
       }
       const descMonto = Math.round(producto.precio_venta * (descuentoGlobalPct / 100));
+      setToastMessage(`${producto.nombre_producto} agregado al carrito`);
+      setToastVisible(true);
       return [...prev, { ...producto, cantidad: 1, descuento: descMonto, porcentajeDescuento: descuentoGlobalPct, subtotal: producto.precio_venta - descMonto }];
     });
     setQuery('');
@@ -454,45 +467,78 @@ const POS = ({ user }) => {
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <div className="grid-3" style={{ paddingRight: '0.5rem', gap: '1rem' }}>
-            {productos.map(p => (
-              <div 
-                key={p.id_producto} 
+            {productos.map((p, idx) => (
+              <motion.div 
+                key={p.id_producto}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.03, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 className="card" 
                 style={{ 
                   cursor: 'pointer', 
-                  transition: 'transform 0.15s, box-shadow 0.15s', 
                   border: p.stock_actual <= 0 ? '1px solid #EF4444' : '1px solid #E2E8F0',
                   opacity: p.stock_actual <= 0 ? 0.6 : 1,
                   padding: '1rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  justify: 'space-between'
+                  justify: 'space-between',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
                 onClick={() => agregarAlCarrito(p)}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(0, 0, 0, 0.1)', transition: { duration: 0.2 } }}
               >
-                <div style={{ height: '110px', backgroundColor: '#F8FAFC', borderRadius: '8px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {/* Imagen del producto con click para galería */}
+                <div 
+                  style={{ height: '120px', backgroundColor: '#F8FAFC', borderRadius: '10px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
+                    if (imgs.length > 0) {
+                      setGalleryProduct(p);
+                    }
+                  }}
+                >
                   {(() => {
-                    // v1.7.2: galería de imágenes — usa la lista de imágenes si existe
                     const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
                     const idx = Math.min(imagenActiva[p.id_producto] || 0, Math.max(imgs.length - 1, 0));
                     const imgActual = imgs[idx] || null;
                     return imgActual ? (
-                      <img src={imgActual} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
+                      <>
+                        <img src={imgActual} alt={p.nombre_producto} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '0.5rem' }} />
+                        {/* Icono de zoom */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '6px',
+                          right: '6px',
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          borderRadius: '6px',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: 0,
+                          transition: 'opacity 0.2s',
+                        }}
+                        className="zoom-icon-hover"
+                        >
+                          <Eye size={12} color="#fff" />
+                        </div>
+                      </>
                     ) : (
                       <span style={{ fontSize: '2rem' }}>📱</span>
                     );
                   })()}
                 </div>
-                {/* v1.7.2: miniaturas de la galería (si hay más de una imagen) */}
+
+                {/* Miniaturas de la galería */}
                 {(() => {
                   const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
                   if (imgs.length <= 1) return null;
                   const idx = Math.min(imagenActiva[p.id_producto] || 0, imgs.length - 1);
                   return (
                     <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
-                      {imgs.map((url, i) => (
+                      {imgs.slice(0, 4).map((url, i) => (
                         <div
                           key={i}
                           onClick={(e) => { e.stopPropagation(); setImagenActiva(prev => ({ ...prev, [p.id_producto]: i })); }}
@@ -500,26 +546,36 @@ const POS = ({ user }) => {
                             width: 26, height: 26, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
                             border: i === idx ? '2px solid #2A9D8F' : '2px solid transparent',
                             opacity: i === idx ? 1 : 0.55,
-                            flexShrink: 0
+                            flexShrink: 0,
+                            transition: 'all 0.2s ease',
                           }}
                         >
                           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
                       ))}
+                      {imgs.length > 4 && (
+                        <span style={{ fontSize: '0.65rem', color: '#64748B', display: 'flex', alignItems: 'center' }}>
+                          +{imgs.length - 4}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
+
                 <h4 style={{ marginBottom: '0.4rem', fontSize: '0.95rem', height: '38px', overflow: 'hidden' }}>{p.nombre_producto}</h4>
+                
                 <div className="flex-between" style={{ alignItems: 'center' }}>
                   <div>
                     <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#264653' }}>{formatearCOP(p.precio_venta)}</span>
                     <span style={{ display: 'block', fontSize: '0.7rem', color: '#2A9D8F', fontWeight: 600 }}>IVA Incluido</span>
                   </div>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: '12px', backgroundColor: p.stock_actual > p.stock_minimo ? '#E6F4F1' : '#FEE2E2', color: p.stock_actual > p.stock_minimo ? '#2A9D8F' : '#EF4444' }}>
-                    Stock: {p.stock_actual}
-                  </span>
+                  <AddToCartButton 
+                    onAdd={() => agregarAlCarrito(p)}
+                    disabled={p.stock_actual <= 0}
+                    product={p}
+                  />
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -1135,6 +1191,37 @@ const POS = ({ user }) => {
           )}
         </div>
       )}
+
+      {/* v2.2.2: Galería de imágenes ampliada */}
+      {galleryProduct && (
+        <ProductGallery
+          product={galleryProduct}
+          images={(galleryProduct.imagenes && galleryProduct.imagenes.length) 
+            ? galleryProduct.imagenes.map(i => i.url) 
+            : (galleryProduct.imagen_url ? [galleryProduct.imagen_url] : [])}
+          onClose={() => setGalleryProduct(null)}
+          onAddToCart={agregarAlCarrito}
+        />
+      )}
+
+      {/* v2.2.2: Toast de notificación */}
+      <Toast 
+        message={toastMessage} 
+        type="success" 
+        visible={toastVisible} 
+        onDone={() => setToastVisible(false)} 
+      />
+
+      {/* Estilos CSS para animaciones */}
+      <style>{`
+        .zoom-icon-hover {
+          opacity: 0 !important;
+          transition: opacity 0.2s ease !important;
+        }
+        .card:hover .zoom-icon-hover {
+          opacity: 1 !important;
+        }
+      `}</style>
     </div>
   );
 };
