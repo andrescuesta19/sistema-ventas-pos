@@ -75,13 +75,13 @@ const SuperAdmin = () => {
       const t = token || localStorage.getItem('super_admin_token');
       const headers = { Authorization: `Bearer ${t}` };
       const [s, l, m, tk, inst, upd, notif] = await Promise.all([
-        fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.json()),
-        fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.json()),
-        fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.json()),
-        fetch(`${API_URL}/api/super/tickets`, { headers }).then(r => r.json()),
-        fetch(`${API_URL}/api/instalaciones`, { headers }).then(r => r.json()).catch(() => []),
-        fetch(`${API_URL}/api/actualizaciones`, { headers }).then(r => r.json()).catch(() => []),
-        fetch(`${API_URL}/api/super/notificaciones`, { headers }).then(r => r.json()).catch(() => []),
+        fetch(`${API_URL}/api/super/solicitudes`, { headers }).then(r => r.ok ? r.json() : []),
+        fetch(`${API_URL}/api/super/locales`, { headers }).then(r => r.ok ? r.json() : []),
+        fetch(`${API_URL}/api/super/metricas`, { headers }).then(r => r.ok ? r.json() : {}),
+        fetch(`${API_URL}/api/super/tickets`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/api/instalaciones`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/api/actualizaciones`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/api/super/notificaciones`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
       setSolicitudes(Array.isArray(s) ? s : []);
       setLocales(Array.isArray(l) ? l : []);
