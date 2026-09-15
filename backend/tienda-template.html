@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{NOMBRE_LOCAL}} — Tienda Online</title>
+    <title>Calvo STORE — 100% Original</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,10 +54,11 @@
         .pc:nth-child(5) { animation-delay: .2s; }
 
         .pi { height: 200px; background: rgba(255,255,255,.02); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; cursor: pointer; }
-        .pi img { width: 100%; height: 100%; object-fit: contain; padding: .75rem; transition: transform .4s ease; }
+        .pi img, .pi video { width: 100%; height: 100%; object-fit: contain; padding: .75rem; transition: transform .4s ease; }
         .pc:hover .pi img { transform: scale(1.08); }
         .ni { font-size: 3rem; opacity: .2; }
         .bl { position: absolute; top: 10px; left: 10px; background: rgba(239,68,68,.9); color: #fff; padding: .2rem .55rem; border-radius: 8px; font-size: .65rem; font-weight: 700; }
+        .vid-badge { position: absolute; top: 10px; right: 10px; background: rgba(42,157,143,.9); color: #fff; padding: .2rem .5rem; border-radius: 8px; font-size: .65rem; font-weight: 700; display: flex; align-items: center; gap: .25rem; }
         .zoom-hint { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.6); color: #fff; padding: .2rem .5rem; border-radius: 6px; font-size: .65rem; opacity: 0; transition: opacity .2s; pointer-events: none; }
         .pi:hover .zoom-hint { opacity: 1; }
 
@@ -138,8 +139,8 @@
             <div class="br">
                 <div class="lo"><img src="/logos/logo.png" alt="Logo" onerror="this.style.display='none'"></div>
                 <div>
-                    <h1>{{NOMBRE_LOCAL}}</h1>
-                    <p>{{DIRECCION}} {{CIUDAD}}</p>
+                    <h1>Calvo STORE</h1>
+                    <p>100% Original • {{DIRECCION}} {{CIUDAD}}</p>
                 </div>
             </div>
             <div class="cw">
@@ -162,11 +163,12 @@
 
     <div class="pd" id="gr">{{PRODUCTOS}}</div>
 
-    <!-- Image Lightbox -->
+    <!-- Image/Video Lightbox -->
     <div class="overlay" id="imgOverlay" onclick="closeImg(event)">
         <button class="overlay-close" onclick="closeImg()">✕</button>
         <div class="overlay-inner" onclick="event.stopPropagation()">
-            <img class="overlay-img" id="overlayImg" src="" alt="" draggable="false">
+            <img class="overlay-img" id="overlayImg" src="" alt="" draggable="false" style="display:none">
+            <video class="overlay-img" id="overlayVid" controls style="display:none;max-width:80vw;max-height:70vh;border-radius:12px"></video>
             <div class="overlay-name" id="overlayName"></div>
             <div class="overlay-price" id="overlayPrice"></div>
             <div class="overlay-controls">
@@ -175,6 +177,8 @@
                 <button class="ov-btn" onclick="rotateImg()">🔄 Rotar</button>
                 <button class="ov-btn" onclick="addToCartFromOverlay()">🛒 Agregar</button>
             </div>
+        </div>
+    </div>
         </div>
     </div>
 
@@ -197,7 +201,7 @@
     <div class="toast" id="to">✓ Agregado al carrito</div>
     <button class="wf" id="wa" onclick="openCart()">💬</button>
 
-    <footer><p>Desarrollado por Andrés Cuesta • {{NOMBRE_LOCAL}}</p></footer>
+    <footer><p>Calvo STORE — 100% Original • Desarrollado por Andrés Cuesta</p></footer>
 
     <script>
         const D = {{PRODUCTOS_JSON}};
@@ -286,13 +290,17 @@
             window.open("https://wa.me/" + TEL + "?text=" + encodeURIComponent(msg), "_blank");
         }
 
-        /* ── IMAGE LIGHTBOX ── */
+        /* ── IMAGE/VIDEO LIGHTBOX ── */
         function openImg(id) {
             const p = D.find(x => x.id === id);
             if (!p || !p.img) return;
             currentOverlayProduct = p;
             imgScale = 1; imgRotation = 0;
             const img = document.getElementById("overlayImg");
+            const vid = document.getElementById("overlayVid");
+            vid.style.display = "none";
+            vid.pause();
+            img.style.display = "block";
             img.src = p.img;
             img.style.transform = "scale(1) rotate(0deg)";
             document.getElementById("overlayName").textContent = p.n;
@@ -301,8 +309,26 @@
             document.body.style.overflow = "hidden";
         }
 
+        function openVid(id) {
+            const p = D.find(x => x.id === id);
+            if (!p || !p.vid) return;
+            currentOverlayProduct = p;
+            const img = document.getElementById("overlayImg");
+            const vid = document.getElementById("overlayVid");
+            img.style.display = "none";
+            vid.style.display = "block";
+            vid.src = p.vid;
+            vid.play();
+            document.getElementById("overlayName").textContent = p.n;
+            document.getElementById("overlayPrice").textContent = "$" + p.p.toLocaleString();
+            document.getElementById("imgOverlay").classList.add("on");
+            document.body.style.overflow = "hidden";
+        }
+
         function closeImg(e) {
             if (e && e.target !== e.currentTarget && !e.target.classList.contains("overlay-close")) return;
+            const vid = document.getElementById("overlayVid");
+            if (vid) { vid.pause(); vid.src = ""; }
             document.getElementById("imgOverlay").classList.remove("on");
             document.body.style.overflow = "";
         }
@@ -339,19 +365,29 @@
             if (q) items = items.filter(p => p.n.toLowerCase().includes(q));
             if (cat !== "Todos") items = items.filter(p => p.c === cat);
             if (!items.length) { g.innerHTML = '<div class="em"><h3>No se encontraron productos</h3></div>'; return; }
-            g.innerHTML = items.map((p, j) =>
-                '<div class="pc" style="animation-delay:' + (j * .05) + 's">' +
-                '<div class="pi" onclick="openImg(' + p.id + ')">' +
-                (p.img ? '<img src="' + p.img + '" alt="' + p.n + '" loading="lazy">' : '<div class="ni">📦</div>') +
+            g.innerHTML = items.map((p, j) => {
+                const hasVid = p.vid && p.vid.length > 0;
+                const hasImg = p.img && p.img.length > 0;
+                let mediaTag;
+                if (hasVid) {
+                    mediaTag = '<video src="' + p.vid + '" muted loop playsinline preload="metadata" onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0" onclick="openVid(' + p.id + ')" style="width:100%;height:100%;object-fit:contain;padding:.75rem;cursor:pointer"></video><span class="vid-badge">▶ Video</span>';
+                } else if (hasImg) {
+                    mediaTag = '<img src="' + p.img + '" alt="' + p.n + '" loading="lazy">';
+                } else {
+                    mediaTag = '<div class="ni">📦</div>';
+                }
+                return '<div class="pc" style="animation-delay:' + (j * .05) + 's">' +
+                '<div class="pi" onclick="' + (hasVid ? 'openVid(' + p.id + ')' : (hasImg ? 'openImg(' + p.id + ')' : '')) + '">' +
+                mediaTag +
                 (p.s <= 5 ? '<span class="bl">¡Últimas ' + p.s + '!</span>' : '') +
-                '<span class="zoom-hint">🔍 Clic para ampliar</span>' +
+                '<span class="zoom-hint">' + (hasVid ? '▶ Clic para ver video' : (hasImg ? '🔍 Clic para ampliar' : '')) + '</span>' +
                 '</div><div class="pb">' +
                 (p.c ? '<span class="tg">' + p.c + '</span>' : '') +
                 '<h3>' + p.n + '</h3>' +
                 '<p class="pp">$' + p.p.toLocaleString() + '</p>' +
                 '<button class="ba" onclick="ac(' + p.id + ')">Agregar</button>' +
-                '</div></div>'
-            ).join("");
+                '</div></div>';
+            }).join("");
         }
 
         /* ── TOAST ── */

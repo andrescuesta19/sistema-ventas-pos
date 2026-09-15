@@ -17,6 +17,8 @@ const Inventario = ({ user }) => {
   });
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoPreview, setVideoPreview] = useState(null);
 
   // === v1.7.2: Galería de imágenes ===
   const [galeria, setGaleria] = useState(null);      // producto seleccionado o null
@@ -52,6 +54,19 @@ const Inventario = ({ user }) => {
     setImagenPreview(null);
   };
 
+  const handleVideoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setVideoFile(file);
+      setVideoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeVideo = () => {
+    setVideoFile(null);
+    setVideoPreview(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
@@ -66,11 +81,21 @@ const Inventario = ({ user }) => {
     const res = await apiPost(`${API_URL}/api/productos`, payload);
 
     if (res.ok) {
-      // Si hay archivo de imagen, subirlo al producto creado
+      // Subir imagen si existe
       if (imagenFile && res.id_producto) {
         const fd = new FormData();
         fd.append('imagen', imagenFile);
         await fetch(`${API_URL}/api/productos/${res.id_producto}/imagen`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+          body: fd
+        });
+      }
+      // Subir video si existe
+      if (videoFile && res.id_producto) {
+        const fd = new FormData();
+        fd.append('video', videoFile);
+        await fetch(`${API_URL}/api/productos/${res.id_producto}/video`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${getToken()}` },
           body: fd
@@ -83,6 +108,8 @@ const Inventario = ({ user }) => {
       });
       setImagenFile(null);
       setImagenPreview(null);
+      setVideoFile(null);
+      setVideoPreview(null);
       fetchProductos();
     } else {
       alert('Error al guardar el producto: ' + (res.error || 'Error desconocido'));
@@ -255,6 +282,25 @@ const Inventario = ({ user }) => {
                   </label>
                 )}
                 <small style={{ color: 'var(--text-light)' }}>Opcional. También puedes agregar más fotos después con el botón de imágenes.</small>
+              </div>
+              <div className="form-group">
+                <label>Video del Producto (opcional)</label>
+                {videoPreview ? (
+                  <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                    <video src={videoPreview} controls style={{ width: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <button type="button" onClick={removeVideo} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.5rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)' }}>
+                    <Upload size={28} color="var(--text-light)" />
+                    <span style={{ marginTop: '0.4rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Haz clic para seleccionar un video</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>MP4, WebM o MOV · máx 50 MB</span>
+                    <input type="file" accept=".mp4,.webm,.mov" onChange={handleVideoChange} style={{ display: 'none' }} />
+                  </label>
+                )}
+                <small style={{ color: 'var(--text-light)' }}>Opcional. Los clientes podrán ver el video en la tienda.</small>
               </div>
               <div className="grid-2">
                 <div className="form-group">
