@@ -490,7 +490,7 @@ const POS = ({ user }) => {
               >
                 {/* Imagen del producto con click para galería */}
                 <div 
-                  style={{ height: '120px', backgroundColor: '#F8FAFC', borderRadius: '10px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}
+                  style={{ height: '150px', backgroundColor: '#F8FAFC', borderRadius: '10px', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     const imgs = (p.imagenes && p.imagenes.length) ? p.imagenes.map(i => i.url) : (p.imagen_url ? [p.imagen_url] : []);
