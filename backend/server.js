@@ -2739,7 +2739,7 @@ app.get('/api/super/solicitudes', requireSuperAdmin, async (req, res) => {
             FROM usuarios u
             JOIN locales l ON u.id_local = l.id_local
             WHERE u.aprobado_por_admin = false
-              AND u.rol = 'Administrador'
+              AND u.rol IN ('Administrador', 'Vendedor', 'Cajero')
               AND u.estado = true
             ORDER BY u.created_at DESC
         `);
