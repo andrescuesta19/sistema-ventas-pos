@@ -12,6 +12,7 @@ const multer = require('multer');
 const { z } = require('zod'); // v2.2.0: validación de inputs
 const speakeasy = require('speakeasy'); // v2.2.0: 2FA TOTP
 const QRCode = require('qrcode'); // v2.2.0: QR para 2FA
+const { v2: cloudinary } = require('cloudinary'); // v2.2.10: Cloudinary para almacenamiento persistente
 const db = require('./db');
 const dian = require('./dian'); // v1.9.1: facturación electrónica DIAN
 
@@ -25,6 +26,55 @@ const REFRESH_EXPIRY = '7d';
 
 // Blacklist de tokens (logout) — en memoria; en producción usar Redis
 const tokenBlacklist = new Set();
+
+// ═══════════════════════════════════════════════════════════════
+// v2.2.10: CLOUDINARY — Almacenamiento persistente de imágenes/videos
+// Configurar CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET en .env
+// Si no está configurado, usa almacenamiento local (desarrollo)
+// ═══════════════════════════════════════════════════════════════
+const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+if (useCloudinary) {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+        secure: true
+    });
+    console.log('☁️  Cloudinary configurado:', process.env.CLOUDINARY_CLOUD_NAME);
+} else {
+    console.warn('⚠️  Cloudinary NO configurado. Usando almacenamiento local (archivos se pierden en Render).');
+}
+
+// Helpers para Cloudinary
+async function uploadToCloudinary(buffer, folder, resourceType = 'image') {
+    return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+            { folder, resource_type: resourceType },
+            (error, result) => {
+                if (error) reject(error);
+                else resolve(result.secure_url);
+            }
+        );
+        uploadStream.end(buffer);
+    });
+}
+
+async function deleteFromCloudinary(url, resourceType = 'image') {
+    if (!url || !url.includes('cloudinary.com')) return; // Solo borrar de Cloudinary
+    try {
+        // Extraer public_id de la URL: https://res.cloudinary.com/cloud_name/image/upload/v123/folder/file.jpg
+        const parts = url.split('/');
+        const uploadIdx = parts.findIndex(p => p === 'upload');
+        if (uploadIdx !== -1 && uploadIdx + 1 < parts.length) {
+            let publicId = parts.slice(uploadIdx + 1).join('/');
+            publicId = publicId.replace(/\.[^/.]+$/, ''); // quitar extensión
+            if (resourceType === 'video') publicId = `video/${publicId}`;
+            await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+        }
+    } catch (e) {
+        console.warn('No se pudo borrar de Cloudinary:', e.message);
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // v2.2.0: VALIDACIÓN DE INPUTS CON ZOD
@@ -280,20 +330,23 @@ for (const fp of frontendPaths) {
 }
 
 // === Configuración de multer para imágenes ===
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+// Si Cloudinary está configurado, usa memoryStorage para subir directo a la nube
+// Si no, usa diskStorage local (desarrollo)
+const storageProductos = useCloudinary
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+        destination: (req, file, cb) => {
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            cb(null, uploadsDir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const rand = Math.round(Math.random() * 1e9);
+            const prodId = req.params.id || 'new';
+            cb(null, `producto_${prodId}_${Date.now()}_${rand}${ext}`);
+        }
+    });
 
-const storageProductos = multer.diskStorage({
-    destination: (req, file, cb) => {
-        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const rand = Math.round(Math.random() * 1e9);
-        const prodId = req.params.id || 'new';
-        cb(null, `producto_${prodId}_${Date.now()}_${rand}${ext}`);
-    }
-});
 const uploadProducto = multer({
     storage: storageProductos,
     limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB — sin límite práctico para fotos
@@ -4519,14 +4572,27 @@ app.post('/api/productos/:id/imagen', requireAuth, requireAprobado, uploadProduc
         const idProd = Number(req.params.id);
         if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
 
-        // Construir URL pública
-        const imageUrl = `/uploads/productos/${req.file.filename}`;
+        let imageUrl;
 
-        // Eliminar imagen anterior si existe
-        const old = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
-        if (old.rows[0]?.imagen_url) {
-            const oldPath = path.join(__dirname, old.rows[0].imagen_url);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        if (useCloudinary) {
+            // Subir a Cloudinary
+            imageUrl = await uploadToCloudinary(req.file.buffer, `productos/${idProd}`, 'image');
+
+            // Eliminar imagen anterior de Cloudinary si existe
+            const old = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+            if (old.rows[0]?.imagen_url) {
+                await deleteFromCloudinary(old.rows[0].imagen_url, 'image');
+            }
+        } else {
+            // Almacenamiento local (desarrollo)
+            imageUrl = `/uploads/productos/${req.file.filename}`;
+
+            // Eliminar imagen anterior si existe
+            const old = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+            if (old.rows[0]?.imagen_url) {
+                const oldPath = path.join(__dirname, old.rows[0].imagen_url);
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            }
         }
 
         await db.query('UPDATE productos SET imagen_url=$1 WHERE id_producto=$2 AND id_local=$3', [imageUrl, idProd, idLocal]);
@@ -4545,8 +4611,12 @@ app.delete('/api/productos/:id/imagen', requireAuth, requireAprobado, async (req
         const r = await db.query('SELECT imagen_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
         const imgUrl = r.rows[0]?.imagen_url;
         if (imgUrl) {
-            const fullPath = path.join(__dirname, imgUrl);
-            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            if (useCloudinary) {
+                await deleteFromCloudinary(imgUrl, 'image');
+            } else {
+                const fullPath = path.join(__dirname, imgUrl);
+                if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            }
         }
         await db.query('UPDATE productos SET imagen_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
         res.json({ success: true });
@@ -4557,13 +4627,13 @@ app.delete('/api/productos/:id/imagen', requireAuth, requireAprobado, async (req
 
 // POST /api/productos/:id/video — subir o reemplazar video
 const uploadVideo = multer({
-    storage: isProduction ? multer.memoryStorage() : multer.diskStorage({
+    storage: useCloudinary ? multer.memoryStorage() : (isProduction ? multer.memoryStorage() : multer.diskStorage({
         destination: (req, file, cb) => cb(null, uploadsDir),
         filename: (req, file, cb) => {
             const ext = path.extname(file.originalname).toLowerCase();
             cb(null, `video_${req.params.id}_${Date.now()}${ext}`);
         }
-    }),
+    })),
     limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
     fileFilter: (req, file, cb) => {
         const allowed = ['.mp4', '.webm', '.mov', '.avi'];
@@ -4581,13 +4651,27 @@ app.post('/api/productos/:id/video', requireAuth, requireAprobado, uploadVideo.s
         const idProd = Number(req.params.id);
         if (!req.file) return res.status(400).json({ error: 'No se recibió ningún video.' });
 
-        const videoUrl = `/uploads/productos/${req.file.filename}`;
+        let videoUrl;
 
-        // Eliminar video anterior si existe
-        const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
-        if (old.rows[0]?.video_url) {
-            const oldPath = path.join(__dirname, old.rows[0].video_url);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        if (useCloudinary) {
+            // Subir a Cloudinary
+            videoUrl = await uploadToCloudinary(req.file.buffer, `productos/${idProd}`, 'video');
+
+            // Eliminar video anterior de Cloudinary si existe
+            const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+            if (old.rows[0]?.video_url) {
+                await deleteFromCloudinary(old.rows[0].video_url, 'video');
+            }
+        } else {
+            // Almacenamiento local (desarrollo)
+            videoUrl = `/uploads/productos/${req.file.filename}`;
+
+            // Eliminar video anterior si existe
+            const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+            if (old.rows[0]?.video_url) {
+                const oldPath = path.join(__dirname, old.rows[0].video_url);
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            }
         }
 
         await db.query('UPDATE productos SET video_url=$1 WHERE id_producto=$2 AND id_local=$3', [videoUrl, idProd, idLocal]);
@@ -4606,8 +4690,12 @@ app.delete('/api/productos/:id/video', requireAuth, requireAprobado, async (req,
         const r = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
         const vidUrl = r.rows[0]?.video_url;
         if (vidUrl) {
-            const fullPath = path.join(__dirname, vidUrl);
-            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            if (useCloudinary) {
+                await deleteFromCloudinary(vidUrl, 'video');
+            } else {
+                const fullPath = path.join(__dirname, vidUrl);
+                if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            }
         }
         await db.query('UPDATE productos SET video_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
         res.json({ success: true });
@@ -4689,7 +4777,12 @@ app.post('/api/productos/:id/imagenes', requireAuth, requireAprobado, uploadProd
 
         const urls = [];
         for (const file of req.files) {
-            const url = `/uploads/productos/${file.filename}`;
+            let url;
+            if (useCloudinary) {
+                url = await uploadToCloudinary(file.buffer, `productos/${idProd}`, 'image');
+            } else {
+                url = `/uploads/productos/${file.filename}`;
+            }
             await db.query('INSERT INTO producto_imagenes (id_producto, url, orden) VALUES ($1, $2, $3)', [idProd, url, orden]);
             urls.push({ url, orden });
             orden++;
@@ -4733,9 +4826,13 @@ app.delete('/api/productos/:id/imagenes/:idImagen', requireAuth, requireAprobado
         const img = await db.query('SELECT url FROM producto_imagenes WHERE id=$1 AND id_producto=$2', [idImagen, idProd]);
         if (img.rows.length === 0) return res.status(404).json({ error: 'Imagen no encontrada.' });
 
-        // Borrar archivo del disco
-        const fullPath = path.join(__dirname, img.rows[0].url);
-        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        // Borrar de Cloudinary o disco
+        if (useCloudinary) {
+            await deleteFromCloudinary(img.rows[0].url, 'image');
+        } else {
+            const fullPath = path.join(__dirname, img.rows[0].url);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
 
         await db.query('DELETE FROM producto_imagenes WHERE id=$1 AND id_producto=$2', [idImagen, idProd]);
 
