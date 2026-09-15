@@ -463,6 +463,8 @@ const Registro = ({ onRegister }) => {
         </>
       )}
     </motion.div>
+    </div>
+  </div>
   );
 };
 
