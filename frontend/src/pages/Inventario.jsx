@@ -13,7 +13,8 @@ const Inventario = ({ user }) => {
     precio_compra: '',
     precio_venta: '',
     stock_actual: '',
-    stock_minimo: ''
+    stock_minimo: '',
+    visible_en_tienda: true
   });
   const [imagenFile, setImagenFile] = useState(null);
   const [imagenPreview, setImagenPreview] = useState(null);
@@ -39,7 +40,10 @@ const Inventario = ({ user }) => {
     return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor);
   };
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -105,7 +109,8 @@ const Inventario = ({ user }) => {
       setShowModal(false);
       setFormData({
         codigo_barras: '', nombre_producto: '', imagen_url: '',
-        precio_compra: '', precio_venta: '', stock_actual: '', stock_minimo: ''
+        precio_compra: '', precio_venta: '', stock_actual: '', stock_minimo: '',
+        visible_en_tienda: true
       });
       setImagenFile(null);
       setImagenPreview(null);
@@ -365,6 +370,24 @@ const Inventario = ({ user }) => {
                   <input type="number" name="stock_minimo" min="0" value={formData.stock_minimo} onChange={handleChange} placeholder="1" />
                   <small style={{ color: 'var(--text-light)' }}>Se alerta cuando el stock llegue a este número.</small>
                 </div>
+              </div>
+              {/* ── Toggle visibilidad en tienda ── */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', background: 'var(--bg-light)', borderRadius: '10px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Visible en tienda web</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>Si está activo, este producto aparece en la página pública de la tienda.</div>
+                </div>
+                <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer' }}>
+                  <input type="checkbox" name="visible_en_tienda" checked={formData.visible_en_tienda !== false} onChange={handleChange} style={{ opacity: 0, width: 0, height: 0 }} />
+                  <span style={{
+                    position: 'absolute', inset: 0, borderRadius: '26px', transition: 'all .3s',
+                    background: formData.visible_en_tienda !== false ? '#2A9D8F' : '#555'
+                  }}></span>
+                  <span style={{
+                    position: 'absolute', height: '20px', width: '20px', left: formData.visible_en_tienda !== false ? '24px' : '3px',
+                    bottom: '3px', background: '#fff', borderRadius: '50%', transition: 'all .3s'
+                  }}></span>
+                </label>
               </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                 <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowModal(false)}>Cancelar</button>
