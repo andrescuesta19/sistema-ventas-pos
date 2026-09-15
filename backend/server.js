@@ -713,53 +713,44 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
         const { idLocal } = req.params;
         const { buscar, categoria, orden, pagina } = req.query;
         
-        const limit = 50; // Productos por página
+        const limit = 50;
         const offset = ((parseInt(pagina) || 1) - 1) * limit;
         
         let query = `
             SELECT 
                 p.id_producto,
                 p.nombre_producto,
-                p.descripcion,
                 p.precio_venta,
-                p.precio_anterior,
+                p.precio_compra as precio_anterior,
                 p.codigo_barras,
                 p.stock_actual,
                 p.imagen_url,
-                p.destacado,
-                c.nombre_categoria,
-                (SELECT json_agg(json_build_object('url', pi.url, 'orden', pi.orden) ORDER BY pi.orden)
-                 FROM producto_imagenes pi WHERE pi.id_producto = p.id_producto) as imagenes
+                c.nombre_categoria
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1
-            AND p.estado = true
             AND p.stock_actual > 0
         `;
         const params = [idLocal];
         let paramIdx = 2;
         
-        // Filtro de búsqueda
         if (buscar) {
             query += ` AND (p.nombre_producto ILIKE $${paramIdx} OR p.codigo_barras ILIKE $${paramIdx})`;
             params.push(`%${buscar}%`);
             paramIdx++;
         }
         
-        // Filtro por categoría
         if (categoria) {
             query += ` AND c.nombre_categoria = $${paramIdx}`;
             params.push(categoria);
             paramIdx++;
         }
         
-        // Orden
         const ordenMap = {
             'precio-asc': 'p.precio_venta ASC',
             'precio-desc': 'p.precio_venta DESC',
             'nombre': 'p.nombre_producto ASC',
-            'reciente': 'p.created_at DESC',
-            'destacado': 'p.destacado DESC, p.nombre_producto ASC',
+            'destacado': 'p.stock_actual DESC',
         };
         query += ` ORDER BY ${ordenMap[orden] || ordenMap['destacado']}`;
         query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
@@ -767,12 +758,11 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
         
         const { rows: productos } = await db.query(query, params);
         
-        // Contar total para paginación
         let countQuery = `
             SELECT COUNT(*)::int as total
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1 AND p.estado = true AND p.stock_actual > 0
+            WHERE p.id_local = $1 AND p.stock_actual > 0
         `;
         const countParams = [idLocal];
         if (buscar) {
@@ -781,19 +771,17 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
         }
         const { rows: [{ total }] } = await db.query(countQuery, countParams);
         
-        // Obtener categorías disponibles
         const { rows: categorias } = await db.query(`
             SELECT DISTINCT c.nombre_categoria, COUNT(*)::int as cantidad
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1 AND p.estado = true AND p.stock_actual > 0 AND c.nombre_categoria IS NOT NULL
+            WHERE p.id_local = $1 AND p.stock_actual > 0 AND c.nombre_categoria IS NOT NULL
             GROUP BY c.nombre_categoria
             ORDER BY cantidad DESC
         `, [idLocal]);
         
-        // Info del local
         const { rows: [local] } = await db.query(
-            'SELECT id_local, nombre_local, direccion, telefono, ciudad FROM locales WHERE id_local = $1',
+            'SELECT id_local, nombre_local FROM locales WHERE id_local = $1',
             [idLocal]
         );
         
