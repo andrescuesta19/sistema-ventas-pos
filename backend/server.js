@@ -151,7 +151,7 @@ function generateTokens(payload) {
 const app = express();
 
 // === Servir imágenes de productos ===
-// En producción (Render), el filesystem es efímero — usamos memoria para uploads.
+// En producción (Render), el filesystem es efímero — usamos /tmp para uploads.
 const isProduction = process.env.NODE_ENV === 'production';
 const uploadsDir = isProduction
   ? path.join('/tmp', 'uploads', 'productos')
@@ -164,7 +164,9 @@ const updatesDir = isProduction
   : path.join(__dirname, 'uploads', 'actualizaciones');
 if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Servir archivos estáticos: en producción desde /tmp/uploads, en desarrollo desde backend/uploads
+const staticUploadsDir = isProduction ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(staticUploadsDir));
 app.use('/logos', express.static(path.join(__dirname, 'logos')));
 
 // ── Tienda Pública HTML (ANTES de express.static para evitar conflicto) ──
@@ -278,15 +280,20 @@ for (const fp of frontendPaths) {
 }
 
 // === Configuración de multer para imágenes ===
-const storageProductos = isProduction
-  ? multer.memoryStorage()
-  : multer.diskStorage({
-      destination: (req, file, cb) => cb(null, uploadsDir),
-      filename: (req, file, cb) => {
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storageProductos = multer.diskStorage({
+    destination: (req, file, cb) => {
+        if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
-        cb(null, `producto_${req.params.id}_${Date.now()}${ext}`);
-      }
-    });
+        const rand = Math.round(Math.random() * 1e9);
+        const prodId = req.params.id || 'new';
+        cb(null, `producto_${prodId}_${Date.now()}_${rand}${ext}`);
+    }
+});
 const uploadProducto = multer({
     storage: storageProductos,
     limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB — sin límite práctico para fotos
@@ -295,14 +302,6 @@ const uploadProducto = multer({
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowed.includes(ext)) {
             return cb(new Error('Solo se permiten imágenes JPG, PNG o WebP.'));
-        }
-        // v2.2.0: Validación de magic bytes (verificar tipo real del archivo)
-        if (file.buffer) {
-            const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
-            const expectedMime = mimeMap[ext];
-            if (expectedMime && !validateMagicBytes(file.buffer, expectedMime)) {
-                return cb(new Error('El archivo no es una imagen válida (magic bytes mismatch).'));
-            }
         }
         cb(null, true);
     }
@@ -866,6 +865,14 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
         params.push(limit, offset);
         
         const { rows: productos } = await db.query(query, params);
+
+        // Prepend base URL to image URLs for web clients
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        productos.forEach(p => {
+            if (p.imagen_url && p.imagen_url.startsWith('/uploads/')) {
+                p.imagen_url = baseUrl + p.imagen_url;
+            }
+        });
         
         let countQuery = `
             SELECT COUNT(*)::int as total
@@ -1632,6 +1639,17 @@ app.get('/api/turnos/historial', requireAuth, requireAprobado, async (req, res) 
     }
 });
 
+// API: Categorías
+app.get('/api/categorias', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const { rows } = await db.query('SELECT id_categoria, nombre_categoria FROM categorias ORDER BY id_categoria ASC');
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando categorias:', err);
+        res.status(500).json({ error: 'Error al obtener categorías.' });
+    }
+});
+
 // API: Productos (SaaS) (PROTEGIDOS)
 app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
     try {
@@ -1639,13 +1657,19 @@ app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        let query = `SELECT * FROM productos WHERE id_local = $1`;
+        let query = `
+            SELECT p.*, COALESCE(c.nombre_categoria, 'General') as nombre_categoria 
+            FROM productos p 
+            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria 
+            WHERE p.id_local = $1
+        `;
         let params = [id_local];
 
         if (q) {
-            query += ` AND (nombre_producto ILIKE $2 OR codigo_barras = $3)`;
+            query += ` AND (p.nombre_producto ILIKE $2 OR p.codigo_barras = $3)`;
             params.push(`%${q}%`, q);
         }
+        query += ` ORDER BY p.id_producto DESC`;
         const { rows } = await db.query(query, params);
 
         // v1.7.2: incluir galería de imágenes de cada producto
@@ -1664,6 +1688,25 @@ app.get('/api/productos', requireAuth, requireAprobado, async (req, res) => {
                 p.imagenes = porProducto[p.id_producto] || [];
             }
         }
+
+        // Prepend base URL to image URLs for web clients
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        rows.forEach(p => {
+            if (p.imagen_url && p.imagen_url.startsWith('/uploads/')) {
+                p.imagen_url = baseUrl + p.imagen_url;
+            }
+            if (p.imagenes && p.imagenes.length > 0) {
+                p.imagenes.forEach(img => {
+                    if (img.url && img.url.startsWith('/uploads/')) {
+                        img.url = baseUrl + img.url;
+                    }
+                });
+            }
+            if (p.video_url && p.video_url.startsWith('/uploads/')) {
+                p.video_url = baseUrl + p.video_url;
+            }
+        });
+
         res.json(rows);
     } catch (err) {
         console.error('Error listando productos:', err);
@@ -1756,39 +1799,47 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url, visible_en_tienda } = req.body;
+        const { nombre_producto, codigo_barras, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url, visible_en_tienda } = req.body;
         const costo = precio_compra ? parseFloat(precio_compra) : 0;
         const visibilidad = visible_en_tienda !== false;
+        const catId = id_categoria ? parseInt(id_categoria) : 3;
+
         await db.query(
-            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, video_url=$7, visible_en_tienda=$8 WHERE id_producto=$9`,
-            [nombre_producto, costo, precio_venta, stock_actual || 0, stock_minimo || 1, imagen_url || null, video_url || null, visibilidad, req.params.id]
+            `UPDATE productos 
+             SET nombre_producto=$1, codigo_barras=$2, id_categoria=$3, precio_compra=$4, precio_venta=$5, stock_actual=$6, stock_minimo=$7, imagen_url=$8, video_url=$9, visible_en_tienda=$10 
+             WHERE id_producto=$11`,
+            [nombre_producto, codigo_barras || null, catId, costo, parseFloat(precio_venta) || 0, parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, imagen_url || null, video_url || null, visibilidad, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
         console.error('Error actualizando producto:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        res.status(500).json({ error: 'Error interno del servidor al actualizar producto: ' + (err.message || '') });
     }
 });
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda } = req.body;
+        const { id_local, codigo_barras, nombre_producto, id_categoria, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        // codigo_barras y precio_compra son opcionales
+        if (!nombre_producto || !precio_venta) {
+            return res.status(400).json({ error: 'Nombre y precio de venta son requeridos.' });
+        }
         const serial = codigo_barras || null;
         const costo = precio_compra ? parseFloat(precio_compra) : 0;
         const visibilidad = visible_en_tienda !== false; // default true
+        const catId = id_categoria ? parseInt(id_categoria) : 3; // default General (3)
+
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id_producto`,
-            [id_local, serial, nombre_producto, imagen_url || null, video_url || null, costo, precio_venta, stock_actual || 0, stock_minimo || 1, visibilidad]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, id_categoria, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id_producto`,
+            [id_local, serial, nombre_producto, catId, imagen_url || null, video_url || null, costo, parseFloat(precio_venta), parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, visibilidad]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
         console.error('Error creando producto:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        res.status(500).json({ error: 'Error interno del servidor al crear producto: ' + (err.message || '') });
     }
 });
 
@@ -1803,7 +1854,7 @@ app.delete('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, asy
         res.json({ success: true });
     } catch (err) {
         console.error('Error eliminando producto:', err);
-        res.status(500).json({ error: 'Error interno del servidor.' });
+        res.status(500).json({ error: 'Error interno del servidor al eliminar producto: ' + (err.message || '') });
     }
 });
 
@@ -4594,11 +4645,28 @@ app.delete('/api/productos/:id/video', requireAuth, requireAprobado, async (req,
     try {
         await db.query('ALTER TABLE productos ALTER COLUMN codigo_barras DROP NOT NULL');
         await db.query('ALTER TABLE productos ALTER COLUMN precio_compra DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria SET DEFAULT 3');
         await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS video_url VARCHAR(500)');
         await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS visible_en_tienda BOOLEAN DEFAULT true');
-        console.log('[v2.2.9] Migración productos aplicada: opcionales + visibilidad');
+        console.log('[v2.2.9] Migración productos aplicada: opcionales + visibilidad + categorias');
     } catch (e) {
         console.error('[v2.2.9] Migración productos:', e.message);
+    }
+})();
+
+// v2.2.10: Agregar categoría 'General' por defecto (id=3)
+(async () => {
+    try {
+        await db.query(`
+            INSERT INTO categorias (id_categoria, nombre_categoria) 
+            VALUES (3, 'General')
+            ON CONFLICT (id_categoria) DO NOTHING
+        `);
+        await db.query(`SELECT setval('categorias_id_categoria_seq', COALESCE((SELECT MAX(id_categoria) FROM categorias), 0) + 1, false)`);
+        console.log('[v2.2.10] Categoría General (id=3) asegurada');
+    } catch (e) {
+        console.error('[v2.2.10] Migración categoría General:', e.message);
     }
 })();
 

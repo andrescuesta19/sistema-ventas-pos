@@ -1,51 +1,86 @@
 import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete, getToken } from '../api';
+import { resolverUrlImagen } from '../utils/imageUrl';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon } from 'lucide-react';
+
+const CATEGORIAS_DEFAULT = [
+  { id_categoria: 1, nombre_categoria: 'Smartphones' },
+  { id_categoria: 2, nombre_categoria: 'Accesorios' },
+  { id_categoria: 3, nombre_categoria: 'General' }
+];
 
 const Inventario = ({ user }) => {
   const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState(CATEGORIAS_DEFAULT);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  const initialForm = {
     codigo_barras: '',
     nombre_producto: '',
+    id_categoria: 3,
     imagen_url: '',
     precio_compra: '',
     precio_venta: '',
     stock_actual: '',
     stock_minimo: '',
     visible_en_tienda: true
-  });
+  };
+
+  const [formData, setFormData] = useState(initialForm);
   const [imagenFiles, setImagenFiles] = useState([]);
   const [videoFile, setVideoFile] = useState(null);
   const [videoPreview, setVideoPreview] = useState(null);
 
-  // === v1.7.2: Galería de imágenes ===
-  const [galeria, setGaleria] = useState(null);      // producto seleccionado o null
+  // === Galería de imágenes ===
+  const [galeria, setGaleria] = useState(null);
   const [galeriaImagenes, setGaleriaImagenes] = useState([]);
   const [subiendo, setSubiendo] = useState(false);
   const [galeriaMsg, setGaleriaMsg] = useState(null);
 
   useEffect(() => {
     fetchProductos();
+    fetchCategorias();
   }, []);
 
+  const fetchCategorias = async () => {
+    try {
+      const data = await apiGet(`${API_URL}/api/categorias`);
+      if (Array.isArray(data) && data.length > 0) {
+        setCategorias(data);
+      }
+    } catch {
+      setCategorias(CATEGORIAS_DEFAULT);
+    }
+  };
+
   const fetchProductos = async () => {
-    const data = await apiGet(`${API_URL}/api/productos?id_local=${user?.id_local}`);
-    setProductos(data);
+    try {
+      const data = await apiGet(`${API_URL}/api/productos?id_local=${user?.id_local}`);
+      setProductos(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error cargando productos:', err);
+      setProductos([]);
+    }
   };
 
   const formatearCOP = (valor) => {
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor);
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor || 0);
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleImagesChange = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     if (files.length > 0) {
       setImagenFiles(prev => [...prev, ...files]);
     }
@@ -56,7 +91,7 @@ const Inventario = ({ user }) => {
   };
 
   const handleVideoChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       setVideoFile(file);
       setVideoPreview(URL.createObjectURL(file));
@@ -68,73 +103,144 @@ const Inventario = ({ user }) => {
     setVideoPreview(null);
   };
 
+  const abrirCrear = () => {
+    setEditingId(null);
+    setFormData(initialForm);
+    setImagenFiles([]);
+    setVideoFile(null);
+    setVideoPreview(null);
+    setSaveError(null);
+    setShowModal(true);
+  };
+
+  const abrirEditar = (prod) => {
+    setEditingId(prod.id_producto);
+    setFormData({
+      codigo_barras: prod.codigo_barras || '',
+      nombre_producto: prod.nombre_producto || '',
+      id_categoria: prod.id_categoria || 3,
+      imagen_url: prod.imagen_url || '',
+      precio_compra: prod.precio_compra || '',
+      precio_venta: prod.precio_venta || '',
+      stock_actual: prod.stock_actual ?? '',
+      stock_minimo: prod.stock_minimo ?? '',
+      visible_en_tienda: prod.visible_en_tienda !== false
+    });
+    setImagenFiles([]);
+    setVideoFile(null);
+    setVideoPreview(prod.video_url ? resolverUrlImagen(prod.video_url) : null);
+    setSaveError(null);
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
+
     const payload = {
       ...formData,
       id_local: user?.id_local,
+      id_categoria: parseInt(formData.id_categoria) || 3,
       precio_compra: parseFloat(formData.precio_compra) || 0,
-      precio_venta: parseFloat(formData.precio_venta),
-      stock_actual: parseInt(formData.stock_actual),
-      stock_minimo: parseInt(formData.stock_minimo) || 0
+      precio_venta: parseFloat(formData.precio_venta) || 0,
+      stock_actual: parseInt(formData.stock_actual) || 0,
+      stock_minimo: parseInt(formData.stock_minimo) || 0,
+      imagen_url: formData.imagen_url?.trim() || null
     };
 
     try {
-      // apiPost retorna JSON directamente y lanza Error si falla
-      const data = await apiPost(`${API_URL}/api/productos`, payload);
+      let prodId = editingId;
 
-      // Subir todas las imágenes de una vez
-      if (imagenFiles.length > 0 && data.id_producto) {
-        const fd = new FormData();
-        imagenFiles.forEach(file => fd.append('imagenes', file));
-        await fetch(`${API_URL}/api/productos/${data.id_producto}/imagenes`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${getToken()}` },
-          body: fd
-        });
+      if (editingId) {
+        await apiPut(`${API_URL}/api/productos/${editingId}`, payload);
+      } else {
+        const data = await apiPost(`${API_URL}/api/productos`, payload);
+        prodId = data.id_producto;
       }
-      // Subir video si existe
-      if (videoFile && data.id_producto) {
-        const fd = new FormData();
-        fd.append('video', videoFile);
-        await fetch(`${API_URL}/api/productos/${data.id_producto}/video`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${getToken()}` },
-          body: fd
-        });
+
+      // Subir imágenes locales (error no crítico — no cierra el flujo)
+      if (imagenFiles.length > 0 && prodId) {
+        try {
+          const fd = new FormData();
+          imagenFiles.forEach(file => fd.append('imagenes', file));
+          const imgRes = await fetch(`${API_URL}/api/productos/${prodId}/imagenes`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+            body: fd
+          });
+          if (!imgRes.ok) {
+            console.warn('Advertencia al subir imágenes:', await imgRes.text());
+          }
+        } catch (imgErr) {
+          console.warn('Advertencia al subir imágenes:', imgErr);
+        }
       }
+
+      // Subir video (error no crítico — no cierra el flujo)
+      if (videoFile && prodId) {
+        try {
+          const fd = new FormData();
+          fd.append('video', videoFile);
+          const vidRes = await fetch(`${API_URL}/api/productos/${prodId}/video`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}` },
+            body: fd
+          });
+          if (!vidRes.ok) {
+            console.warn('Advertencia al subir video:', await vidRes.text());
+          }
+        } catch (vidErr) {
+          console.warn('Advertencia al subir video:', vidErr);
+        }
+      }
+
+      // Cerrar modal y resetear estado ANTES de recargar lista
       setShowModal(false);
-      setFormData({
-        codigo_barras: '', nombre_producto: '', imagen_url: '',
-        precio_compra: '', precio_venta: '', stock_actual: '', stock_minimo: '',
-        visible_en_tienda: true
-      });
+      setFormData(initialForm);
       setImagenFiles([]);
       setVideoFile(null);
       setVideoPreview(null);
-      fetchProductos();
+      setEditingId(null);
+      setSaveError(null);
+
+      // Recargar lista de productos (independiente — no afecta el éxito del guardado)
+      fetchProductos().catch(err => console.warn('Error recargando productos:', err));
+
     } catch (err) {
-      alert('Error al guardar: ' + err.message);
+      // Error real al guardar el producto (POST/PUT fallido)
+      const msg = err.message || 'Error desconocido al guardar.';
+      setSaveError(msg);
+      console.error('Error al guardar producto:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      await apiDelete(`${API_URL}/api/productos/${id}`);
-      fetchProductos();
+      try {
+        await apiDelete(`${API_URL}/api/productos/${id}`);
+        fetchProductos();
+      } catch (err) {
+        alert('Error al eliminar: ' + err.message);
+      }
     }
   };
 
   const toggleVisibilidad = async (producto) => {
     const nuevaVisibilidad = producto.visible_en_tienda === false;
-    await apiPut(`${API_URL}/api/productos/${producto.id_producto}`, {
-      ...producto,
-      visible_en_tienda: nuevaVisibilidad
-    });
-    fetchProductos();
+    try {
+      await apiPut(`${API_URL}/api/productos/${producto.id_producto}`, {
+        ...producto,
+        visible_en_tienda: nuevaVisibilidad
+      });
+      fetchProductos();
+    } catch (err) {
+      alert('Error al cambiar visibilidad: ' + err.message);
+    }
   };
 
-  // === v1.7.2: Funciones de la galería ===
   const abrirGaleria = async (producto) => {
     setGaleria(producto);
     setGaleriaMsg(null);
@@ -164,15 +270,15 @@ const Inventario = ({ user }) => {
     try {
       const res = await fetch(`${API_URL}/api/productos/${galeria.id_producto}/imagenes`, {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + getToken() }, // sin Content-Type: el browser pone el boundary
+        headers: { Authorization: 'Bearer ' + getToken() },
         body: fd,
       });
       const data = await res.json();
       if (res.ok) {
-        setGaleriaMsg({ type: 'success', text: `Se subieron ${data.imagenes.length} imagen(es).` });
+        setGaleriaMsg({ type: 'success', text: `Se subieron ${data.imagenes?.length || files.length} imagen(es).` });
         const imgs = await apiGet(`${API_URL}/api/productos/${galeria.id_producto}/imagenes`);
         setGaleriaImagenes(Array.isArray(imgs) ? imgs : []);
-        fetchProductos(); // refrescar thumbnails
+        fetchProductos();
       } else {
         setGaleriaMsg({ type: 'error', text: data.error || 'Error al subir imágenes.' });
       }
@@ -180,7 +286,7 @@ const Inventario = ({ user }) => {
       setGaleriaMsg({ type: 'error', text: err.message || 'Error al subir imágenes.' });
     } finally {
       setSubiendo(false);
-      e.target.value = ''; // permitir volver a seleccionar el mismo archivo
+      e.target.value = '';
     }
   };
 
@@ -199,19 +305,25 @@ const Inventario = ({ user }) => {
   return (
     <div className="page-content" style={{ padding: '2rem' }}>
       <div className="flex-between" style={{ marginBottom: '2rem' }}>
-        <h2>Gestión de Catálogo</h2>
-        <button className="btn-primary flex-row" onClick={() => setShowModal(true)}>
+        <div>
+          <h2>Gestión de Catálogo</h2>
+          <p style={{ color: 'var(--text-light)', fontSize: '0.9rem', margin: 0 }}>
+            {productos.length} producto{productos.length !== 1 ? 's' : ''} registrado{productos.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button className="btn-primary flex-row" onClick={abrirCrear}>
           <Plus size={18} /> Nuevo Producto
         </button>
       </div>
 
-      <div className="card" style={{ padding: '0' }}>
+      <div className="card" style={{ padding: '0', overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#f9f9f9', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
               <th style={{ padding: '1rem' }}>Foto</th>
-              <th style={{ padding: '1rem' }}>Serial</th>
+              <th style={{ padding: '1rem' }}>Serial / Código</th>
               <th style={{ padding: '1rem' }}>Producto</th>
+              <th style={{ padding: '1rem' }}>Categoría</th>
               <th style={{ padding: '1rem' }}>Precio Venta</th>
               <th style={{ padding: '1rem' }}>Stock</th>
               <th style={{ padding: '1rem', textAlign: 'center' }}>Tienda</th>
@@ -219,50 +331,71 @@ const Inventario = ({ user }) => {
             </tr>
           </thead>
           <tbody>
-            {productos.map(p => (
-              <tr key={p.id_producto} style={{ borderBottom: '1px solid var(--border-color)', opacity: p.visible_en_tienda === false ? 0.5 : 1 }}>
-                <td style={{ padding: '1rem' }}>
-                  {p.imagen_url ? (
-                    <img src={p.imagen_url} alt={p.nombre_producto} style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />
-                  ) : (
-                    <div style={{ width: '40px', height: '40px', backgroundColor: '#eee', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <ImageIcon size={20} color="var(--text-light)" />
+            {productos.map(p => {
+              const fotoUrl = resolverUrlImagen(p.imagen_url);
+              return (
+                <tr key={p.id_producto} style={{ borderBottom: '1px solid var(--border-color)', opacity: p.visible_en_tienda === false ? 0.5 : 1 }}>
+                  <td style={{ padding: '1rem' }}>
+                    {fotoUrl ? (
+                      <img 
+                        src={fotoUrl} 
+                        alt={p.nombre_producto} 
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                        }}
+                        style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0' }} 
+                      />
+                    ) : (
+                      <div style={{ width: '44px', height: '44px', backgroundColor: '#f1f5f9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ImageIcon size={20} color="var(--text-light)" />
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '1rem', color: 'var(--text-light)', fontSize: '0.9rem' }}>{p.codigo_barras || '—'}</td>
+                  <td style={{ padding: '1rem', fontWeight: 600 }}>{p.nombre_producto}</td>
+                  <td style={{ padding: '1rem' }}>
+                    <span style={{ fontSize: '0.78rem', padding: '0.2rem 0.6rem', borderRadius: '12px', background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>
+                      {p.nombre_categoria || 'General'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '1rem', color: 'var(--primary-color)', fontWeight: 700 }}>{formatearCOP(p.precio_venta)}</td>
+                  <td style={{ padding: '1rem' }}>
+                    <span style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', backgroundColor: p.stock_actual <= (p.stock_minimo || 0) ? 'rgba(231,111,81,0.12)' : 'rgba(42,157,143,0.12)', color: p.stock_actual <= (p.stock_minimo || 0) ? 'var(--accent-color)' : 'var(--primary-color)', fontSize: '0.8rem', fontWeight: 700 }}>
+                      {p.stock_actual} ud.
+                    </span>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={p.visible_en_tienda !== false} onChange={() => toggleVisibilidad(p)}
+                        style={{ opacity: 0, width: 0, height: 0 }} />
+                      <span style={{ position: 'absolute', inset: 0, borderRadius: '22px', transition: 'all .3s', background: p.visible_en_tienda !== false ? '#2A9D8F' : '#cbd5e1' }}></span>
+                      <span style={{ position: 'absolute', height: '16px', width: '16px', left: p.visible_en_tienda !== false ? '20px' : '3px', bottom: '3px', background: '#fff', borderRadius: '50%', transition: 'all .3s' }}></span>
+                    </label>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', alignItems: 'center' }}>
+                      <button onClick={() => abrirEditar(p)} title="Editar producto"
+                        style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', cursor: 'pointer', padding: '0.45rem', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
+                        <Edit3 size={16} />
+                      </button>
+                      <button onClick={() => abrirGaleria(p)} title="Ver / gestionar fotos"
+                        style={{ backgroundColor: 'var(--green-light)', border: '1px solid var(--border-soft)', color: 'var(--green-primary)', cursor: 'pointer', padding: '0.45rem 0.65rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                        <ImagePlus size={16} />
+                        {(p.imagenes && p.imagenes.length) ? `${p.imagenes.length}` : ''}
+                      </button>
+                      <button onClick={() => handleDelete(p.id_producto)} title="Eliminar producto"
+                        style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '0.45rem' }}>
+                        <Trash2 size={17} />
+                      </button>
                     </div>
-                  )}
-                </td>
-                <td style={{ padding: '1rem', color: 'var(--text-light)', fontSize: '0.9rem' }}>{p.codigo_barras || '—'}</td>
-                <td style={{ padding: '1rem', fontWeight: 500 }}>{p.nombre_producto}</td>
-                <td style={{ padding: '1rem', color: 'var(--primary-color)', fontWeight: 600 }}>{formatearCOP(p.precio_venta)}</td>
-                <td style={{ padding: '1rem' }}>
-                  <span style={{ padding: '0.2rem 0.6rem', borderRadius: '12px', backgroundColor: p.stock_actual <= p.stock_minimo ? 'rgba(231,111,81,0.1)' : 'rgba(42,157,143,0.1)', color: p.stock_actual <= p.stock_minimo ? 'var(--accent-color)' : 'var(--primary-color)', fontSize: '0.8rem', fontWeight: 600 }}>
-                    {p.stock_actual} ud.
-                  </span>
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={p.visible_en_tienda !== false} onChange={() => toggleVisibilidad(p)}
-                      style={{ opacity: 0, width: 0, height: 0 }} />
-                    <span style={{ position: 'absolute', inset: 0, borderRadius: '22px', transition: 'all .3s', background: p.visible_en_tienda !== false ? '#2A9D8F' : '#aaa' }}></span>
-                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: p.visible_en_tienda !== false ? '20px' : '3px', bottom: '3px', background: '#fff', borderRadius: '50%', transition: 'all .3s' }}></span>
-                  </label>
-                </td>
-                <td style={{ padding: '1rem', textAlign: 'center' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
-                    <button onClick={() => abrirGaleria(p)} title="Ver / subir fotos"
-                      style={{ backgroundColor: 'var(--green-light)', border: '1px solid var(--border-soft)', color: 'var(--green-primary)', cursor: 'pointer', padding: '0.5rem 0.7rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: 600 }}>
-                      <ImagePlus size={16} />
-                      {(p.imagenes && p.imagenes.length) ? `${p.imagenes.length}` : ''}
-                    </button>
-                    <button onClick={() => handleDelete(p.id_producto)} style={{ backgroundColor: 'transparent', border: 'none', color: 'var(--accent-color)', cursor: 'pointer', padding: '0.5rem' }}>
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
             {productos.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-light)' }}>
+                <td colSpan="8" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-light)' }}>
                   No tienes productos registrados en tu local. Agrega tu primer producto.
                 </td>
               </tr>
@@ -271,21 +404,76 @@ const Inventario = ({ user }) => {
         </table>
       </div>
 
+      {/* Modal Crear / Editar Producto */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
+          <div className="modal-content" style={{ maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
-              <h2>Agregar Nuevo Producto</h2>
-              <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
+              <h2>{editingId ? 'Editar Producto' : 'Agregar Nuevo Producto'}</h2>
+              <button className="close-btn" onClick={() => { setShowModal(false); setSaveError(null); }}>×</button>
             </div>
+            {/* Mensaje de error al guardar */}
+            {saveError && (
+              <div style={{
+                margin: '0 0 1rem 0',
+                padding: '0.85rem 1rem',
+                borderRadius: '10px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#dc2626',
+                fontSize: '0.88rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
+                <div>
+                  <strong>Error al guardar:</strong> {saveError}
+                  <div style={{ marginTop: '0.25rem', fontSize: '0.8rem', color: '#991b1b' }}>Verifica tu conexión y vuelve a intentarlo.</div>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label>Nombre del Producto</label>
-                <input type="text" name="nombre_producto" value={formData.nombre_producto} onChange={handleChange} required />
+                <label>Nombre del Producto *</label>
+                <input type="text" name="nombre_producto" value={formData.nombre_producto} onChange={handleChange} required placeholder="Ej: iPhone 15 Pro Max 256GB" />
               </div>
+
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Categoría</label>
+                  <select name="id_categoria" value={formData.id_categoria} onChange={handleChange} style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                    {categorias.map(cat => (
+                      <option key={cat.id_categoria} value={cat.id_categoria}>{cat.nombre_categoria}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Número Serial / Código de Barras</label>
+                  <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
+                </div>
+              </div>
+
+              {/* URL Directa de Imagen (Opcional) */}
               <div className="form-group">
-                <label>Fotografías del Producto</label>
-                {/* Previews de imágenes seleccionadas */}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <LinkIcon size={14} /> URL Directa de Imagen (opcional o de la web)
+                </label>
+                <input 
+                  type="url" 
+                  name="imagen_url" 
+                  value={formData.imagen_url || ''} 
+                  onChange={handleChange} 
+                  placeholder="https://ejemplo.com/foto-producto.png" 
+                />
+                <small style={{ color: 'var(--text-light)', fontSize: '0.75rem' }}>
+                  Puedes pegar un enlace directo de internet o seleccionar archivos abajo.
+                </small>
+              </div>
+
+              {/* Fotografías locales del Producto */}
+              <div className="form-group">
+                <label>Fotografías del Producto (subir archivos)</label>
                 {imagenFiles.length > 0 && (
                   <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
                     {imagenFiles.map((file, i) => (
@@ -296,124 +484,127 @@ const Inventario = ({ user }) => {
                     ))}
                   </div>
                 )}
-                <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.5rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)', transition: 'border-color 0.2s' }}>
-                  <Upload size={32} color="var(--text-light)" />
-                  <span style={{ marginTop: '0.5rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Seleccionar varias fotos a la vez</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>JPG, PNG o WebP · máx 5 MB c/u · Selecciona todas las que quieras</span>
+                <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.25rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)', transition: 'border-color 0.2s' }}>
+                  <Upload size={28} color="var(--text-light)" />
+                  <span style={{ marginTop: '0.4rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Seleccionar fotos locales</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>JPG, PNG o WebP · Puedes seleccionar varias</span>
                   <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={handleImagesChange} style={{ display: 'none' }} />
                 </label>
-                <small style={{ color: 'var(--text-light)' }}>Selecciona todas las imágenes de una vez. La primera será la principal.</small>
               </div>
+
+              {/* Video del Producto (opcional) */}
               <div className="form-group">
                 <label>Video del Producto (opcional)</label>
                 {videoPreview ? (
                   <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
-                    <video src={videoPreview} controls style={{ width: '100%', maxHeight: '200px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <video src={videoPreview} controls style={{ width: '100%', maxHeight: '180px', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
                     <button type="button" onClick={removeVideo} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <X size={14} />
                     </button>
                   </div>
                 ) : (
-                  <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.5rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)' }}>
-                    <Upload size={28} color="var(--text-light)" />
-                    <span style={{ marginTop: '0.4rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Haz clic para seleccionar un video</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>MP4, WebM o MOV · máx 50 MB</span>
+                  <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)' }}>
+                    <Upload size={24} color="var(--text-light)" />
+                    <span style={{ marginTop: '0.3rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Seleccionar video (MP4, WebM)</span>
                     <input type="file" accept=".mp4,.webm,.mov" onChange={handleVideoChange} style={{ display: 'none' }} />
                   </label>
                 )}
-                <small style={{ color: 'var(--text-light)' }}>Opcional. Los clientes podrán ver el video en la tienda.</small>
               </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label>Número Serial</label>
-                  <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
-                </div>
-                <div></div>
-              </div>
-              {/* ── Precios + Calculadora de Ganancia ── */}
+
+              {/* Precios + Calculadora de Ganancia */}
               <div className="grid-2">
                 <div className="form-group">
                   <label>Precio de Compra (COP)</label>
                   <input type="number" name="precio_compra" min="0" value={formData.precio_compra} onChange={handleChange} placeholder="Ej: 450000" />
                 </div>
                 <div className="form-group">
-                  <label>Precio de Venta (COP)</label>
+                  <label>Precio de Venta (COP) *</label>
                   <input type="number" name="precio_venta" min="0" value={formData.precio_venta} onChange={handleChange} required placeholder="Ej: 600000" />
                 </div>
               </div>
+
               {Number(formData.precio_compra) > 0 && Number(formData.precio_venta) > 0 && (
                 <div style={{
                   background: Number(formData.precio_venta) >= Number(formData.precio_compra)
                     ? 'linear-gradient(135deg, rgba(42,157,143,0.12), rgba(38,70,83,0.12))'
                     : 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(180,40,40,0.12))',
                   border: `1px solid ${Number(formData.precio_venta) >= Number(formData.precio_compra) ? 'rgba(42,157,143,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                  borderRadius: '12px', padding: '1rem 1.25rem', marginTop: '0.5rem', marginBottom: '0.5rem'
+                  borderRadius: '12px', padding: '0.9rem 1.25rem', marginTop: '0.25rem', marginBottom: '0.75rem'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                    <span style={{ fontSize: '1.1rem' }}>💰</span>
-                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Resumen de Ganancia</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem' }}>💰</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Resumen de Margen</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', textAlign: 'center' }}>
                     <div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Ganancia Unitaria</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>Ganancia Unitaria</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
                         ${Number(formData.precio_venta - formData.precio_compra).toLocaleString('es-CO')}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Margen</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>Margen</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
                         {(((Number(formData.precio_venta) - Number(formData.precio_compra)) / Number(formData.precio_compra)) * 100).toFixed(1)}%
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Ganancia Total (x{formData.stock_actual || 1})</div>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)' }}>Ganancia Total</div>
+                      <div style={{ fontSize: '1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
                         ${((Number(formData.precio_venta) - Number(formData.precio_compra)) * (parseInt(formData.stock_actual) || 1)).toLocaleString('es-CO')}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
+
               <div className="grid-2">
                 <div className="form-group">
-                  <label>Stock Físico Inicial</label>
+                  <label>Stock Físico Inicial *</label>
                   <input type="number" name="stock_actual" min="0" value={formData.stock_actual} onChange={handleChange} required />
                 </div>
                 <div className="form-group">
-                  <label>Stock Mínimo (Alerta en 0)</label>
+                  <label>Stock Mínimo (Alerta)</label>
                   <input type="number" name="stock_minimo" min="0" value={formData.stock_minimo} onChange={handleChange} placeholder="1" />
-                  <small style={{ color: 'var(--text-light)' }}>Se alerta cuando el stock llegue a este número.</small>
                 </div>
               </div>
-              {/* ── Toggle visibilidad en tienda ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1rem', background: 'var(--bg-light)', borderRadius: '10px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+
+              {/* Toggle visibilidad en tienda */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: 'var(--bg-light)', borderRadius: '10px', marginTop: '0.5rem', marginBottom: '1rem' }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Visible en tienda web</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>Si está activo, este producto aparece en la página pública de la tienda.</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>Activa este producto para pedidos online.</div>
                 </div>
-                <label style={{ position: 'relative', display: 'inline-block', width: '48px', height: '26px', cursor: 'pointer' }}>
+                <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
                   <input type="checkbox" name="visible_en_tienda" checked={formData.visible_en_tienda !== false} onChange={handleChange} style={{ opacity: 0, width: 0, height: 0 }} />
                   <span style={{
-                    position: 'absolute', inset: 0, borderRadius: '26px', transition: 'all .3s',
-                    background: formData.visible_en_tienda !== false ? '#2A9D8F' : '#555'
+                    position: 'absolute', inset: 0, borderRadius: '24px', transition: 'all .3s',
+                    background: formData.visible_en_tienda !== false ? '#2A9D8F' : '#cbd5e1'
                   }}></span>
                   <span style={{
-                    position: 'absolute', height: '20px', width: '20px', left: formData.visible_en_tienda !== false ? '24px' : '3px',
-                    bottom: '3px', background: '#fff', borderRadius: '50%', transition: 'all .3s'
+                    position: 'absolute', height: '18px', width: '18px', left: formData.visible_en_tienda !== false ? '22px' : '3px', bottom: '3px',
+                    background: '#fff', borderRadius: '50%', transition: 'all .3s'
                   }}></span>
                 </label>
               </div>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Guardar Producto</button>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" className="btn-secondary" onClick={() => { setShowModal(false); setSaveError(null); }}>Cancelar</button>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                      Guardando...
+                    </span>
+                  ) : (editingId ? 'Actualizar Producto' : 'Guardar Producto')}
+                </button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* v1.7.2: Modal de galería de imágenes */}
+      {/* Modal de Galería de Imágenes */}
       {galeria && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '680px', maxHeight: '85vh', overflowY: 'auto' }}>
@@ -433,18 +624,21 @@ const Inventario = ({ user }) => {
 
             {/* Grid de imágenes */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              {galeriaImagenes.map(img => (
-                <div key={img.id} style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)', aspectRatio: '1/1' }}>
-                  <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <button onClick={() => eliminarImagen(img.id)} title="Eliminar imagen"
-                    style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%', border: 'none', backgroundColor: 'rgba(0,0,0,0.55)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
+              {galeriaImagenes.map(img => {
+                const imgRes = resolverUrlImagen(img.url);
+                return (
+                  <div key={img.id} style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)', aspectRatio: '1/1' }}>
+                    <img src={imgRes} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button onClick={() => eliminarImagen(img.id)} title="Eliminar imagen"
+                      style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%', border: 'none', backgroundColor: 'rgba(0,0,0,0.6)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
               {galeriaImagenes.length === 0 && (
                 <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', color: 'var(--text-light)', border: '1px dashed var(--border-color)', borderRadius: '10px', fontSize: '0.9rem' }}>
-                  Este producto aún no tiene fotos. Sube una o varias.
+                  Este producto aún no tiene fotos en su galería. Sube una o varias abajo.
                 </div>
               )}
             </div>
@@ -453,10 +647,10 @@ const Inventario = ({ user }) => {
             <div style={{ border: '1px dashed var(--green-primary)', borderRadius: '10px', padding: '1rem', textAlign: 'center', backgroundColor: 'var(--green-light)' }}>
               <label style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', color: 'var(--green-primary)', fontWeight: 600 }}>
                 <Upload size={22} />
-                {subiendo ? 'Subiendo...' : 'Haz clic para seleccionar fotos (puedes elegir varias)'}
+                {subiendo ? 'Subiendo...' : 'Haz clic para seleccionar fotos adicionales'}
                 <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={subirImagenes} disabled={subiendo} style={{ display: 'none' }} />
               </label>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', margin: '0.4rem 0 0' }}>JPG, PNG o WebP · máx 5 MB por archivo · hasta 10 fotos</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-light)', margin: '0.4rem 0 0' }}>JPG, PNG o WebP · máx 10 MB por archivo</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
