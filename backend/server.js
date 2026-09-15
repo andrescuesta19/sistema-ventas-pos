@@ -624,8 +624,8 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Error en Google auth:', err);
-        res.status(500).json({ error: 'Error al autenticar con Google.' });
+        console.error('[GoogleAuth] Error detallado:', err.message, err.stack?.split('\n')[1]);
+        res.status(500).json({ error: 'Error al autenticar con Google.', detail: err.message });
     }
 });
 
