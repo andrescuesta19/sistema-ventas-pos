@@ -430,44 +430,39 @@ const Registro = ({ onRegister }) => {
           </AnimatePresence>
 
           {/* v2.2.2: Separador y botón de Google */}
-          {registroHabilitado && (
-            <>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-                margin: '1.5rem 0 1rem',
-              }}>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
-                <span style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.4)', whiteSpace: 'nowrap' }}>
-                  O regístrate con
-                </span>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
-              </div>
-              <GoogleLoginButton
-                text="Registrarse con Google"
-                onSuccess={(data) => {
-                  if (data.token && data.user) {
-                    setSession(data.token, data.user);
-                    if (onRegister) onRegister(data.user);
-                    setInfo('¡Cuenta creada con Google! Pendiente de aprobación.');
-                    setTimeout(() => navigate('/dashboard'), 600);
-                  }
-                }}
-                onError={(msg) => setError(msg)}
-              />
-            </>
-          )}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            margin: '1.5rem 0 1rem',
+          }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+            <span style={{ fontSize: '0.8rem', color: 'rgba(255, 255, 255, 0.4)', whiteSpace: 'nowrap' }}>
+              O regístrate con
+            </span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
+          </div>
+          <GoogleLoginButton
+            text="Registrarse con Google"
+            onSuccess={(data) => {
+              if (data.token && data.user) {
+                setSession(data.token, data.user);
+                if (onRegister) onRegister(data.user);
+                setInfo('¡Cuenta creada con Google! Pendiente de aprobación.');
+                setTimeout(() => navigate('/dashboard'), 600);
+              }
+            }}
+            onError={(msg) => setError(msg)}
+          />
 
-            <p style={{ textAlign: 'center', marginTop: '1.25rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.88rem' }}>
-              <Link to="/login" style={{ color: '#7ed957', textDecoration: 'none', fontWeight: 600 }}>
-                ¿Ya tienes cuenta? Inicia sesión
-              </Link>
-            </p>
-          </motion.div>
-        </div>
-      </div>
-    </div>
+          <p style={{ textAlign: 'center', marginTop: '1.25rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.88rem' }}>
+            <Link to="/login" style={{ color: '#7ed957', textDecoration: 'none', fontWeight: 600 }}>
+              ¿Ya tienes cuenta? Inicia sesión
+            </Link>
+          </p>
+        </>
+      )}
+    </motion.div>
   );
 };
 
