@@ -187,7 +187,7 @@ app.get('/tienda/:idLocal', async (req, res) => {
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
         const { rows: productos } = await db.query(`
-            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.stock_actual, c.nombre_categoria
+            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, c.nombre_categoria
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1 AND p.stock_actual > 0 ORDER BY p.stock_actual DESC
         `, [idLocal]);
@@ -205,11 +205,14 @@ app.get('/tienda/:idLocal', async (req, res) => {
 
         const prodsJSON = JSON.stringify(productos.map(p => {
             let img = p.imagen_url || '';
-            // Si es ruta local (/uploads/...), prepend la URL del backend
             if (img.startsWith('/uploads/')) {
                 img = baseUrl + img;
             }
-            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, s: p.stock_actual, c: p.nombre_categoria || '' };
+            let vid = p.video_url || '';
+            if (vid.startsWith('/uploads/')) {
+                vid = baseUrl + vid;
+            }
+            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '' };
         }));
 
         const prodsHTML = productos.map(p => {
@@ -1754,10 +1757,10 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url } = req.body;
+        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url } = req.body;
         await db.query(
-            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6 WHERE id_producto=$7`,
-            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, req.params.id]
+            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, video_url=$7 WHERE id_producto=$8`,
+            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url || null, video_url || null, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1768,14 +1771,14 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
+        const { id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_producto`,
-            [id_local, codigo_barras, nombre_producto, imagen_url, precio_compra, precio_venta, stock_actual, stock_minimo]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_producto`,
+            [id_local, codigo_barras, nombre_producto, imagen_url || null, video_url || null, precio_compra, precio_venta, stock_actual, stock_minimo]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
@@ -4490,6 +4493,67 @@ app.delete('/api/productos/:id/imagen', requireAuth, requireAprobado, async (req
             if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
         }
         await db.query('UPDATE productos SET imagen_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// POST /api/productos/:id/video — subir o reemplazar video
+const uploadVideo = multer({
+    storage: isProduction ? multer.memoryStorage() : multer.diskStorage({
+        destination: (req, file, cb) => cb(null, uploadsDir),
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            cb(null, `video_${req.params.id}_${Date.now()}${ext}`);
+        }
+    }),
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.mp4', '.webm', '.mov', '.avi'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) {
+            return cb(new Error('Solo se permiten videos MP4, WebM, MOV o AVI.'));
+        }
+        cb(null, true);
+    }
+});
+
+app.post('/api/productos/:id/video', requireAuth, requireAprobado, uploadVideo.single('video'), async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        if (!req.file) return res.status(400).json({ error: 'No se recibió ningún video.' });
+
+        const videoUrl = `/uploads/productos/${req.file.filename}`;
+
+        // Eliminar video anterior si existe
+        const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        if (old.rows[0]?.video_url) {
+            const oldPath = path.join(__dirname, old.rows[0].video_url);
+            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        }
+
+        await db.query('UPDATE productos SET video_url=$1 WHERE id_producto=$2 AND id_local=$3', [videoUrl, idProd, idLocal]);
+        res.json({ success: true, video_url: videoUrl });
+    } catch (err) {
+        console.error('Error subiendo video:', err);
+        res.status(500).json({ error: 'Error al subir el video.' });
+    }
+});
+
+// DELETE /api/productos/:id/video — eliminar video
+app.delete('/api/productos/:id/video', requireAuth, requireAprobado, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const idProd = Number(req.params.id);
+        const r = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+        const vidUrl = r.rows[0]?.video_url;
+        if (vidUrl) {
+            const fullPath = path.join(__dirname, vidUrl);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
+        await db.query('UPDATE productos SET video_url=NULL WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Error interno del servidor.' });
