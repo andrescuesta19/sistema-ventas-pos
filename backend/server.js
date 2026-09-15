@@ -201,15 +201,24 @@ app.get('/tienda/:idLocal', async (req, res) => {
 
         const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
         const telWA = (local.telefono || '').replace(/\D/g, '');
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        const prodsJSON = JSON.stringify(productos.map(p => ({
-            id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta),
-            img: p.imagen_url || '', s: p.stock_actual, c: p.nombre_categoria || ''
-        })));
+        const prodsJSON = JSON.stringify(productos.map(p => {
+            let img = p.imagen_url || '';
+            // Si es ruta local (/uploads/...), prepend la URL del backend
+            if (img.startsWith('/uploads/')) {
+                img = baseUrl + img;
+            }
+            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, s: p.stock_actual, c: p.nombre_categoria || '' };
+        }));
 
         const prodsHTML = productos.map(p => {
-            const img = p.imagen_url
-                ? `<img src="${p.imagen_url}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=ni>📦</div>'">`
+            let imgSrc = p.imagen_url || '';
+            if (imgSrc.startsWith('/uploads/')) {
+                imgSrc = baseUrl + imgSrc;
+            }
+            const img = imgSrc
+                ? `<img src="${imgSrc}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=ni>📦</div>'">`
                 : '<div class="ni">📦</div>';
             const badge = p.stock_actual <= 5 ? `<span class="bl">¡Últimas ${p.stock_actual}!</span>` : '';
             const cat = p.nombre_categoria ? `<span class="tg">${p.nombre_categoria}</span>` : '';
@@ -420,8 +429,8 @@ async function requireAprobado(req, res, next) {
 
 // Middleware: requiere rol Administrador
 function requireAdmin(req, res, next) {
-    if (!req.user || req.user.rol !== 'Administrador') {
-        return res.status(403).json({ error: 'Se requiere rol de Administrador.' });
+    if (!req.user || !['Administrador', 'Vendedor'].includes(req.user.rol)) {
+        return res.status(403).json({ error: 'Se requiere rol de Administrador o Vendedor.' });
     }
     next();
 }

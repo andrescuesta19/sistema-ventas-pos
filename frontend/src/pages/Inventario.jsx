@@ -15,6 +15,8 @@ const Inventario = ({ user }) => {
     stock_actual: '',
     stock_minimo: ''
   });
+  const [imagenFile, setImagenFile] = useState(null);
+  const [imagenPreview, setImagenPreview] = useState(null);
 
   // === v1.7.2: Galería de imágenes ===
   const [galeria, setGaleria] = useState(null);      // producto seleccionado o null
@@ -37,28 +39,53 @@ const Inventario = ({ user }) => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImagenFile(file);
+      setImagenPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeImage = () => {
+    setImagenFile(null);
+    setImagenPreview(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const payload = {
       ...formData,
       id_local: user?.id_local,
-      precio_compra: parseFloat(formData.precio_compra),
+      precio_compra: parseFloat(formData.precio_compra) || 0,
       precio_venta: parseFloat(formData.precio_venta),
       stock_actual: parseInt(formData.stock_actual),
-      stock_minimo: parseInt(formData.stock_minimo)
+      stock_minimo: parseInt(formData.stock_minimo) || 0
     };
 
     const res = await apiPost(`${API_URL}/api/productos`, payload);
 
     if (res.ok) {
+      // Si hay archivo de imagen, subirlo al producto creado
+      if (imagenFile && res.id_producto) {
+        const fd = new FormData();
+        fd.append('imagen', imagenFile);
+        await fetch(`${API_URL}/api/productos/${res.id_producto}/imagen`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+          body: fd
+        });
+      }
       setShowModal(false);
       setFormData({
         codigo_barras: '', nombre_producto: '', imagen_url: '',
         precio_compra: '', precio_venta: '', stock_actual: '', stock_minimo: ''
       });
+      setImagenFile(null);
+      setImagenPreview(null);
       fetchProductos();
     } else {
-      alert('Error al guardar el producto');
+      alert('Error al guardar el producto: ' + (res.error || 'Error desconocido'));
     }
   };
 
@@ -211,9 +238,23 @@ const Inventario = ({ user }) => {
                 <input type="text" name="nombre_producto" value={formData.nombre_producto} onChange={handleChange} required />
               </div>
               <div className="form-group">
-                <label>URL de la Fotografía (opcional)</label>
-                <input type="url" name="imagen_url" placeholder="https://..." value={formData.imagen_url} onChange={handleChange} />
-                <small style={{ color: 'var(--text-light)' }}>También puedes subir varias fotos después de crear el producto con el botón de imágenes.</small>
+                <label>Fotografía del Producto</label>
+                {imagenPreview ? (
+                  <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+                    <img src={imagenPreview} alt="Vista previa" style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border-color)' }} />
+                    <button type="button" onClick={removeImage} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2rem', border: '2px dashed var(--border-color)', borderRadius: '10px', cursor: 'pointer', backgroundColor: 'var(--bg-light)', transition: 'border-color 0.2s' }}>
+                    <Upload size={32} color="var(--text-light)" />
+                    <span style={{ marginTop: '0.5rem', color: 'var(--text-light)', fontSize: '0.85rem' }}>Haz clic para seleccionar una foto</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>JPG, PNG o WebP · máx 5 MB</span>
+                    <input type="file" accept=".jpg,.jpeg,.png,.webp" onChange={handleImageChange} style={{ display: 'none' }} />
+                  </label>
+                )}
+                <small style={{ color: 'var(--text-light)' }}>Opcional. También puedes agregar más fotos después con el botón de imágenes.</small>
               </div>
               <div className="grid-2">
                 <div className="form-group">
