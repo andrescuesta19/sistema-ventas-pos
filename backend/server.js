@@ -174,10 +174,22 @@ const frontendPaths = [
     path.join(__dirname, '..', 'frontend', 'dist'),
     path.join(__dirname, 'dist'),
 ];
+console.log('[Frontend] Buscando archivos estáticos...');
 for (const fp of frontendPaths) {
-    if (fs.existsSync(fp)) {
+    const exists = fs.existsSync(fp);
+    console.log(`[Frontend] ${fp} → ${exists ? '✅ EXISTE' : '❌ no existe'}`);
+    if (exists) {
+        // Listar primeros archivos para debug
+        try {
+            const files = fs.readdirSync(fp);
+            console.log(`[Frontend] Archivos en ${fp}: ${files.join(', ')}`);
+            if (fs.existsSync(path.join(fp, 'assets'))) {
+                const assets = fs.readdirSync(path.join(fp, 'assets'));
+                console.log(`[Frontend] Archivos en assets/: ${assets.slice(0, 5).join(', ')}...`);
+            }
+        } catch(e) {}
         app.use(express.static(fp));
-        console.log(`[Frontend] Sirviendo archivos estáticos desde: ${fp}`);
+        console.log(`[Frontend] ✅ Sirviendo desde: ${fp}`);
         break;
     }
 }
@@ -5343,13 +5355,18 @@ app.get('/api/actualizaciones', async (req, res) => {
     }
 });
 
-// v2.2.2: Catch-all — servir index.html para rutas del frontend (React Router)
+// v2.2.3: Catch-all — servir index.html para rutas del frontend (React Router)
 // Esto permite que /tienda/:idLocal, /login, /dashboard, etc. funcionen
 const frontendIndex = frontendPaths.map(fp => path.join(fp, 'index.html')).find(fp => fs.existsSync(fp));
+console.log(`[Frontend] Index HTML: ${frontendIndex || 'NO ENCONTRADO'}`);
 app.use((req, res, next) => {
     // Si es API o uploads, pasar al 404
     if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/updates/')) {
         return res.status(404).json({ error: 'Ruta no encontrada.' });
+    }
+    // Si el request es para un archivo con extensión (js, css, png, etc) y no existe, 404
+    if (path.extname(req.path)) {
+        return res.status(404).json({ error: 'Archivo no encontrado.' });
     }
     // Si existe el index.html del frontend, servirlo (React Router se encarga)
     if (frontendIndex) {

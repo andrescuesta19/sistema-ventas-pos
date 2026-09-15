@@ -4,11 +4,16 @@ services:
     runtime: node
     plan: free
     buildCommand: |
-      cd frontend && npm install && npm run build && cd ..
+      cd frontend
+      npm install
+      npm run build
+      cd ..
       mkdir -p backend/frontend
-      cp -r frontend/dist backend/frontend/
-      cd backend && npm install
-    startCommand: node server.js
+      rm -rf backend/frontend/dist
+      cp -r frontend/dist backend/frontend/dist
+      cd backend
+      npm install
+    startCommand: cd backend && node server.js
     envVars:
       - key: DATABASE_URL
         sync: false
