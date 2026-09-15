@@ -78,24 +78,25 @@ const Inventario = ({ user }) => {
       stock_minimo: parseInt(formData.stock_minimo) || 0
     };
 
-    const res = await apiPost(`${API_URL}/api/productos`, payload);
+    try {
+      // apiPost retorna JSON directamente y lanza Error si falla
+      const data = await apiPost(`${API_URL}/api/productos`, payload);
 
-    if (res.ok) {
       // Subir imagen si existe
-      if (imagenFile && res.id_producto) {
+      if (imagenFile && data.id_producto) {
         const fd = new FormData();
         fd.append('imagen', imagenFile);
-        await fetch(`${API_URL}/api/productos/${res.id_producto}/imagen`, {
+        await fetch(`${API_URL}/api/productos/${data.id_producto}/imagen`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${getToken()}` },
           body: fd
         });
       }
       // Subir video si existe
-      if (videoFile && res.id_producto) {
+      if (videoFile && data.id_producto) {
         const fd = new FormData();
         fd.append('video', videoFile);
-        await fetch(`${API_URL}/api/productos/${res.id_producto}/video`, {
+        await fetch(`${API_URL}/api/productos/${data.id_producto}/video`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${getToken()}` },
           body: fd
@@ -111,8 +112,8 @@ const Inventario = ({ user }) => {
       setVideoFile(null);
       setVideoPreview(null);
       fetchProductos();
-    } else {
-      alert('Error al guardar el producto: ' + (res.error || 'Error desconocido'));
+    } catch (err) {
+      alert('Error al guardar: ' + err.message);
     }
   };
 
@@ -304,8 +305,8 @@ const Inventario = ({ user }) => {
               </div>
               <div className="grid-2">
                 <div className="form-group">
-                  <label>Código Interno (SKU)</label>
-                  <input type="text" name="codigo_barras" value={formData.codigo_barras} onChange={handleChange} required />
+                  <label>Número Serial</label>
+                  <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
                 </div>
                 <div className="form-group">
                   <label>Precio de Venta (COP)</label>
@@ -315,11 +316,12 @@ const Inventario = ({ user }) => {
               <div className="grid-2">
                 <div className="form-group">
                   <label>Stock Físico Inicial</label>
-                  <input type="number" name="stock_actual" value={formData.stock_actual} onChange={handleChange} required />
+                  <input type="number" name="stock_actual" min="0" value={formData.stock_actual} onChange={handleChange} required />
                 </div>
                 <div className="form-group">
-                  <label>Stock Mínimo (Alerta)</label>
-                  <input type="number" name="stock_minimo" value={formData.stock_minimo} onChange={handleChange} required />
+                  <label>Stock Mínimo (Alerta en 0)</label>
+                  <input type="number" name="stock_minimo" min="0" value={formData.stock_minimo} onChange={handleChange} placeholder="1" />
+                  <small style={{ color: 'var(--text-light)' }}>Se alerta cuando el stock llegue a este número.</small>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
