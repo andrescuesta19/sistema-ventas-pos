@@ -6,6 +6,14 @@ const { spawn, exec, execFile } = require('child_process');
 const net = require('net');
 
 // ─────────────────────────────────────────────────────────
+// PROTOCOLO PERSONALIZADO: pos:// para Google OAuth
+// ─────────────────────────────────────────────────────────
+// v2.2.2: Registramos el protocolo "pos://" para que Google OAuth
+// pueda redirigir de vuelta a la app de Electron.
+// Ejemplo: pos://callback?token=xxx
+const PROTOCOL_KEY = 'pos';
+
+// ─────────────────────────────────────────────────────────
 // BACKEND: Arranque automático en producción + WATCHDOG
 // ─────────────────────────────────────────────────────────
 // En producción (app empaquetada), arrancamos el backend como proceso hijo.
@@ -648,6 +656,56 @@ async function checkActualizaciones() {
 // ─────────────────────────────────────────────────────────
 const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === 'true';
 const BACKEND_PORT = parseInt(process.env.PORT || '3000', 10);
+
+// v2.2.2: Registrar protocolo personalizado ANTES de app.whenReady()
+app.setAsDefaultProtocolClient(PROTOCOL_KEY);
+
+// Manejar URLs del protocolo pos://
+// En Mac: app.on('open-url')
+// En Windows/Linux: segundo instancia de la app
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine) => {
+    // Windows/Linux: extraer URL del protocolo
+    const url = commandLine.find(arg => arg.startsWith(`${PROTOCOL_KEY}://`));
+    if (url) {
+      handleProtocolUrl(url);
+    }
+    // Si la ventana está minimizada, restaurarla
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
+// Mac: open-url se dispara cuando la app ya está abierta
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleProtocolUrl(url);
+});
+
+function handleProtocolUrl(url) {
+  // Extraer el token de la URL: pos://callback?token=xxx
+  try {
+    const parsed = new URL(url);
+    const token = parsed.searchParams.get('token');
+    const user = parsed.searchParams.get('user');
+    
+    if (token && mainWindow && !mainWindow.isDestroyed()) {
+      // Enviar el token al renderer process
+      mainWindow.webContents.send('google-auth-callback', {
+        token,
+        user: user ? JSON.parse(decodeURIComponent(user)) : null,
+      });
+      console.log('✅ Google OAuth callback recibido via pos:// protocol');
+    }
+  } catch (err) {
+    console.error('Error procesando protocolo pos://:', err);
+  }
+}
 
 app.whenReady().then(async () => {
   if (!isDev) {

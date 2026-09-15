@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "2.1.7",
+  "version": "2.2.2",
   "description": "POS System Backend - Sistema Integral de Ventas",
   "main": "server.js",
   "scripts": {
