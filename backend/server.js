@@ -3063,186 +3063,123 @@ app.post('/api/super/reporte', requireSuperAdmin, async (req, res) => {
     }
 });
 
-// POST /api/super/bot — chat inteligente con lenguaje natural para el super-admin
-// v2.2.0: Bot con contexto completo del sistema (arquitectura, features, stack)
+// POST /api/super/bot — asistente conversacional inteligente para el super-admin
+// v2.3.0: Bot con personalidad, contexto dinámico y respuestas naturales
 app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
     try {
-        const msg = (req.body.mensaje || '').trim().toLowerCase();
+        const msgOriginal = (req.body.mensaje || '').trim();
+        const msg = msgOriginal.toLowerCase();
         if (!msg) return res.json({ respuesta: '¿En qué te puedo ayudar? Escribe tu pregunta o solicitud.' });
 
+        // Formateadores
         const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
         const fmtNum = (v) => new Intl.NumberFormat('es-CO').format(Number(v) || 0);
 
         // ═══════════════════════════════════════════════════════════════
-        // BASE DE CONOCIMIENTO COMPLETA DEL SISTEMA
-        // Esto es como tener al ingeniero Senior dentro del bot
+        // CONTEXTO DINÁMICO DEL SISTEMA
+        // Se actualiza en tiempo real con datos de la BD
         // ═══════════════════════════════════════════════════════════════
-        const CONTEXTO_SISTEMA = {
-            nombre: 'Sistema Integral de Ventas POS',
-            version_actual: APP_VERSION,
-            autor: 'Andrés Cuesta',
-            fecha_creacion: 'Agosto 2026',
+        const [metricas, ultimaVersion, pendientesCount, uptimeRaw] = await Promise.all([
+            db.query(`
+                SELECT
+                    (SELECT COUNT(*)::int FROM locales) AS locales,
+                    (SELECT COUNT(*)::int FROM usuarios) AS usuarios,
+                    (SELECT COUNT(*)::int FROM usuarios WHERE aprobado_por_admin = false) AS pendientes,
+                    (SELECT COALESCE(SUM(total_neto),0)::numeric FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '24 hours') AS ventas_hoy,
+                    (SELECT COUNT(*)::int FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '24 hours') AS ventas_hoy_cant,
+                    (SELECT COALESCE(SUM(total_neto),0)::numeric FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '30 days') AS ventas_mes,
+                    (SELECT COUNT(*)::int FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '30 days') AS ventas_mes_cant,
+                    (SELECT COUNT(*)::int FROM tickets_soporte WHERE estado = 'Abierto') AS tickets_abiertos,
+                    (SELECT COUNT(*)::int FROM productos) AS productos,
+                    (SELECT COUNT(*)::int FROM productos WHERE stock_actual <= stock_minimo) AS stock_bajo
+            `).then(r => r.rows[0]),
+            db.query('SELECT version, changelog FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1').then(r => r.rows[0]),
+            db.query("SELECT COUNT(*)::int FROM usuarios WHERE aprobado_por_admin = false").then(r => r.rows[0].n),
+            Promise.resolve(Math.floor(process.uptime())),
+        ]);
 
-            // Stack tecnológico completo
-            stack: {
-                frontend: 'React 19 + Vite + Electron 35 + Capacitor 7',
-                backend: 'Node.js 22 + Express 5',
-                base_datos: 'PostgreSQL 16 (Neon)',
-                hosting_frontend: 'GitHub Pages (https://andrescuesta19.github.io/sistema-ventas-pos/)',
-                hosting_backend: 'Render (https://sistema-ventas-pos-aeka.onrender.com)',
-                auth: 'JWT (jsonwebtoken)',
-                email: 'Nodemailer + Gmail SMTP (pendiente configurar)',
-                ui_css: 'CSS custom variables, glassmorphism, responsive',
-                desktop: 'Electron (Windows NSIS + macOS ARM64)',
-                mobile: 'Capacitor (iOS + Android)',
-            },
+        const m = metricas;
+        const uptime = uptimeRaw;
+        const hrs = Math.floor(uptime / 3600);
+        const min = Math.floor((uptime % 3600) / 60);
+        const version = ultimaVersion?.version || APP_VERSION;
 
-            // Arquitectura de archivos
-            archivos: {
-                frontend: {
-                    principal: 'frontend/src/App.jsx (rutas + layout principal)',
-                    paginas: [
-                        'Dashboard.jsx — Panel principal con métricas, gráficos, actividad reciente',
-                        'POS.jsx — Punto de venta, carrito, checkout, métodos de pago',
-                        'Inventario.jsx — CRUD productos, categorías, stock, imágenes',
-                        'Historial.jsx — Ventas pasadas, filtros, reimpresión',
-                        'Clientes.jsx — CRUD clientes con geolocalización (lat/lng/dirección)',
-                        'Cotizaciones.jsx — Crear/enviar cotizaciones, convertir a venta',
-                        'Facturas.jsx — Gestión de facturación DIAN',
-                        'AtencionCliente.jsx — Tickets de soporte, chat con clientes',
-                        'Configuracion.jsx — Perfil, foto, datos del local, prefers',
-                        'PanelUsuarios.jsx — CRUD usuarios, roles (Admin/Cajero/Vendedor)',
-                        'CierreCaja.jsx — Cierre de turno, arqueo, resumen del día',
-                        'Caja.jsx — Apertura de caja (estilo Karrot), fondo inicial',
-                        'Nomina.jsx — Gestión de nómina, pagos, empleados',
-                        'Proveedores.jsx — CRUD proveedores, contacto',
-                        'Ecommerce.jsx — Integraciones Shopify/WooCommerce',
-                        'SuperAdmin.jsx — PanelSuper con métricas, locales, bot, updates',
-                        'Login.jsx — Login con código de local + email/password',
-                        'Registro.jsx — Registro de nuevos locales',
-                        'RecuperarPassword.jsx — Reset por email',
-                        'Terminos.jsx — Términos de privacidad (con geolocalización)',
-                        'CodigosPendientes.jsx — Códigos de verificación pendientes',
-                    ],
-                    componentes: [
-                        'Header.jsx — Barra lateral con navegación, usuario, logout',
-                        'Logo.jsx — Logo animado con glow verde',
-                        'WelcomeModal.jsx — Modal de bienvenida (siempre visible al abrir)',
-                        'UpdateNotification.jsx — Notificación de updates remotos',
-                    ],
-                    contextos: ['ThemeContext.jsx — Tema claro/oscuro'],
-                    utilidades: ['api.js — Wrapper fetch con auto-refresh JWT y manejo 401', 'dateCO.jsx — Formato fecha/hora Colombia'],
-                },
-                backend: {
-                    principal: 'backend/server.js (4500+ líneas, todos los endpoints)',
-                    base_datos: 'backend/db.js (pool PostgreSQL con neon)',
-                    migraciones: 'backend/migrations/ (SQL de tablas nuevas)',
-                },
-            },
-
-            // Base de datos - 29 tablas
-            tablas: {
-                locales: 'id_local, nombre_local, direccion, nit, telefono, ciudad, email',
-                usuarios: 'id_usuario, nombre, correo, password_hash, rol (Admin/Cajero/Vendedor), id_local, aprobado_por_admin, foto_perfil',
-                productos: 'id_producto, nombre, descripcion, precio, stock_actual, stock_minimo, id_categoria, imagen_url, codigo_barras',
-                categorias: 'id_categoria, nombre',
-                clientes: 'id_cliente, nombre, correo, telefono, direccion, latitud, longitud, id_local',
-                ventas: 'id_venta, id_usuario, id_cliente, id_local, subtotal, impuestos, total_neto, metodo_pago, estado',
-                detalle_ventas: 'id_detalle, id_venta, id_producto, cantidad, precio_unitario, subtotal',
-                cotizaciones: 'id_cotizacion, id_cliente, id_usuario, id_local, total, estado (Pendiente/Enviada/Aceptada/Rechazada)',
-                detalle_cotizaciones: 'id_detalle, id_cotizacion, id_producto, cantidad, precio_unitario',
-                turnos_caja: 'id_turno, id_usuario, id_local, fondo_inicial, saldo_esperado, saldo_real, estado (Abierto/Cerrado)',
-                tickets_soporte: 'id_ticket, id_usuario, id_local, asunto, mensaje, estado (Abierto/Respondido/Cerrado), respuesta',
-                super_admins: 'id_super, nombre, correo, codigo_acceso, estado',
-                actualizaciones: 'id, version, changelog, url_descarga, fecha_publicacion, activa',
-                instalaciones: 'id, ip, sistema_operativo, hostname, version_app, fecha, activa',
-                configuracion_sistema: 'Configuración general del sistema',
-                configuracion_dian: 'Certificados DIAN para facturación',
-                configuracion_pago: 'Configuración de pasarela de pagos (Wompi)',
-                pagos_nomina: 'Pagos de nómina registrados',
-                empleados: 'Datos de empleados',
-                proveedores: 'CRUD proveedores',
-                notificaciones: 'Notificaciones del sistema',
-                email_logs: 'Log de emails enviados',
-                producto_imagenes: 'Múltiples imágenes por producto',
-                ecommerce_integraciones: 'Conexiones con Shopify/WooCommerce',
-                respaldos: 'Backups de la base de datos',
-                transacciones_wompi: 'Transacciones de Wompi',
-                pagos_automaticos_programados: 'Pagos recurrentes',
-            },
-
-            // Features principales
-            features: {
-                pos: 'Punto de venta con carrito, descuentos, métodos de pago (efectivo, tarjeta, QR, Wompi)',
-                inventario: 'CRUD productos con imágenes, categorías, código de barras, stock mínimo',
-                clientes: 'Gestión de clientes con geolocalización (OpenStreetMap/Nominatim)',
-                cotizaciones: 'Crear cotizaciones, enviar por email, convertir a venta',
-                facturacion: 'Integración DIAN para facturación electrónica',
-                nomina: 'Gestión de nómina con pagos automáticos programados',
-                caja: 'Apertura de caja estilo Karrot (fondo inicial), cierre con arqueo',
-                dashboard: 'Métricas en tiempo real, gráficos de ventas, actividad reciente',
-                ecommerce: 'Integraciones con Shopify y WooCommerce',
-                soporte: 'Sistema de tickets de soporte',
-                auth: 'Login con código de local + email, registro, recuperación de contraseña',
-                superadmin: 'Panel administrativo con métricas de todos los locales',
-                tracking: 'Tracking de instalaciones y actualizaciones remotas',
-                responsive: 'Diseño responsive para desktop, tablet y móvil',
-                electron: 'App de escritorio para Windows (NSIS) y macOS (ARM64)',
-                welcome: 'Modal de bienvenida siempre visible al abrir la app',
-                bot: 'Asistente inteligente con lenguaje natural',
-            },
-
-            // Errores conocidos y pendientes
-            pendientes: [
-                'Gmail SMTP no funciona (credenciales inválidas) — necesita regenerar contraseña de aplicación',
-                'JWT_SECRET no está configurado en .env (usa aleatorio por sesión)',
-                'La foto de perfil del usuario no se actualiza en tiempo real en el Header (solo en Configuración)',
-                'El bot no tiene memoria entre sesiones',
-                'No hay sistema de notificaciones push para móviles',
-                'La facturación DIAN está en fase de pruebas',
-            ],
-
-            // Cómo publicar actualizaciones
-            flujo_actualizaciones: {
-                paso1: 'El bot detecta "publicar actualización con [cambios]"',
-                paso2: 'Auto-incrementa la versión (patch: 2.1.1 → 2.1.2)',
-                paso3: 'Guarda en tabla actualizaciones con changelog',
-                paso4: 'Los clientes la verán al reiniciar la app (check en electron.cjs)',
-                nota: 'Los archivos .exe/.dmg se suben manualmente desde SuperAdmin pestaña "Actualizar Sistema"',
-            },
+        // ═══════════════════════════════════════════════════════════════
+        // SISTEMA DE DETECCIÓN DE INTENCIÓN MEJORADO
+        // Más flexible, entiende sinónimos y contexto
+        // ═══════════════════════════════════════════════════════════════
+        const intenciones = {
+            saludo: /^(hola|buenos dias|buenas tardes|buenas noches|hey|que tal|saludos|que onda|que hubo|que hay|epa|buenas|que mas)/,
+            ayuda: /(ayuda|help|comandos|opciones|que puedo|que sabes hacer|que puedes|menu|guia|tutorial)/,
+            estadistica: /(metricas|estadisticas|resumen|como va|como vas|como estamos|que tal|cuantos|cuantas|total|cantidad|cuanto|cuanta|reporte|informe|dashboard)/,
+            locales: /(local|locales|tienda|tiendas|sucursal|sucursales|negocio|negocios)/,
+            usuarios: /(usuario|usuarios|empleado|empleados|gente|personas|cuenta|cuentas|personal|equipo)/,
+            ventas: /(venta|ventas|vendio|vendí|facturo|facturó|ingreso|ingresos|dinero|ganancia|facturacion|facturación|cobro|cobros|factura|facturas)/,
+            productos: /(producto|productos|articulo|artículos|inventario|stock|mercancia|mercancía|catálogo)/,
+            pendientes: /(pendiente|pendientes|espera|aprobar|aprobacion|aprobación|registro|registrado|sin aprobar|nuevos)/,
+            tickets: /(ticket|tickets|soporte|problema|reclamo|ayuda tecnica|asistencia)/,
+            errores: /(error|bug|falla|no funciona|ROTO|mal|defectuoso|fallo)/,
+            seguridad: /(seguridad|security|vulnerabilidad|hack|proteccion|protección|cifrar|encriptar|jwt|token|password|contraseña|auth)/,
+            arquitectura: /(como funciona|arquitectura|estructura|stack|tecnologia|tecnología|que usa|que tecnologias)/,
+            features: /(que puede|que hace|funcionalidades|features|capacidades|que ofrece|modulo|modulos)/,
+            tablas: /(tablas?|base de datos|campos|columnas|schema|estructura de datos|que guarda|que datos)/,
+            endpoints: /(endpoint|api|rutas?|endpoints|rest|request)/,
+            archivos: /(archivos?|paginas?|componente|componentes|donde esta|ubicacion|directorio)/,
+            version: /(version|versión|release|changelog|actualizacion|actualización|que version|ultima version)/,
+            autor: /(quien hizo|quien creo|quién hizo|quién creó|desarrollador|autor|programador|creador|dueño)/,
+            estado: /(estado|status|servidor|activo|funcionando|uptime|online|sistema)/,
+            actualizar: /(publicar|mandar|mandemos|enviar|sacar|lanzar|push|publish|nueva version|nueva versión|mejorar|mejoras|calidad|actualizar sistema)/,
+            historial_updates: /(ver actualizacion|ver actualización|historial|actualizaciones publicadas|que version tenemos|ultimas versiones)/,
+            reportes: /(reporte|informe|exportar|descargar|excel|csv|pdf)/,
         };
 
-        // ── Funciones de datos ─────────────────────────────────────────────
-        async function getMetricas() {
-            const [locales, usuarios, ventas, tickets, productos] = await Promise.all([
-                db.query('SELECT COUNT(*)::int AS n FROM locales'),
-                db.query('SELECT COUNT(*)::int AS n FROM usuarios'),
-                db.query("SELECT COUNT(*)::int AS n, COALESCE(SUM(total_neto),0)::numeric AS total FROM ventas WHERE fecha_venta >= NOW() - INTERVAL '30 days'"),
-                db.query("SELECT COUNT(*)::int AS n FROM tickets_soporte WHERE estado = 'Abierto'"),
-                db.query('SELECT COUNT(*)::int AS n FROM productos'),
-            ]);
-            return {
-                locales: locales.rows[0].n,
-                usuarios: usuarios.rows[0].n,
-                ventas_total: ventas.rows[0].total,
-                ventas_cantidad: ventas.rows[0].n,
-                tickets: tickets.rows[0].n,
-                productos: productos.rows[0].n,
-            };
+        function detectarIntencion(texto) {
+            for (const [intencion, regex] of Object.entries(intenciones)) {
+                if (regex.test(texto)) return intencion;
+            }
+            return null;
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // DETECCIÓN DE ACCIONES (aprobar/rechazar/publicar)
+        // ═══════════════════════════════════════════════════════════════
+        function detectarAccion(texto) {
+            if (/(aprobar|aceptar|activar|habilitar|autorizar|dar acceso)/.test(texto)) return 'aprobar';
+            if (/(rechazar|eliminar|borrar|denegar|rechazar|bloquear)/.test(texto)) return 'rechazar';
+            if (/(enviar|mandar|correo|email|notificar)/.test(texto)) return 'enviar';
+            return null;
+        }
+
+        // Extraer nombre del mensaje (para aprobar/rechazar)
+        function extraerNombre(texto) {
+            const match = texto.match(/(?:aprobar|rechazar|aceptar|eliminar|borrar|autorizar|dar acceso)\s+(?:a\s+|al\s+|la\s+)?(.+?)(?:\s*$|\s*\?|\s*¿)/i);
+            return match ? match[1].trim() : null;
+        }
+
+        // Extraer nombre de local del mensaje
+        function extraerLocal(texto) {
+            // Buscar entre comillas
+            const comillas = texto.match(/["'`](.+?)["'`]/);
+            if (comillas) return comillas[1];
+            // Buscar después de "de", "en", "para", "el", "la"
+            const match = texto.match(/(?:de|en|para|el|la|los|las)\s+(.+?)(?:\s*$|\s*\?|\s*¿|\s*,)/i);
+            return match ? match[1].trim() : null;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // FUNCIONES DE DATOS
+        // ═══════════════════════════════════════════════════════════════
         async function getLocales() {
-            const r = await db.query(`
+            return db.query(`
                 SELECT l.id_local, l.nombre_local, l.ciudad,
                     (SELECT COUNT(*) FROM usuarios u WHERE u.id_local = l.id_local) as total_usuarios,
                     (SELECT COALESCE(SUM(v.total_neto),0)::numeric FROM ventas v WHERE v.id_local = l.id_local) as total_ventas
                 FROM locales l ORDER BY l.id_local
-            `);
-            return r.rows;
+            `).then(r => r.rows);
         }
 
         async function getVentasLocal(nombreLocal) {
-            const r = await db.query(`
+            return db.query(`
                 SELECT l.nombre_local,
                     COUNT(v.id_venta)::int as num_ventas,
                     COALESCE(SUM(v.total_neto),0)::numeric as total,
@@ -3251,340 +3188,257 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
                 LEFT JOIN ventas v ON v.id_local = l.id_local
                 WHERE LOWER(l.nombre_local) LIKE $1
                 GROUP BY l.id_local, l.nombre_local
-            `, [`%${nombreLocal}%`]);
-            return r.rows[0] || null;
+            `, [`%${nombreLocal}%`]).then(r => r.rows[0] || null);
         }
 
         async function getVentasRecientes() {
-            const r = await db.query(`
+            return db.query(`
                 SELECT v.id_venta, v.total_neto, v.fecha_venta, l.nombre_local
                 FROM ventas v JOIN locales l ON v.id_local = l.id_local
                 ORDER BY v.fecha_venta DESC LIMIT 5
-            `);
-            return r.rows;
+            `).then(r => r.rows);
         }
 
         async function getPendientes() {
-            const r = await db.query(`
+            return db.query(`
                 SELECT u.id_usuario, u.nombre, u.correo, l.nombre_local
                 FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local
                 WHERE u.aprobado_por_admin = false
                 ORDER BY u.created_at
-            `);
-            return r.rows;
+            `).then(r => r.rows);
         }
 
         async function getProductos() {
-            const r = await db.query('SELECT COUNT(*)::int AS total, COUNT(CASE WHEN stock_actual <= stock_minimo THEN 1 END)::int AS bajo_stock FROM productos');
-            return r.rows[0];
+            return db.query('SELECT COUNT(*)::int AS total, COUNT(CASE WHEN stock_actual <= stock_minimo THEN 1 END)::int AS bajo_stock FROM productos').then(r => r.rows[0]);
         }
 
-        async function getTicketRecientes() {
-            const r = await db.query("SELECT * FROM tickets_soporte WHERE estado = 'Abierto' ORDER BY created_at DESC LIMIT 5");
-            return r.rows;
+        async function getTickets() {
+            return db.query("SELECT * FROM tickets_soporte WHERE estado = 'Abierto' ORDER BY created_at DESC LIMIT 5").then(r => r.rows);
         }
 
-        // ══════════════════════════════════════════════════════════════════
-        // FLUJO DEL BOT — Orden de prioridad:
-        // 1. Actualizaciones (siempre primero)
-        // 2. Técnico (arquitectura, tablas, errores)
-        // 3. Acciones (aprobar, rechazar)
-        // 4. Operaciones (locales, ventas, tickets, etc.)
-        // 5. Respuesta por defecto
-        // ══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════
+        // MOTOR DE RESPUESTAS CONVERSACIONALES
+        // Cada intención tiene múltiples variaciones para sonar natural
+        // ═══════════════════════════════════════════════════════════════
 
-        // ── 1. PUBLICAR ACTUALIZACIÓN (prioridad máxima) ──────────────
-        if (msg.includes('actualizaci') || msg.includes('actualiz') ||
-            msg.includes('nueva versión') || msg.includes('nueva version') ||
-            msg.includes('push update') || msg.includes('publish update') ||
-            msg.includes('mandar actualización') || msg.includes('mandemos una actualización') ||
-            msg.includes('enviar actualización') || msg.includes('sacar versión') ||
-            msg.includes('lanzar versión') || msg.includes('mejorar el sistema') ||
-            msg.includes('mejoras del sistema') || msg.includes('calidad')) {
-
-            // Solo procesar como actualización si TAMBIÉN pide cambios o es explícito
-            const esPeticionActualizacion = msg.includes('publicar') ||
-                msg.includes('mandar') || msg.includes('mandemos') ||
-                msg.includes('enviar') || msg.includes('sacar') || msg.includes('lanzar') ||
-                msg.includes('con ') || msg.includes('que tenga') || msg.includes('que contenga') ||
-                msg.includes('sería para') || msg.includes('seria para') ||
-                msg.includes('mejorar') || msg.includes('mejoras') ||
-                msg.includes('necesito') || msg.includes('quiero') ||
-                (msg.includes('actualizaci') && msg.includes('calidad'));
-
-            if (esPeticionActualizacion) {
-                // Extraer changelog del mensaje
-                let changelog = msg
-                    .replace(/publicar\s+(la\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/nueva\s+versi[oó]n/gi, '')
-                    .replace(/hacer\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/sacar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/lanzar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/mandar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/mandemos\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/enviar\s+(una\s+)?actualizaci[oó]n/gi, '')
-                    .replace(/con\s+los?\s+cambios?:?/gi, '')
-                    .replace(/con\s+estos?\s+cambios?:?/gi, '')
-                    .replace(/que\s+(?:tenga|contenga|incluya|sería|seria)/gi, '')
-                    .replace(/push\s+update/gi, '')
-                    .replace(/publish\s+update/gi, '')
-                    .replace(/para\s+calidad/gi, '')
-                    .replace(/calidad/gi, '')
-                    .trim();
-
-                if (!changelog || changelog.length < 3) {
-                    return res.json({ respuesta:
-                        `🔄 *¿Publicar actualización?*\n\n` +
-                        `Escríbeme así:\n` +
-                        `_"publicar actualización con corrección de errores en el POS, mejor rendimiento"_\n\n` +
-                        `Yo automáticamente:\n` +
-                        `1️⃣ Incremento la versión (ej: 2.1.1 → 2.1.2)\n` +
-                        `2️⃣ Registro los cambios\n` +
-                        `3️⃣ Publico la actualización\n` +
-                        `4️⃣ Todos los clientes la verán al reiniciar\n\n` +
-                        `_¿Qué cambios quieres incluir?_`
-                    });
-                }
-
-                // Obtener última versión y generar la siguiente
-                const ultimaUpd = await db.query('SELECT version FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 1');
-                let nuevaVersion = '2.1.5';
-                if (ultimaUpd.rows.length > 0) {
-                    const parts = ultimaUpd.rows[0].version.split('.').map(Number);
-                    parts[2] = (parts[2] || 0) + 1;
-                    nuevaVersion = parts.join('.');
-                }
-
-                // Crear la actualización automáticamente
-                await db.query('UPDATE actualizaciones SET activa = false');
-                await db.query(
-                    'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3) RETURNING *',
-                    [nuevaVersion, changelog, '']
-                );
-
-                console.log(`🤖 Bot: Actualización v${nuevaVersion} publicada automáticamente`);
-
-                return res.json({ respuesta:
-                    `✅ *¡Actualización publicada!*\n\n` +
-                    `📦 *Versión:* v${nuevaVersion}\n` +
-                    `📝 *Cambios:* ${changelog}\n` +
-                    `📅 *Fecha:* ${new Date().toLocaleString('es-CO')}\n\n` +
-                    `🔄 Todos los clientes recibirán la notificación al reiniciar la aplicación.\n\n` +
-                    `_¿Necesitas algo más?_`
-                });
-            }
-        }
-
-        // Ver actualizaciones publicadas
-        if (msg.includes('ver actualización') || msg.includes('ver actualizacion') ||
-            msg.includes('historial de actualización') || msg.includes('actualizaciones publicadas') ||
-            msg.includes('qué versión') || msg.includes('que version') ||
-            msg.includes('versión actual') || msg.includes('última versión')) {
-            const upds = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 5');
-            if (upds.rows.length === 0) return res.json({ respuesta: 'No hay actualizaciones publicadas aún.' });
-            let respuesta = `📋 *Últimas actualizaciones:*\n\n`;
-            for (const u of upds.rows) {
-                respuesta += `• *v${u.version}* — ${u.activa ? '🟢 Activa' : '⚪ Inactiva'}\n  ${u.changelog || 'Sin cambios'}\n  ${new Date(u.fecha_publicacion).toLocaleString('es-CO')}\n\n`;
-            }
-            return res.json({ respuesta });
-        }
-
-        // ── 2. INTELIGENCIA TÉCNICA ──────────────────────────────────
-        // Palabras clave para cada intención
-        const intenciones = {
-            locales: ['local', 'locales', 'tienda', 'tiendas', 'sucursal', 'sucursales'],
-            usuarios: ['usuario', 'usuarios', 'empleado', 'empleados', 'gente', 'personas', 'cuenta', 'cuentas'],
-            ventas: ['venta', 'ventas', 'vendió', 'vendio', 'facturó', 'facturado', 'ingreso', 'ingresos', 'dinero', 'ganancia', 'facturación'],
-            productos: ['producto', 'productos', 'artículo', 'articulos', 'inventario', 'stock'],
-            pendientes: ['pendiente', 'pendientes', 'espera', 'aprobar', 'aprobación', 'aprobacion', 'registro', 'registrado'],
-            tickets: ['ticket', 'tickets', 'soporte', 'problema', 'reclamo'],
-            reportes: ['reporte', 'reportes', 'resumen', 'informe', 'estadística', 'estadisticas', 'gráfica'],
-            metricas: ['métricas', 'metricas', 'total', 'cuántos', 'cuantos', 'cuántas', 'cuantas', 'cantidad', 'qué tal', 'que tal'],
-            estado: ['estado', 'status', 'servidor', 'activo'],
-            version: ['versión', 'version', 'v1', 'v2'],
-            ayuda: ['ayuda', 'help', 'comandos', 'opciones', 'qué puedo', 'que puedo'],
-        };
-
-        function detectarIntencion(msg) {
-            for (const [intencion, palabras] of Object.entries(intenciones)) {
-                if (palabras.some(p => msg.includes(p))) return intencion;
-            }
-            return null;
-        }
-
-        // Detectar si es una acción (aprobar/rechazar)
-        function detectarAccion(msg) {
-            if (msg.includes('aprobar') || msg.includes('aceptar') || msg.includes('activar') || msg.includes('habilitar')) return 'aprobar';
-            if (msg.includes('rechazar') || msg.includes('eliminar') || msg.includes('borrar') || msg.includes('denegar')) return 'rechazar';
-            if (msg.includes('enviar') || msg.includes('mandar') || msg.includes('correo') || msg.includes('email')) return 'enviar';
-            return null;
-        }
-
-        // Extraer nombre de local del mensaje
-        function extraerLocal(msg) {
-            const locales = ['istore', 'techshop', 'gabo', 'mi tienda'];
-            for (const l of locales) {
-                if (msg.includes(l)) return l;
-            }
-            // Buscar después de "de", "en", "para"
-            const match = msg.match(/(?:de|en|para|el)\s+(.+?)(?:\s|$|\?|¿)/);
-            return match ? match[1].trim() : null;
-        }
-
-        // Extraer nombre de usuario del mensaje
-        function extraerNombre(msg) {
-            const match = msg.match(/(?:aprobar|rechazar|aceptar|eliminar|borrar)\s+(?:a\s+)?(.+?)(?:\s|$|\?|¿)/);
-            return match ? match[1].trim() : null;
-        }
-
-        // ── Respuestas ─────────────────────────────────────────────────────
-
-        // Detectar intención
         const intencion = detectarIntencion(msg);
         const accion = detectarAccion(msg);
 
-        // Saludos
-        if (msg.match(/^(hola|buenos|buenas|hey|qué tal|que tal|saludos|bienvenido)/)) {
-            const m = await getMetricas();
+        // ── SALUDO ──────────────────────────────────────────────────
+        if (intencion === 'saludo') {
+            const saludos = [
+                `¡Hola! 👋 ¿Qué tal? Todo funcionando bien por aquí.`,
+                `¡Hey! 🤙 Buenas. El sistema está online y tranquilo.`,
+                `¡Qué más! 👋 Aquí estoy, listo para lo que necesites.`,
+                `¡Buenas! 🙌 Todo en orden. ¿En qué te ayudo?`,
+            ];
+            const saludo = saludos[Math.floor(Math.random() * saludos.length)];
             return res.json({ respuesta:
-                `¡Hola! 👋 Soy tu asistente del POS. Aquí un rápido vistazo:\n\n` +
-                `🏪 ${m.locales} locales activos\n` +
-                `👥 ${m.usuarios} usuarios registrados\n` +
-                `💰 ${fmtCOP(m.ventas_total)} en ventas (30 días)\n` +
-                `🎫 ${m.tickets} tickets abiertos\n\n` +
-                `¿Qué necesitas? Pregúntame lo que quieras.`
+                `${saludo}\n\n` +
+                `📊 *Resumen rápido:*\n` +
+                `• ${m.locales} locales · ${m.usuarios} usuarios\n` +
+                `• ${fmtCOP(m.ventas_hoy)} hoy · ${fmtCOP(m.ventas_mes)} este mes\n` +
+                (m.pendientes > 0 ? `• ⚠️ *${m.pendientes}* usuario(s) pendiente(s) de aprobación\n` : '') +
+                (m.tickets_abiertos > 0 ? `• 🎫 *${m.tickets_abiertos}* ticket(s) abierto(s)\n` : '') +
+                (m.stock_bajo > 0 ? `• ⚠️ *${m.stock_bajo}* producto(s) con stock bajo\n` : '') +
+                `\n¿Qué necesitas?`
             });
         }
 
-        // Ayuda
-        if (intencion === 'ayuda' || msg === '?') {
+        // ── AYUDA ───────────────────────────────────────────────────
+        if (intencion === 'ayuda') {
             return res.json({ respuesta:
-                `🤖 *Soy tu asistente técnico del POS v${CONTEXTO_SISTEMA.version_actual}*\n\n` +
-                `📊 *Operaciones:*\n` +
-                `• *"¿Cuántos locales hay?"* — Métricas y detalle\n` +
-                `• *"¿Cuánto vendió iStore?"* — Ventas por local\n` +
-                `• *"¿Quiénes están pendientes?"* — Usuarios sin aprobar\n` +
-                `• *"Aprobar a Juan"* — Aprobar usuario\n` +
-                `• *"Rechazar a Pedro"* — Rechazar usuario\n` +
-                `• *"¿Cómo va el mes?"* — Resumen de ventas\n` +
-                `• *"Dame un reporte"* — Reporte semanal\n` +
-                `• *"¿Hay tickets?"* — Tickets de soporte\n` +
-                `• *"¿Cuántos productos?"* — Inventario\n` +
-                `• *"¿El sistema está bien?"* — Estado del servidor\n\n` +
-                `🔧 *Técnico (¡pregúntame lo que sea!):*\n` +
-                `• *"¿Cómo funciona el sistema?"* — Arquitectura completa\n` +
-                `• *"¿Qué stack usan?"* — Tecnologías\n` +
-                `• *"¿Qué tablas hay?"* — Estructura de BD\n` +
-                `• *"¿Qué errores hay?"* — Issues conocidos\n` +
-                `• *"¿Qué archivos tiene el frontend?"* — Estructura de código\n` +
-                `• *"¿Quién hizo esto?"* — Info del proyecto\n` +
-                `• *"Cuéntame del sistema"* — Todo sobre el POS\n\n` +
+                `🤖 *¡Soy tu asistente del POS v${version}!*\n\n` +
+                `Puedo hacer muchas cosas. Solo háblame en natural:\n\n` +
+                `📊 *Pregúntame:*\n` +
+                `• "¿Cómo va el día?" — Resumen del sistema\n` +
+                `• "¿Cuánto vendimos hoy?" — Ventas del día\n` +
+                `• "¿Cuántos locales hay?" — Detalle de locales\n` +
+                `• "¿Quién está pendiente?" — Usuarios sin aprobar\n` +
+                `• "¿Hay tickets abiertos?" — Soporte\n` +
+                `• "¿Cómo va el mes?" — Métricas del mes\n\n` +
+                `✅ *Acciones:*\n` +
+                `• "Aprobar a Juan" — Aprobar usuario\n` +
+                `• "Rechazar a Pedro" — Rechazar usuario\n` +
+                `• "Enviar reporte semanal" — Generar reporte\n\n` +
+                `🔧 *Técnico:*\n` +
+                `• "¿Cómo funciona el sistema?" — Arquitectura\n` +
+                `• "¿Qué tablas hay?" — Base de datos\n` +
+                `• "¿Qué stack usamos?" — Tecnologías\n` +
+                `• "¿Qué errores hay?" — Issues conocidos\n\n` +
                 `🔄 *Actualizaciones:*\n` +
-                `• *"Publicar actualización con [cambios]"* — Yo publico todo\n` +
-                `• *"Ver actualizaciones"* — Historial de updates\n\n` +
-                `_Escríbeme en natural, no necesitas comandos exactos._`
+                `• "Publicar actualización con [cambios]" — Yo la publico\n` +
+                `• "Ver actualizaciones" — Historial\n\n` +
+                `_No necesitas comandos exactos. Háblame como me hablarías a mí._`
             });
         }
 
-        // Locales
-        if (intencion === 'locales' && !accion) {
-            const locales = await getLocales();
-            if (locales.length === 0) return res.json({ respuesta: 'No hay locales registrados.' });
+        // ── PUBLICAR ACTUALIZACIÓN ──────────────────────────────────
+        if (intencion === 'actualizar') {
+            // Extraer changelog del mensaje
+            let changelog = msgOriginal
+                .replace(/publicar\s+(la\s+)?actualizaci[oó]n/gi, '')
+                .replace(/nueva\s+versi[oó]n/gi, '')
+                .replace(/hacer\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/sacar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/lanzar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/mandar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/mandemos\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/enviar\s+(una\s+)?actualizaci[oó]n/gi, '')
+                .replace(/push\s+update/gi, '')
+                .replace(/publish\s+update/gi, '')
+                .replace(/con\s+los?\s+cambios?:?/gi, '')
+                .replace(/con\s+estos?\s+cambios?:?/gi, '')
+                .replace(/que\s+(?:tenga|contenga|incluya|sería|seria)/gi, '')
+                .replace(/para\s+calidad/gi, '')
+                .replace(/calidad/gi, '')
+                .replace(/actualizar\s+sistema/gi, '')
+                .trim();
 
-            let respuesta = `🏪 *Tienes ${locales.length} locale${locales.length > 1 ? 's' : ''} registrado${locales.length > 1 ? 's' : ''}:*\n\n`;
-            for (const l of locales) {
-                respuesta += `• *${l.nombre_local}* — ${l.total_usuarios} usuario${l.total_usuarios !== 1 ? 's' : ''}`;
-                if (l.ciudad) respuesta += ` · ${l.ciudad}`;
-                if (Number(l.total_ventas) > 0) respuesta += ` · ${fmtCOP(l.total_ventas)} en ventas`;
-                respuesta += '\n';
+            if (!changelog || changelog.length < 3) {
+                return res.json({ respuesta:
+                    `🔄 *¿Publicar actualización?*\n\n` +
+                    `Dime qué cambios quieres incluir. Por ejemplo:\n\n` +
+                    `_"Publicar actualización con corrección de errores en el POS"_\n` +
+                    `_"Mandemos una actualización con mejoras de rendimiento"_\n` +
+                    `_"Actualizar sistema con nuevo diseño del header"_\n\n` +
+                    `Yo automáticamente:\n` +
+                    `1️⃣ Incremento la versión (v${version} → siguiente)\n` +
+                    `2️⃣ Registro los cambios\n` +
+                    `3️⃣ Publico la actualización\n` +
+                    `4️⃣ Todos la verán al reiniciar\n\n` +
+                    `_¿Qué cambios quieres incluir?_`
+                });
+            }
+
+            // Obtener última versión y generar la siguiente
+            const parts = version.split('.').map(Number);
+            parts[2] = (parts[2] || 0) + 1;
+            const nuevaVersion = parts.join('.');
+
+            // Crear la actualización
+            await db.query('UPDATE actualizaciones SET activa = false');
+            await db.query(
+                'INSERT INTO actualizaciones (version, changelog, url_descarga) VALUES ($1, $2, $3)',
+                [nuevaVersion, changelog, '']
+            );
+
+            console.log(`🤖 Bot: Actualización v${nuevaVersion} publicada: "${changelog}"`);
+
+            const respuestas = [
+                `✅ *¡Lista!* Actualización v${nuevaVersion} publicada.\n\n📝 *Cambios:* ${changelog}\n📅 ${new Date().toLocaleString('es-CO')}\n\n🔄 Los clientes la verán al reiniciar. ¿Algo más?`,
+                `✅ *¡Listo!* v${nuevaVersion} ya está en el aire.\n\n📝 ${changelog}\n\n🔄 Reinician y la tienen. ¿Qué más?`,
+                `✅ *¡Hecho!* v${nuevaVersion} publicada.\n\n📝 *Cambios:* ${changelog}\n\n🔄 Los clientes reciben la notificación automáticamente. ¿Algo más?`,
+            ];
+            return res.json({ respuesta: respuestas[Math.floor(Math.random() * respuestas.length)] });
+        }
+
+        // ── VER HISTORIAL DE ACTUALIZACIONES ────────────────────────
+        if (intencion === 'historial_updates') {
+            const upds = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 5');
+            if (upds.rows.length === 0) return res.json({ respuesta: '📋 No hay actualizaciones publicadas aún. ¿Quieres publicar una?' });
+            let respuesta = `📋 *Últimas actualizaciones:*\n\n`;
+            for (const u of upds.rows) {
+                respuesta += `• *v${u.version}* — ${u.activa ? '🟢 Activa' : '⚪ Inactiva'}\n  ${u.changelog || 'Sin changelog'}\n  📅 ${new Date(u.fecha_publicacion).toLocaleString('es-CO')}\n\n`;
             }
             return res.json({ respuesta });
         }
 
-        // Versión
-        if (intencion === 'version') {
-            const ultimaVer = await db.query('SELECT version FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1');
-            const ver = ultimaVer.rows[0]?.version || APP_VERSION;
-            return res.json({ respuesta: `🔄 *Versión actual:* ${ver}\n\nPara actualizar, escribe "publicar actualización con [cambios]" y yo me encargo del resto.` });
+        // ── ESTADÍSTICAS / RESUMEN ──────────────────────────────────
+        if (intencion === 'estadistica') {
+            const productos = await getProductos();
+            let respuesta = `📈 *Resumen del sistema:*\n\n`;
+            respuesta += `🏪 *Locales:* ${m.locales}\n`;
+            respuesta += `👥 *Usuarios:* ${m.usuarios}${m.pendientes > 0 ? ` (${m.pendientes} pendiente(s))` : ''}\n`;
+            respuesta += `📦 *Productos:* ${m.productos}${m.stock_bajo > 0 ? ` (${m.stock_bajo} con stock bajo ⚠️)` : ''}\n\n`;
+            respuesta += `💰 *Ventas:*\n`;
+            respuesta += `  • Hoy: ${fmtCOP(m.ventas_hoy)} (${m.ventas_hoy_cant} ventas)\n`;
+            respuesta += `  • 30 días: ${fmtCOP(m.ventas_mes)} (${m.ventas_mes_cant} ventas)\n\n`;
+            if (m.tickets_abiertos > 0) respuesta += `🎫 *Tickets abiertos:* ${m.tickets_abiertos} ⚠️\n\n`;
+            respuesta += `_¿Quieres detalle de algo específico?_`;
+            return res.json({ respuesta });
         }
 
-        // Ventas de un local específico
-        if (intencion === 'ventas') {
+        // ── LOCALES ─────────────────────────────────────────────────
+        if (intencion === 'locales' && accion !== 'aprobar' && accion !== 'rechazar') {
+            // Verificar si pregunta por uno específico
             const nombreLocal = extraerLocal(msg);
             if (nombreLocal) {
                 const v = await getVentasLocal(nombreLocal);
                 if (!v) return res.json({ respuesta: `No encontré un local con "${nombreLocal}". ¿Puedes verificar el nombre?` });
                 return res.json({ respuesta:
                     `💰 *Ventas de ${v.nombre_local}:*\n\n` +
-                    `📊 Total facturado: *${fmtCOP(v.total)}*\n` +
-                    `🧾 Número de ventas: *${v.num_ventas}*\n` +
-                    `💵 Subtotal (sin impuestos): ${fmtCOP(v.subtotal)}`
+                    `• Total facturado: *${fmtCOP(v.total)}*\n` +
+                    `• Número de ventas: *${v.num_ventas}*\n` +
+                    `• Subtotal: ${fmtCOP(v.subtotal)}`
                 });
             }
 
-            // Ventas recientes
+            const locales = await getLocales();
+            if (locales.length === 0) return res.json({ respuesta: 'No hay locales registrados.' });
+
+            let respuesta = `🏪 *Tienes ${locales.length} local(es):*\n\n`;
+            for (const l of locales) {
+                respuesta += `• *${l.nombre_local}*`;
+                if (l.ciudad) respuesta += ` — ${l.ciudad}`;
+                respuesta += ` · ${l.total_usuarios} usuario(s)`;
+                if (Number(l.total_ventas) > 0) respuesta += ` · ${fmtCOP(l.total_ventas)}`;
+                respuesta += '\n';
+            }
+            return res.json({ respuesta });
+        }
+
+        // ── VENTAS ──────────────────────────────────────────────────
+        if (intencion === 'ventas') {
+            const nombreLocal = extraerLocal(msg);
+            if (nombreLocal) {
+                const v = await getVentasLocal(nombreLocal);
+                if (!v) return res.json({ respuesta: `No encontré un local con "${nombreLocal}".` });
+                return res.json({ respuesta:
+                    `💰 *Ventas de ${v.nombre_local}:*\n\n` +
+                    `• Total: *${fmtCOP(v.total)}*\n` +
+                    `• Ventas: *${v.num_ventas}*\n` +
+                    `• Subtotal: ${fmtCOP(v.subtotal)}`
+                });
+            }
+
+            // Preguntar por hoy o el mes
+            if (msg.includes('hoy') || msg.includes('dia') || msg.includes('día')) {
+                return res.json({ respuesta:
+                    `💰 *Ventas de hoy:*\n\n` +
+                    `• Total: *${fmtCOP(m.ventas_hoy)}*\n` +
+                    `• Transacciones: *${m.ventas_hoy_cant}*\n\n` +
+                    `_¿Quieres ver las de un local específico?_`
+                });
+            }
+
             const recientes = await getVentasRecientes();
             if (recientes.length === 0) return res.json({ respuesta: 'No hay ventas registradas aún.' });
 
             let respuesta = `💰 *Últimas ventas:*\n\n`;
             for (const v of recientes) {
-                respuesta += `• Venta #${v.id_venta} — ${fmtCOP(v.total_neto)} en *${v.nombre_local}*\n  ${new Date(v.fecha_venta).toLocaleString('es-CO')}\n`;
+                respuesta += `• #${v.id_venta} — ${fmtCOP(v.total_neto)} en *${v.nombre_local}*\n  ${new Date(v.fecha_venta).toLocaleString('es-CO')}\n`;
             }
             return res.json({ respuesta });
         }
 
-        // Métricas / resumen
-        if (intencion === 'metricas' || intencion === 'reportes' || msg.includes('cómo va') || msg.includes('como va') || msg.includes('qué tal') || msg.includes('que tal') || msg.includes('cómo estamos') || msg.includes('como estamos')) {
-            const m = await getMetricas();
-            const productos = await getProductos();
-            return res.json({ respuesta:
-                `📈 *Resumen del sistema:*\n\n` +
-                `🏪 Locales: *${m.locales}*\n` +
-                `👥 Usuarios: *${m.usuarios}*\n` +
-                `📦 Productos: *${productos.total}* (${productos.bajo_stock} con stock bajo)\n` +
-                `💰 Ventas (30 días): *${fmtCOP(m.ventas_total)}* (${m.ventas_cantidad} transacciones)\n` +
-                `🎫 Tickets abiertos: *${m.tickets}*\n\n` +
-                `_¿Quieres ver más detalle de algo específico?_`
-            });
-        }
-
-        // Errores / bugs (DEBE ir antes de pendientes para evitar conflictos)
-        if (msg.includes('error') || msg.includes('bug') ||
-            msg.includes('no funciona') || msg.includes('falla') ||
-            (msg.includes('problema') && !msg.includes('ticket'))) {
-            return res.json({ respuesta:
-                `⚠️ *Issues conocidos:*\n\n` +
-                `1. *Gmail SMTP* — Credenciales inválidas\n` +
-                `   → Necesita regenerar contraseña de aplicación en Google\n\n` +
-                `2. *JWT_SECRET* — No configurado en .env\n` +
-                `   → Usa aleatorio por sesión (tokens se invalidan al reiniciar)\n\n` +
-                `3. *Foto de perfil* — No se actualiza en tiempo real en Header\n` +
-                `   → Solo se ve el cambio al recargar la página\n\n` +
-                `4. *Bot* — Sin memoria entre sesiones\n` +
-                `   → Cada conversación empieza de cero\n\n` +
-                `5. *Facturación DIAN* — En fase de pruebas\n\n` +
-                `6. *Notificaciones push* — No implementadas para móviles\n\n` +
-                `_¿Cuál quieres resolver? Puedo crear una actualización si lo solucionas._`
-            });
-        }
-
-        // Usuarios / pendientes
+        // ── USUARIOS / PENDIENTES ───────────────────────────────────
         if (intencion === 'usuarios' || intencion === 'pendientes') {
             const pendientes = await getPendientes();
-            if (pendientes.length === 0) return res.json({ respuesta: '✅ No hay usuarios pendientes de aprobación. Todos están aprobados.' });
+            if (pendientes.length === 0) return res.json({ respuesta: '✅ No hay usuarios pendientes. Todos aprobados.' });
 
-            let respuesta = `👥 *${pendientes.length} usuario${pendientes.length > 1 ? 's' : ''} esperando aprobación:*\n\n`;
+            let respuesta = `👥 *${pendientes.length} usuario(s) esperando aprobación:*\n\n`;
             for (const u of pendientes) {
-                respuesta += `• *${u.nombre}* — ${u.correo}\n  Local: ${u.nombre_local || 'sin asignar'} · ID: ${u.id_usuario}\n`;
+                respuesta += `• *${u.nombre}* — ${u.correo}\n  📍 ${u.nombre_local || 'sin asignar'} · ID: ${u.id_usuario}\n`;
             }
-            respuesta += `\n_Para aprobar, escribe: "aprobar [nombre]"_`;
+            respuesta += `\n💡 _Responde "aprobar [nombre]" o "rechazar [nombre]"_`;
             return res.json({ respuesta });
         }
 
-        // Aprobar usuario
+        // ── APROBAR USUARIO ─────────────────────────────────────────
         if (accion === 'aprobar') {
             const nombre = extraerNombre(msg);
-            if (!nombre) return res.json({ respuesta: '¿A quién quieres aprobar? Escribe "aprobar [nombre del usuario]".' });
+            if (!nombre) return res.json({ respuesta: '¿A quién quieres aprobar? Escribe "aprobar [nombre]".' });
             const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
             if (r.rows.length === 0) return res.json({ respuesta: `No encontré un usuario pendiente llamado "${nombre}".` });
             if (r.rows.length > 1) {
@@ -3595,331 +3449,247 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
             return res.json({ respuesta: `✅ *${r.rows[0].nombre}* aprobado. Ya puede usar el sistema.` });
         }
 
-        // Rechazar usuario
+        // ── RECHAZAR USUARIO ────────────────────────────────────────
         if (accion === 'rechazar') {
             const nombre = extraerNombre(msg);
-            if (!nombre) return res.json({ respuesta: '¿A quién quieres rechazar? Escribe "rechazar [nombre del usuario]".' });
+            if (!nombre) return res.json({ respuesta: '¿A quién quieres rechazar? Escribe "rechazar [nombre]".' });
             const r = await db.query('SELECT id_usuario, nombre FROM usuarios WHERE LOWER(nombre) LIKE $1 AND aprobado_por_admin = false', [`%${nombre}%`]);
             if (r.rows.length === 0) return res.json({ respuesta: `No encontré un usuario pendiente llamado "${nombre}".` });
             await db.query('DELETE FROM usuarios WHERE id_usuario = $1', [r.rows[0].id_usuario]);
             return res.json({ respuesta: `❌ *${r.rows[0].nombre}* rechazado y eliminado.` });
         }
 
-        // Tickets
+        // ── TICKETS ─────────────────────────────────────────────────
         if (intencion === 'tickets') {
-            const tickets = await getTicketRecientes();
-            if (tickets.length === 0) return res.json({ respuesta: '✅ No hay tickets de soporte abiertos. Todo tranquilo.' });
-            let respuesta = `🎫 *${tickets.length} ticket${tickets.length > 1 ? 's' : ''} abierto${tickets.length > 1 ? 's' : ''}:*\n\n`;
+            const tickets = await getTickets();
+            if (tickets.length === 0) return res.json({ respuesta: '✅ No hay tickets abiertos. Todo tranquilo. 🎉' });
+            let respuesta = `🎫 *${tickets.length} ticket(s) abierto(s):*\n\n`;
             for (const t of tickets) {
-                respuesta += `• *#${t.id_ticket}* ${t.asunto || 'Consulta'}\n  ${t.nombre} — ${t.mensaje?.substring(0, 80) || 'Sin detalle'}...\n`;
+                respuesta += `• *#${t.id_ticket}* ${t.asunto || 'Consulta'}\n  👤 ${t.nombre} — ${t.mensaje?.substring(0, 80) || 'Sin detalle'}...\n`;
             }
             return res.json({ respuesta });
         }
 
-        // Productos / inventario
+        // ── PRODUCTOS ───────────────────────────────────────────────
         if (intencion === 'productos') {
             const p = await getProductos();
             return res.json({ respuesta:
                 `📦 *Inventario:*\n\n` +
-                `• Total productos: *${p.total}*\n` +
-                `• Stock bajo: *${p.bajo_stock}* producto${p.bajo_stock !== 1 ? 's' : ''} ${p.bajo_stock > 0 ? '⚠️' : '✅'}\n\n` +
-                `_¿Quieres ver el detalle de algún producto o local específico?_`
+                `• Total: *${p.total}* productos\n` +
+                `• Stock bajo: *${p.bajo_stock}* ${p.bajo_stock > 0 ? '⚠️' : '✅'}\n\n` +
+                `_¿Quieres ver detalle de algún local?_`
             });
         }
 
-        // Versión
-        if (intencion === 'version') {
-            const ultimaUpd = await db.query('SELECT version FROM actualizaciones WHERE activa = true ORDER BY fecha_publicacion DESC LIMIT 1');
-            const ver = ultimaUpd.rows[0]?.version || APP_VERSION;
-            return res.json({ respuesta: `🔄 *Versión actual:* ${ver}\n\nPara actualizar, escribe "publicar actualización con [cambios]" y yo me encargo del resto.` });
-        }
-
-        // ══════════════════════════════════════════════════════════════════
-        // INTELIGENCIA TÉCNICA — El bot conoce TODO el sistema
-        // DEBE IR ANTES de detección de estado para evitar conflictos
-        // ══════════════════════════════════════════════════════════════════
-
-        // Preguntas sobre arquitectura / stack / cómo funciona
-        // NO matchea "tablas" ni "base de datos" (eso va en sección de tablas)
-        if (msg.includes('cómo funciona') || msg.includes('como funciona') ||
-            msg.includes('qué tecnología') || msg.includes('que tecnologia') ||
-            msg.includes('qué stack') || msg.includes('qué usa') ||
-            msg.includes('arquitectura') || msg.includes('estructura')) {
-            return res.json({ respuesta:
-                `🏗️ *Arquitectura del Sistema:*\n\n` +
-                `*Frontend:* ${CONTEXTO_SISTEMA.stack.frontend}\n` +
-                `*Backend:* ${CONTEXTO_SISTEMA.stack.backend}\n` +
-                `*Base de datos:* ${CONTEXTO_SISTEMA.stack.base_datos}\n` +
-                `*Hosting:* ${CONTEXTO_SISTEMA.stack.hosting_frontend}\n` +
-                `*API:* ${CONTEXTO_SISTEMA.stack.hosting_backend}\n\n` +
-                `📁 *Estructura:*\n` +
-                `• Frontend: 21 páginas React + 4 componentes\n` +
-                `• Backend: 1 archivo server.js (~4500 líneas)\n` +
-                `• BD: 29 tablas PostgreSQL\n` +
-                `• Desktop: Electron (Windows + macOS)\n` +
-                `• Mobile: Capacitor (iOS + Android)\n\n` +
-                `_¿Qué parte del sistema quieres conocer?_`
-            });
-        }
-
-        // Preguntas sobre features específicas
-        if (msg.includes('qué puede') || msg.includes('que puede') ||
-            msg.includes('qué features') || msg.includes('qué hace') ||
-            msg.includes('qué sabes') || msg.includes('que sabes') ||
-            msg.includes('cuéntame') || msg.includes('cuentame') ||
-            msg.includes('contami') || msg.includes('cuéntame del sistema')) {
-            return res.json({ respuesta:
-                `📋 *Features del Sistema:*\n\n` +
-                `🛒 *POS:* Punto de venta con carrito, descuentos, métodos de pago\n` +
-                `📦 *Inventario:* CRUD productos, imágenes, stock, código de barras\n` +
-                `👥 *Clientes:* Gestión con geolocalización (OpenStreetMap)\n` +
-                `📄 *Cotizaciones:* Crear, enviar, convertir a venta\n` +
-                `🧾 *Facturación:* Integración DIAN\n` +
-                `💰 *Nómina:* Gestión de pagos y empleados\n` +
-                `🏪 *Caja:* Apertura estilo Karrot, cierre con arqueo\n` +
-                `📊 *Dashboard:* Métricas en tiempo real, gráficos\n` +
-                `🌐 *Ecommerce:* Shopify + WooCommerce\n` +
-                `🎫 *Soporte:* Sistema de tickets\n` +
-                `🔄 *Updates:* Actualizaciones remotas + tracking de instalaciones\n` +
-                `🤖 *Bot:* Asistente inteligente (¡soy yo!)\n\n` +
-                `_Pregúntame sobre cualquier feature específica._`
-            });
-        }
-
-        // Preguntas sobre tablas / base de datos
-        if (msg.includes('qué tablas') || msg.includes('que tablas') ||
-            msg.includes('tablas de la') || msg.includes('estructura de la') ||
-            msg.includes('campos') || msg.includes('columnas') ||
-            msg.includes('qué guarda') || msg.includes('qué datos')) {
-            return res.json({ respuesta:
-                `🗄️ *Base de datos — 29 tablas:*\n\n` +
-                `*Core:* locales, usuarios, productos, categorías, clientes\n` +
-                `*Ventas:* ventas, detalle_ventas, cotizaciones, detalle_cotizaciones\n` +
-                `*Caja:* turnos_caja, pagos_nomina, pagos_automaticos_programados\n` +
-                `*Soporte:* tickets_soporte, notificaciones, email_logs\n` +
-                `*Admin:* super_admins, configuracion_sistema, configuracion_dian\n` +
-                `*Ecommerce:* ecommerce_integraciones, integraciones_ecommerce\n` +
-                `*Extras:* producto_imagenes, proveedores, empleados, respaldos\n` +
-                `*Tracking:* instalaciones, actualizaciones\n` +
-                `*Pagos:* configuracion_pago, transacciones_wompi\n\n` +
-                `_¿Quieres saber los campos de alguna tabla específica?_`
-            });
-        }
-
-        // Detalle de una tabla específica
-        if (msg.includes('tabla de usuarios') || msg.includes('usuarios tiene') ||
-            msg.includes('campos de usuario') || msg.includes('qué tiene usuario')) {
-            return res.json({ respuesta:
-                `👤 *Tabla usuarios:*\n\n` +
-                `• id_usuario (serial PK)\n` +
-                `• nombre (varchar)\n` +
-                `• correo (varchar, unique)\n` +
-                `• password_hash (varchar)\n` +
-                `• rol (enum: Admin/Cajero/Vendedor)\n` +
-                `• id_local (FK → locales)\n` +
-                `• aprobado_por_admin (boolean)\n` +
-                `• foto_perfil (text, URL)\n` +
-                `• created_at (timestamp)\n\n` +
-                `_¿Otra tabla?_`
-            });
-        }
-
-        if (msg.includes('tabla de productos') || msg.includes('productos tiene') ||
-            msg.includes('campos de producto')) {
-            return res.json({ respuesta:
-                `📦 *Tabla productos:*\n\n` +
-                `• id_producto (serial PK)\n` +
-                `• nombre (varchar)\n` +
-                `• descripcion (text)\n` +
-                `• precio (numeric)\n` +
-                `• stock_actual (int)\n` +
-                `• stock_minimo (int)\n` +
-                `• id_categoria (FK → categorias)\n` +
-                `• imagen_url (text)\n` +
-                `• codigo_barras (varchar)\n` +
-                `• id_local (FK → locales)\n\n` +
-                `_¿Otra tabla?_`
-            });
-        }
-
-        if (msg.includes('tabla de ventas') || msg.includes('ventas tiene') ||
-            msg.includes('campos de venta')) {
-            return res.json({ respuesta:
-                `💰 *Tabla ventas:*\n\n` +
-                `• id_venta (serial PK)\n` +
-                `• id_usuario (FK → usuarios)\n` +
-                `• id_cliente (FK → clientes)\n` +
-                `• id_local (FK → locales)\n` +
-                `• subtotal (numeric)\n` +
-                `• impuestos (numeric)\n` +
-                `• total_neto (numeric)\n` +
-                `• metodo_pago (varchar)\n` +
-                `• estado (varchar)\n` +
-                `• fecha_venta (timestamp)\n\n` +
-                `_¿Otra tabla?_`
-            });
-        }
-
-        // Preguntas sobre endpoints / API
-        if (msg.includes('endpoint') || msg.includes('api') ||
-            msg.includes('ruta') || msg.includes('rutas') ||
-            msg.includes('qué endpoints') || msg.includes('qué rutas')) {
-            return res.json({ respuesta:
-                `🔌 *Endpoints principales:*\n\n` +
-                `*Auth:* /api/auth/login, /registro, /me, /mi-perfil, /mi-password\n` +
-                `*Productos:* /api/productos, /:id, /:id/imagen, /:id/imagenes\n` +
-                `*Clientes:* /api/clientes, /crear, /buscar, /total\n` +
-                `*Ventas:* /api/ventas, / crear, /historial\n` +
-                `*Cotizaciones:* /api/cotizaciones, /:id, /:id/convertir-venta\n` +
-                `*Caja:* /api/turnos, /apertura, /cierre\n` +
-                `*Tickets:* /api/tickets, /crear, /responder\n` +
-                `*SuperAdmin:* /api/super/login, /solicitudes, /locales, /metricas, /bot\n` +
-                `*Updates:* /api/actualizaciones, /crear, /ultima, /instalaciones\n\n` +
-                `_¿Qué endpoint necesitas consultar?_`
-            });
-        }
-
-        // Preguntas sobre archivos / frontend
-        if (msg.includes('qué archivos') || msg.includes('qué página') ||
-            msg.includes('dónde está') || msg.includes('archivo') ||
-            msg.includes('página de') || msg.includes('componente')) {
-            return res.json({ respuesta:
-                `📁 *Archivos del Frontend:*\n\n` +
-                `• *App.jsx* — Rutas y layout principal\n` +
-                `• *Login.jsx* — Login con código + email\n` +
-                `• *Dashboard.jsx* — Panel principal con métricas\n` +
-                `• *POS.jsx* — Punto de venta\n` +
-                `• *Inventario.jsx* — CRUD productos\n` +
-                `• *Clientes.jsx* — Clientes con geolocalización\n` +
-                `• *Configuracion.jsx* — Perfil y ajustes\n` +
-                `• *SuperAdmin.jsx* — Panel administrativo\n` +
-                `• *Header.jsx* — Barra lateral\n` +
-                `• *WelcomeModal.jsx* — Modal de bienvenida\n` +
-                `• *UpdateNotification.jsx* — Notificación de updates\n\n` +
-                `_¿Qué archivo necesitas revisar?_`
-            });
-        }
-
-        // Preguntas sobre errores / bugs conocidos
-        if (msg.includes('error') || msg.includes('bug') ||
-            msg.includes('no funciona') || msg.includes('falla') ||
-            msg.includes('problema') || msg.includes('pendiente')) {
+        // ── ERRORES / BUGS ──────────────────────────────────────────
+        if (intencion === 'errores') {
             return res.json({ respuesta:
                 `⚠️ *Issues conocidos:*\n\n` +
                 `1. *Gmail SMTP* — Credenciales inválidas\n` +
-                `   → Necesita regenerar contraseña de aplicación en Google\n\n` +
+                `   → Regenerar contraseña de aplicación en Google\n\n` +
                 `2. *JWT_SECRET* — No configurado en .env\n` +
-                `   → Usa aleatorio por sesión (tokens se invalidan al reiniciar)\n\n` +
-                `3. *Foto de perfil* — No se actualiza en tiempo real en Header\n` +
-                `   → Solo se ve el cambio al recargar la página\n\n` +
-                `4. *Bot* — Sin memoria entre sesiones\n` +
-                `   → Cada conversación empieza de cero\n\n` +
+                `   → Tokens se invalidan al reiniciar servidor\n\n` +
+                `3. *Foto de perfil* — No actualiza en tiempo real en Header\n\n` +
+                `4. *Bot* — Sin memoria entre sesiones\n\n` +
                 `5. *Facturación DIAN* — En fase de pruebas\n\n` +
-                `6. *Notificaciones push* — No implementadas para móviles\n\n` +
-                `_¿Cuál quieres resolver? Puedo crear una actualización si lo solucionas._`
+                `6. *Notificaciones push* — No implementadas (móvil)\n\n` +
+                `_¿Cuál quieres resolver? Puedo publicar una actualización si lo arreglas._`
             });
         }
 
-        // Preguntas sobre versiones / releases
-        if (msg.includes('qué versión') || msg.includes('que version') ||
-            msg.includes('versión actual') || msg.includes('última versión') ||
-            msg.includes('release') || msg.includes('changelog') ||
-            msg.includes('cómo funcionan las actualizaciones') || msg.includes('cómo funciona la actualización')) {
-            const ultimaUpd = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 3');
-            let respuesta = `🔄 *Sistema — Versión ${CONTEXTO_SISTEMA.version_actual}*\n\n`;
-            respuesta += `📊 *Versión actual:* ${CONTEXTO_SISTEMA.version_actual}\n`;
-            respuesta += `👤 *Desarrollador:* ${CONTEXTO_SISTEMA.autor}\n\n`;
-
-            respuesta += `📡 *Cómo funcionan las actualizaciones:*\n\n` +
-                `1️⃣ *Tú me dices* qué cambios quieres (ej: "publicar actualización con fecha y hora en el header")\n` +
-                `2️⃣ *Yo creo* el registro en la base de datos automáticamente\n` +
-                `3️⃣ *Los clientes* reciben la notificación al reiniciar la app\n` +
-                `4️⃣ *No necesitas* subir archivos .exe ni .dm — solo yo y tú hablamos\n\n` +
-                `_Ejemplo: "publicar actualización con corrección de bugs en el POS"_\n\n`;
-
-            if (ultimaUpd.rows.length > 0) {
-                respuesta += `📋 *Últimas actualizaciones:*\n`;
-                for (const u of ultimaUpd.rows) {
-                    respuesta += `• v${u.version} — ${u.activa ? '🟢' : '⚪'} ${u.changelog || 'Sin changelog'}\n`;
-                }
-            }
-            return res.json({ respuesta });
+        // ── SEGURIDAD ───────────────────────────────────────────────
+        if (intencion === 'seguridad') {
+            return res.json({ respuesta:
+                `🔐 *Estado de seguridad:*\n\n` +
+                `✅ Credenciales hasheadas con bcrypt (cost 12)\n` +
+                `✅ Login con rate limit\n` +
+                `✅ API protegida con JWT\n` +
+                `✅ Roles (Admin/Cajero/Vendedor)\n` +
+                `✅ CORS whitelist\n` +
+                `✅ .env fuera de git\n\n` +
+                `⚠️ *Pendientes de seguridad:*\n` +
+                `• Validación de inputs con Zod/Joi\n` +
+                `• Cifrar access_token de Shopify en BD\n` +
+                `• Magic bytes en upload de imágenes\n` +
+                `• Refresh tokens + blacklist de logout\n` +
+                `• 2FA (TOTP) para super-admin\n\n` +
+                `_¿Quieres que publique una actualización de seguridad?_`
+            });
         }
 
-        // Preguntas sobre quién lo hizo / autor
-        if (msg.includes('quién hizo') || msg.includes('quien hizo') ||
-            msg.includes('quién creó') || msg.includes('quien creo') ||
-            msg.includes('desarrollador') || msg.includes('autor') ||
-            msg.includes('programador')) {
+        // ── ARQUITECTURA / STACK ────────────────────────────────────
+        if (intencion === 'arquitectura') {
             return res.json({ respuesta:
-                `👨‍💻 *Desarrollador:* ${CONTEXTO_SISTEMA.autor}\n\n` +
-                `📅 *Creación:* ${CONTEXTO_SISTEMA.fecha_creacion}\n` +
-                `🛠️ *Stack:* ${CONTEXTO_SISTEMA.stack.frontend}\n` +
-                `⚙️ *Backend:* ${CONTEXTO_SISTEMA.stack.backend}\n` +
-                `💾 *BD:* ${CONTEXTO_SISTEMA.stack.base_datos}\n\n` +
+                `🏗️ *Arquitectura del Sistema:*\n\n` +
+                `*Frontend:* React 19 + Vite + Electron 35 + Capacitor 7\n` +
+                `*Backend:* Node.js 22 + Express 5\n` +
+                `*Base de datos:* PostgreSQL 16 (Neon)\n` +
+                `*Hosting:* GitHub Pages + Render\n` +
+                `*Desktop:* Electron (Windows NSIS + macOS ARM64)\n` +
+                `*Móvil:* Capacitor (iOS + Android)\n\n` +
+                `📁 *Estructura:*\n` +
+                `• 21 páginas React + 4 componentes\n` +
+                `• 1 server.js (~4500 líneas)\n` +
+                `• 29 tablas PostgreSQL\n\n` +
+                `_¿Qué parte quieres conocer?_`
+            });
+        }
+
+        // ── FEATURES ────────────────────────────────────────────────
+        if (intencion === 'features') {
+            return res.json({ respuesta:
+                `📋 *Features del POS:*\n\n` +
+                `🛒 POS · 📦 Inventario · 👥 Clientes\n` +
+                `📄 Cotizaciones · 🧾 Facturación DIAN\n` +
+                `💰 Nómina · 🏪 Caja · 📊 Dashboard\n` +
+                `🌐 Ecommerce · 🎫 Soporte\n` +
+                `🔄 Updates remotos · 🤖 Bot (¡soy yo!)\n\n` +
+                `_Pregúntame sobre cualquier feature._`
+            });
+        }
+
+        // ── TABLAS / BASE DE DATOS ──────────────────────────────────
+        if (intencion === 'tablas') {
+            // Verificar si pregunta por una tabla específica
+            if (msg.includes('usuarios') || msg.includes('usuario')) {
+                return res.json({ respuesta:
+                    `👤 *Tabla usuarios:*\n\n` +
+                    `id_usuario · nombre · correo · password_hash\n` +
+                    `rol (Admin/Cajero/Vendedor) · id_local\n` +
+                    `aprobado_por_admin · foto_perfil · created_at`
+                });
+            }
+            if (msg.includes('productos') || msg.includes('producto')) {
+                return res.json({ respuesta:
+                    `📦 *Tabla productos:*\n\n` +
+                    `id_producto · nombre · descripcion · precio\n` +
+                    `stock_actual · stock_minimo · id_categoria\n` +
+                    `imagen_url · codigo_barras · id_local`
+                });
+            }
+            if (msg.includes('ventas') || msg.includes('venta')) {
+                return res.json({ respuesta:
+                    `💰 *Tabla ventas:*\n\n` +
+                    `id_venta · id_usuario · id_cliente · id_local\n` +
+                    `subtotal · impuestos · total_neto\n` +
+                    `metodo_pago · estado · fecha_venta`
+                });
+            }
+            return res.json({ respuesta:
+                `🗄️ *Base de datos — 29 tablas:*\n\n` +
+                `*Core:* locales, usuarios, productos, categorías, clientes\n` +
+                `*Ventas:* ventas, detalle_ventas, cotizaciones\n` +
+                `*Caja:* turnos_caja, pagos_nomina\n` +
+                `*Soporte:* tickets_soporte, notificaciones\n` +
+                `*Admin:* super_admins, configuracion_sistema\n` +
+                `*Ecommerce:* ecommerce_integraciones\n` +
+                `*Extras:* producto_imagenes, proveedores, empleados\n\n` +
+                `_¿Campos de alguna tabla específica?_`
+            });
+        }
+
+        // ── ENDPOINTS / API ─────────────────────────────────────────
+        if (intencion === 'endpoints') {
+            return res.json({ respuesta:
+                `🔌 *Endpoints principales:*\n\n` +
+                `*Auth:* /api/auth/login, /registro, /me\n` +
+                `*Productos:* /api/productos, /:id/imagenes\n` +
+                `*Clientes:* /api/clientes, /buscar\n` +
+                `*Ventas:* /api/ventas, /historial\n` +
+                `*Cotizaciones:* /api/cotizaciones\n` +
+                `*Caja:* /api/turnos, /apertura, /cierre\n` +
+                `*Tickets:* /api/tickets\n` +
+                `*SuperAdmin:* /api/super/*\n` +
+                `*Updates:* /api/actualizaciones\n\n` +
+                `_¿Qué endpoint necesitas?_`
+            });
+        }
+
+        // ── ARCHIVOS / FRONTEND ─────────────────────────────────────
+        if (intencion === 'archivos') {
+            return res.json({ respuesta:
+                `📁 *Archivos principales:*\n\n` +
+                `• *App.jsx* — Rutas y layout\n` +
+                `• *Login.jsx* — Login\n` +
+                `• *Dashboard.jsx* — Panel principal\n` +
+                `• *POS.jsx* — Punto de venta\n` +
+                `• *Inventario.jsx* — Productos\n` +
+                `• *Clientes.jsx* — Clientes\n` +
+                `• *Configuracion.jsx* — Ajustes\n` +
+                `• *SuperAdmin.jsx* — Panel admin\n` +
+                `• *Header.jsx* — Barra lateral\n\n` +
+                `_¿Qué archivo necesitas?_`
+            });
+        }
+
+        // ── VERSIÓN ─────────────────────────────────────────────────
+        if (intencion === 'version') {
+            return res.json({ respuesta:
+                `🔄 *Versión actual:* v${version}\n\n` +
+                `📡 *Cómo funcionan las actualizaciones:*\n` +
+                `1. Me dices qué cambios quieres\n` +
+                `2. Yo publico automáticamente\n` +
+                `3. Los clientes la ven al reiniciar\n\n` +
+                `_¿Quieres publicar una nueva versión?_`
+            });
+        }
+
+        // ── AUTOR ───────────────────────────────────────────────────
+        if (intencion === 'autor') {
+            return res.json({ respuesta:
+                `👨‍💻 *Desarrollador:* Andrés Cuesta\n\n` +
+                `📅 Creación: Agosto 2026\n` +
+                `🛠️ Stack: React + Node.js + PostgreSQL\n` +
+                `📱 Desktop: Electron · Móvil: Capacitor\n\n` +
                 `_¿Qué necesitas del desarrollador? Yo puedo ayudarte con lo que sea._`
             });
         }
 
-        // ══════════════════════════════════════════════════════════════════
-
-        // Estado del servidor (solo matchea si NO es pregunta de arquitectura)
-        if (intencion === 'estado' || msg.includes('está bien') || msg.includes('esta bien')) {
-            const uptime = Math.floor(process.uptime());
-            const hrs = Math.floor(uptime / 3600);
-            const min = Math.floor((uptime % 3600) / 60);
+        // ── ESTADO DEL SERVIDOR ─────────────────────────────────────
+        if (intencion === 'estado') {
             return res.json({ respuesta:
                 `🟢 *Sistema funcionando correctamente*\n\n` +
                 `⏱️ Tiempo activo: ${hrs}h ${min}m\n` +
-                `📊 Versión: ${APP_VERSION}\n` +
+                `📊 Versión: v${version}\n` +
                 `💾 Puerto: 3000\n` +
                 `🟢 Base de datos: conectada`
             });
         }
 
-        // Reporte
+        // ── REPORTE ─────────────────────────────────────────────────
         if (accion === 'enviar' || msg.includes('reporte') || msg.includes('informe')) {
             const tipo = msg.includes('mensual') ? 'mensual' : 'semanal';
             const resultado = await enviarReporteAutomatico(tipo);
             return res.json({ respuesta: resultado.enviado
                 ? `✅ Reporte ${tipo} enviado a tu correo.`
-                : `⚠️ Reporte generado, pero no se pudo enviar el correo (revisa la configuración SMTP).`
+                : `⚠️ Reporte generado, pero no se pudo enviar el correo (revisa SMTP).`
             });
         }
 
-        // ── Respuesta por defecto (intenta ayudar) ──────────────────────────
-        // Si el mensaje contiene palabras clave sueltas, intentar responder
+        // ── RESPUESTAS FALLBACK CONTECTUALES ────────────────────────
+        // Intenta entender por contexto antes de dar la respuesta por defecto
+
         if (msg.includes('local') || msg.includes('tienda')) {
             const locales = await getLocales();
-            return res.json({ respuesta: `Tienes *${locales.length} locales*. ¿Quieres ver el detalle de alguno específico?` });
+            return res.json({ respuesta: `Tienes *${locales.length} locales*. ¿Quieres ver el detalle de alguno?` });
         }
         if (msg.includes('usuario') || msg.includes('empleado')) {
             const pendientes = await getPendientes();
             const total = await db.query('SELECT COUNT(*)::int AS n FROM usuarios');
-            return res.json({ respuesta: `Hay *${total.rows[0].n} usuarios* en total. ${pendientes.length > 0 ? `${pendientes.length} pendiente(s) de aprobación.` : 'Todos aprobados.'}` });
+            return res.json({ respuesta: `Hay *${total.rows[0].n} usuarios*. ${pendientes.length > 0 ? `${pendientes.length} pendiente(s).` : 'Todos aprobados.'}` });
         }
         if (msg.includes('venta') || msg.includes('dinero') || msg.includes('factura')) {
-            const m = await getMetricas();
-            return res.json({ respuesta: `En los últimos 30 días: *${fmtCOP(m.ventas_total)}* en ${m.ventas_cantidad} ventas.` });
+            return res.json({ respuesta: `Hoy: *${fmtCOP(m.ventas_hoy)}* · Este mes: *${fmtCOP(m.ventas_mes)}*` });
         }
 
-        return res.json({ respuesta:
-            `🤔 No estoy seguro de entender. Soy el asistente técnico del *Sistema POS v${CONTEXTO_SISTEMA.version_actual}*.\n\n` +
-            `Puedo ayudarte con:\n\n` +
-            `📊 *Operaciones:*\n` +
-            `• "¿Cuántos locales hay?" — Métricas\n` +
-            `• "Aprobar a Juan" — Gestionar usuarios\n` +
-            `• "¿Cuánto vendió iStore?" — Ventas\n\n` +
-            `🔧 *Técnico:*\n` +
-            `• "¿Cómo funciona el sistema?" — Arquitectura\n` +
-            `• "¿Qué tablas hay?" — Base de datos\n` +
-            `• "¿Qué errores hay?" — Issues conocidos\n` +
-            `• "¿Qué versión tenemos?" — Releases\n\n` +
-            `🔄 *Actualizaciones:*\n` +
-            `• "Publicar actualización con [cambios]" — Yo publico\n` +
-            `• "Ver actualizaciones" — Historial\n\n` +
-            `_Escribe "ayuda" para ver todo lo que puedo hacer._`
-        });
+        // ── RESPUESTA POR DEFECTO ───────────────────────────────────
+        // Respuestas variadas para no sonar robotico
+        const defaultRespuestas = [
+            `🤔 Hmm, no estoy seguro de entender. Soy el asistente del *POS v${version}*.\n\nPuedo ayudarte con métricas, usuarios, ventas, actualizaciones y más.\n\n_Escribe "ayuda" para ver todo lo que puedo hacer._`,
+            `🤔 No capté bien. ¿Puedes reformular?\n\nSoy el asistente del *POS v${version}*. Pregúntame sobre locales, ventas, usuarios, seguridad, o cualquier cosa técnica.\n\n_Escribe "ayuda" para ver opciones._`,
+            `🤔 Interesante, pero no sé a qué te refieres.\n\nSoy el asistente del *POS v${version}*. Puedo ayudarte con:\n• Métricas y estadísticas\n• Gestionar usuarios\n• Publicar actualizaciones\n• Preguntas técnicas\n\n_Escribe "ayuda" para ver todo._`,
+        ];
+        return res.json({ respuesta: defaultRespuestas[Math.floor(Math.random() * defaultRespuestas.length)] });
 
     } catch (err) {
         console.error('Error en bot:', err);
