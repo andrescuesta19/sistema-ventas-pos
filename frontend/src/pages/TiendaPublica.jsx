@@ -255,9 +255,6 @@ const TiendaPublica = () => {
                   <span style={styles.productCategory}>{p.nombre_categoria}</span>
                 )}
                 <h3 style={styles.productName}>{p.nombre_producto}</h3>
-                {p.descripcion && (
-                  <p style={styles.productDesc}>{p.descripcion.substring(0, 80)}...</p>
-                )}
                 <div style={styles.priceRow}>
                   <div>
                     <span style={styles.productPrice}>{fmtCOP(p.precio_venta)}</span>
@@ -337,9 +334,6 @@ const TiendaPublica = () => {
                   <span style={styles.modalCategory}>{productoModal.nombre_categoria}</span>
                 )}
                 <h2 style={styles.modalTitle}>{productoModal.nombre_producto}</h2>
-                {productoModal.descripcion && (
-                  <p style={styles.modalDesc}>{productoModal.descripcion}</p>
-                )}
                 <div style={styles.modalPriceRow}>
                   <span style={styles.modalPrice}>{fmtCOP(productoModal.precio_venta)}</span>
                   {productoModal.precio_anterior && productoModal.precio_anterior > productoModal.precio_venta && (
