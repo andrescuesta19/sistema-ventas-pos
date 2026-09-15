@@ -166,6 +166,22 @@ if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// v2.2.2: Servir el frontend estático desde el backend
+// Permite que Electron cargue la app via http://localhost:3000
+// (necesario para que Google OAuth funcione con origen http://localhost:3000)
+const frontendPaths = [
+    path.join(__dirname, 'frontend', 'dist'),
+    path.join(__dirname, '..', 'frontend', 'dist'),
+    path.join(__dirname, 'dist'),
+];
+for (const fp of frontendPaths) {
+    if (fs.existsSync(fp)) {
+        app.use(express.static(fp));
+        console.log(`[Frontend] Sirviendo archivos estáticos desde: ${fp}`);
+        break;
+    }
+}
+
 // === Configuración de multer para imágenes ===
 const storageProductos = isProduction
   ? multer.memoryStorage()
@@ -598,6 +614,94 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
     } catch (err) {
         console.error('Error en Google auth:', err);
         res.status(500).json({ error: 'Error al autenticar con Google.' });
+    }
+});
+
+// ── Google OAuth Callback (para Electron via navegador del sistema) ──
+// Este endpoint recibe el código de autorización de Google,
+// lo intercambia por un token, y redirige al app via pos:// protocol
+app.get('/api/auth/google/callback', async (req, res) => {
+    try {
+        const { code, state } = req.query;
+
+        if (!code) {
+            return res.status(400).send('Código de autorización no proporcionado');
+        }
+
+        // Intercambiar código por access token
+        const tokenResult = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+                redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`,
+                grant_type: 'authorization_code',
+            }),
+        });
+
+        const tokenData = await tokenResult.json();
+
+        if (!tokenData.id_token) {
+            return res.status(400).send('Error al obtener token de Google');
+        }
+
+        // Decodificar el id_token para obtener datos del usuario
+        const payload = JSON.parse(Buffer.from(tokenData.id_token.split('.')[1], 'base64url').toString());
+        
+        const email = payload.email;
+        const name = payload.name || payload.given_name || email.split('@')[0];
+        const photoUrl = payload.picture || null;
+
+        // Buscar o crear usuario
+        const { rows: existingUsers } = await db.query(
+            'SELECT u.*, l.nombre_local FROM usuarios u LEFT JOIN locales l ON u.id_local = l.id_local WHERE u.correo = $1',
+            [email]
+        );
+
+        let user = existingUsers[0];
+
+        if (!user) {
+            // Crear usuario nuevo
+            const { rows: locales } = await db.query('SELECT id_local FROM locales ORDER BY id_local LIMIT 1');
+            const idLocal = locales[0]?.id_local || 1;
+            const randomPass = require('crypto').randomBytes(16).toString('hex');
+            const hashedPass = await bcrypt.hash(randomPass, 10);
+
+            const { rows: newUser } = await db.query(`
+                INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, aprobado_por_admin, estado, avatar_url)
+                VALUES ($1, $2, $3, 'Vendedor', $4, true, true, $5)
+                RETURNING *
+            `, [name, email, hashedPass, idLocal, photoUrl]);
+
+            user = newUser[0];
+            user.nombre_local = locales[0]?.nombre_local || 'Local';
+        }
+
+        // Generar JWT
+        const jwtToken = signToken({
+            id_usuario: user.id_usuario,
+            nombre: user.nombre,
+            rol: user.rol,
+            id_local: user.id_local,
+            nombre_local: user.nombre_local,
+        });
+
+        // Redirigir al app via pos:// protocol
+        const userData = encodeURIComponent(JSON.stringify({
+            id_usuario: user.id_usuario,
+            nombre: user.nombre,
+            rol: user.rol,
+            id_local: user.id_local,
+            nombre_local: user.nombre_local,
+            avatar_url: user.avatar_url,
+        }));
+
+        res.redirect(`pos://callback?token=${jwtToken}&user=${userData}`);
+    } catch (err) {
+        console.error('Error en Google OAuth callback:', err);
+        res.status(500).send('Error al procesar autenticación con Google');
     }
 });
 

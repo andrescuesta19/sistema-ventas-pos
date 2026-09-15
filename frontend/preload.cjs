@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 
 // API segura expuesta al renderer
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // v2.2.2: Google OAuth callback via pos:// protocol
   onGoogleAuthCallback: (cb) => ipcRenderer.on('google-auth-callback', (_e, data) => cb(data)),
+  
+  // Abrir enlaces externos en el navegador del sistema
+  openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
 });

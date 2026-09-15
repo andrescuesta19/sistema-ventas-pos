@@ -349,7 +349,9 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
   if (process.env.ELECTRON_DEV === 'true' || process.env.NODE_ENV === 'development') {
     mainWindow.loadURL(devServerUrl);
   } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    // v2.2.2: En producción, servir el frontend desde el backend local
+    // para que el origen sea http://localhost:3000 (necesario para Google OAuth)
+    mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
   }
 
   mainWindow.on('closed', () => {
@@ -402,6 +404,11 @@ ipcMain.handle('app:restart-backend', async () => {
   startBackendInProduction();
   const ready = await waitForBackend(BACKEND_PORT, 15000);
   return { success: ready, error: ready ? null : 'Backend no respondió en 15s' };
+});
+
+// v2.2.2: Abrir enlaces externos en el navegador del sistema
+ipcMain.handle('app:open-external', async (event, url) => {
+  await shell.openExternal(url);
 });
 
 // ─────────────────────────────────────────────────────────
