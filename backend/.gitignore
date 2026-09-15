@@ -1,0 +1,17 @@
+# Backend-specific ignores (root .gitignore already covers most)
+# But explicit is better than implicit for sensitive paths
+
+# Local SQLite (legacy, project now uses Neon PostgreSQL)
+*.sqlite
+*.sqlite3
+*.db
+pos_database.sqlite
+
+# Logs
+*.log
+logs/
+
+# v1.5.4: archivo generado por sync-version.js antes del build
+# Se commitea con `git add -f` si se quiere tener la versión histórica en git,
+# pero por defecto se regenera en cada build.
+frontend-version.json
