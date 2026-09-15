@@ -3,7 +3,6 @@ services:
     name: pos-backend
     runtime: node
     plan: free
-    rootDir: backend
     buildCommand: |
       cd frontend
       npm install
@@ -14,7 +13,7 @@ services:
       cp -r frontend/dist backend/frontend/dist
       cd backend
       npm install
-    startCommand: node server.js
+    startCommand: cd backend && node server.js
     envVars:
       - key: DATABASE_URL
         sync: false
