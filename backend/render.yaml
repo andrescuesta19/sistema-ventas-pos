@@ -3,17 +3,8 @@ services:
     name: pos-backend
     runtime: node
     plan: free
-    buildCommand: |
-      cd frontend
-      npm install
-      npm run build
-      cd ..
-      mkdir -p backend/frontend
-      rm -rf backend/frontend/dist
-      cp -r frontend/dist backend/frontend/dist
-      cd backend
-      npm install
-    startCommand: cd backend && node server.js
+    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend && mkdir -p frontend && rm -rf frontend/dist && cp -r ../frontend/dist frontend/dist
+    startCommand: node server.js
     envVars:
       - key: DATABASE_URL
         sync: false
@@ -27,4 +18,6 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: https://andrescuesta19.github.io,https://sistema-ventas-pos-aeka.onrender.com
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
     healthCheckPath: /api/health
