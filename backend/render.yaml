@@ -3,7 +3,7 @@ services:
     name: pos-backend
     runtime: node
     plan: free
-    buildCommand: npm install && cd ../frontend && npm install && npm run build && cd ../backend && mkdir -p frontend && rm -rf frontend/dist && cp -r ../frontend/dist frontend/dist
+    buildCommand: npm install && cd ../frontend && npm install --include=dev && npm run build && cd ../backend && mkdir -p frontend && rm -rf frontend/dist && cp -r ../frontend/dist frontend/dist
     startCommand: node server.js
     envVars:
       - key: DATABASE_URL
