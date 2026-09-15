@@ -584,23 +584,27 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
                 await db.query('UPDATE usuarios SET avatar_url = $1 WHERE id_usuario = $2', [photoUrl, user.id_usuario]);
             }
         } else {
-            // Usuario nuevo — crear cuenta automáticamente
-            // Buscar el primer local disponible (o crear uno básico)
+            // v2.2.3: Usuario nuevo de Google — crear como Vendedor pendiente de aprobación
+            // DEBE pasar por SuperAdmin antes de poder usar la app
             const { rows: locales } = await db.query('SELECT id_local FROM locales ORDER BY id_local LIMIT 1');
             const idLocal = locales[0]?.id_local || 1;
 
-            // Generar contraseña aleatoria (no la usaremos, pero es requerida por el schema)
             const randomPass = require('crypto').randomBytes(16).toString('hex');
             const hashedPass = await bcrypt.hash(randomPass, 10);
 
+            // v2.2.4: verificado=true porque Google ya verificó el email
+            // aprobado_por_admin=false para que pase por SuperAdmin
             const { rows: newUser } = await db.query(`
-                INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, aprobado_por_admin, estado, avatar_url)
-                VALUES ($1, $2, $3, 'Cajero', $4, true, true, $5)
+                INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, verificado, aprobado_por_admin, estado, avatar_url)
+                VALUES ($1, $2, $3, 'Vendedor', $4, true, false, true, $5)
                 RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
             user = newUser[0];
             user.nombre_local = locales[0]?.nombre_local || 'Local';
+
+            // Notificar al SuperAdmin que hay un nuevo registro pendiente
+            console.log(`[GoogleAuth] Nuevo usuario registrado: ${email} (${name}) — Pendiente de aprobación`);
         }
 
         // Generar JWT
@@ -674,21 +678,31 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
         let user = existingUsers[0];
 
-        if (!user) {
-            // Crear usuario nuevo
+        if (user) {
+            // Verificar que esté aprobado
+            if (!user.aprobado_por_admin) {
+                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=pendiente_aprobacion&email=${encodeURIComponent(email)}`);
+            }
+            if (!user.estado) {
+                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=cuenta_desactivada`);
+            }
+        } else {
+            // v2.2.3: Crear usuario nuevo como Vendedor pendiente de aprobación
             const { rows: locales } = await db.query('SELECT id_local FROM locales ORDER BY id_local LIMIT 1');
             const idLocal = locales[0]?.id_local || 1;
             const randomPass = require('crypto').randomBytes(16).toString('hex');
             const hashedPass = await bcrypt.hash(randomPass, 10);
 
+            // v2.2.4: verificado=true porque Google ya verificó el email
             const { rows: newUser } = await db.query(`
-                INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, aprobado_por_admin, estado, avatar_url)
-                VALUES ($1, $2, $3, 'Cajero', $4, true, true, $5)
+                INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, verificado, aprobado_por_admin, estado, avatar_url)
+                VALUES ($1, $2, $3, 'Vendedor', $4, true, false, true, $5)
                 RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
             user = newUser[0];
             user.nombre_local = locales[0]?.nombre_local || 'Local';
+            console.log(`[GoogleCallback] Nuevo usuario: ${email} — Pendiente de aprobación`);
         }
 
         // Generar JWT
