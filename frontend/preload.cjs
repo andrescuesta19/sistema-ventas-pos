@@ -19,4 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDownloaded: (cb) => ipcRenderer.on('update:downloaded', (_e, info) => cb(info)),
   // v2.1.1: Actualización remota desde SuperAdmin
   onRemoteUpdateAvailable: (cb) => ipcRenderer.on('update:remote-available', (_e, info) => cb(info)),
+
+  // v2.2.2: Google OAuth callback via pos:// protocol
+  onGoogleAuthCallback: (cb) => ipcRenderer.on('google-auth-callback', (_e, data) => cb(data)),
 });

@@ -85,7 +85,7 @@ const WelcomeModal = () => {
           </button>
 
           <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.72rem', margin: '1rem 0 0' }}>
-            Desarrollado por Andrés Cuesta · v2.1.7
+            Desarrollado por Andrés Cuesta · v2.2.2
           </p>
         </div>
       </div>
