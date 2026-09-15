@@ -165,6 +165,7 @@ const updatesDir = isProduction
 if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/logos', express.static(path.join(__dirname, 'logos')));
 
 // ── Tienda Pública HTML (ANTES de express.static para evitar conflicto) ──
 // v2.2.5: Lee template HTML y reemplaza datos del local/productos
