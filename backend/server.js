@@ -595,7 +595,7 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
 
             const { rows: newUser } = await db.query(`
                 INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, aprobado_por_admin, estado, avatar_url)
-                VALUES ($1, $2, $3, 'Vendedor', $4, true, true, $5)
+                VALUES ($1, $2, $3, 'Cajero', $4, true, true, $5)
                 RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
@@ -683,7 +683,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
 
             const { rows: newUser } = await db.query(`
                 INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, aprobado_por_admin, estado, avatar_url)
-                VALUES ($1, $2, $3, 'Vendedor', $4, true, true, $5)
+                VALUES ($1, $2, $3, 'Cajero', $4, true, true, $5)
                 RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
@@ -4139,7 +4139,7 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
                 `✅ Credenciales hasheadas con bcrypt (cost 12)\n` +
                 `✅ Login con rate limit\n` +
                 `✅ API protegida con JWT\n` +
-                `✅ Roles (Admin/Cajero/Vendedor)\n` +
+                `✅ Roles (Admin/Cajero/Supervisor)\n` +
                 `✅ CORS whitelist\n` +
                 `✅ .env fuera de git\n` +
                 `✅ *Validación de inputs con Zod* (v2.2.0)\n` +
@@ -4190,7 +4190,7 @@ app.post('/api/super/bot', requireSuperAdmin, async (req, res) => {
                 return res.json({ respuesta:
                     `👤 *Tabla usuarios:*\n\n` +
                     `id_usuario · nombre · correo · password_hash\n` +
-                    `rol (Admin/Cajero/Vendedor) · id_local\n` +
+                    `rol (Admin/Cajero/Supervisor) · id_local\n` +
                     `aprobado_por_admin · foto_perfil · created_at`
                 });
             }
