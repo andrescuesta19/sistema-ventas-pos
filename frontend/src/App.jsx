@@ -41,6 +41,7 @@ import Ecommerce from './pages/Ecommerce';
 import Cotizaciones from './pages/Cotizaciones';
 import Terminos from './pages/Terminos';
 import AtencionCliente from './pages/AtencionCliente';
+import TiendaPublica from './pages/TiendaPublica';
 import Header from './components/Header';
 import Logo from './components/Logo';
 import UpdateNotification from './components/UpdateNotification';
@@ -137,6 +138,15 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
   // v1.5.3: El cliente SÍ ve Configuración (perfil, cambiar contraseña, modo oscuro).
   // Gestión de Usuarios sigue siendo solo del super-admin.
   navItems.push({ to: '/configuracion', icon: Settings, label: 'Configuración' });
+
+  // Link de tienda pública para compartir
+  const tiendaUrl = `${window.location.origin}/tienda/${user?.id_local || 1}`;
+  const copiarLinkTienda = async () => {
+    try {
+      await navigator.clipboard.writeText(tiendaUrl);
+      alert('✅ Link copiado! Compártelo con tus clientes:\n\n' + tiendaUrl);
+    } catch { prompt('Copia este link para compartir con tus clientes:', tiendaUrl); }
+  };
 
   return (
     <div className="app-container">
@@ -429,6 +439,33 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
           {/* Separator */}
           <div style={{ height: 1, background: 'var(--border-light)', margin: '0.4rem 0.5rem' }} />
 
+          {/* Botón Mi Tienda — link para compartir con clientes */}
+          <button
+            onClick={() => { copiarLinkTienda(); setSidebarOpen(false); }}
+            className="nav-link"
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(42,157,143,0.15), rgba(38,70,83,0.15))',
+              border: '1px solid rgba(42,157,143,0.3)',
+              cursor: 'pointer',
+              width: '100%',
+              textAlign: 'left',
+              borderRadius: '8px',
+              margin: '0.25rem 0.5rem',
+              padding: '0.55rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.55rem',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#2A9D8F',
+              fontFamily: 'inherit',
+            }}
+            title="Copiar link de tienda para compartir con clientes"
+          >
+            <Store size={18} />
+            <span>Mi Tienda 🔗</span>
+          </button>
+
           {/* User card — al final del nav, antes de Configuración */}
           <Link
             to="/configuracion"
@@ -584,6 +621,7 @@ function App() {
           <Route path="/caja" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Caja user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/nomina" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Nomina user={user} /></AppLayout> : <Navigate to="/login" />} />
           <Route path="/ecommerce" element={user ? <AppLayout user={user} onLogout={handleLogout} onSwitchUser={handleLogin}><Ecommerce user={user} /></AppLayout> : <Navigate to="/login" />} />
+          <Route path="/tienda/:idLocal" element={<TiendaPublica />} />
           <Route path="*" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
         </Routes>
       </ErrorBoundary>

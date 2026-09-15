@@ -194,7 +194,7 @@ const storageProductos = isProduction
     });
 const uploadProducto = multer({
     storage: storageProductos,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB — sin límite práctico para fotos
     fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -702,6 +702,114 @@ app.get('/api/auth/google/callback', async (req, res) => {
     } catch (err) {
         console.error('Error en Google OAuth callback:', err);
         res.status(500).send('Error al procesar autenticación con Google');
+    }
+});
+
+// ── Tienda Pública: Productos visibles para clientes ──
+// v2.2.2: Endpoint público (no requiere autenticación)
+// Permite a los dueños compartir un link con sus clientes
+app.get('/api/tienda/:idLocal', async (req, res) => {
+    try {
+        const { idLocal } = req.params;
+        const { buscar, categoria, orden, pagina } = req.query;
+        
+        const limit = 50; // Productos por página
+        const offset = ((parseInt(pagina) || 1) - 1) * limit;
+        
+        let query = `
+            SELECT 
+                p.id_producto,
+                p.nombre_producto,
+                p.descripcion,
+                p.precio_venta,
+                p.precio_anterior,
+                p.codigo_barras,
+                p.stock_actual,
+                p.imagen_url,
+                p.destacado,
+                c.nombre_categoria,
+                (SELECT json_agg(json_build_object('url', pi.url, 'orden', pi.orden) ORDER BY pi.orden)
+                 FROM producto_imagenes pi WHERE pi.id_producto = p.id_producto) as imagenes
+            FROM productos p
+            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1
+            AND p.estado = true
+            AND p.stock_actual > 0
+        `;
+        const params = [idLocal];
+        let paramIdx = 2;
+        
+        // Filtro de búsqueda
+        if (buscar) {
+            query += ` AND (p.nombre_producto ILIKE $${paramIdx} OR p.codigo_barras ILIKE $${paramIdx})`;
+            params.push(`%${buscar}%`);
+            paramIdx++;
+        }
+        
+        // Filtro por categoría
+        if (categoria) {
+            query += ` AND c.nombre_categoria = $${paramIdx}`;
+            params.push(categoria);
+            paramIdx++;
+        }
+        
+        // Orden
+        const ordenMap = {
+            'precio-asc': 'p.precio_venta ASC',
+            'precio-desc': 'p.precio_venta DESC',
+            'nombre': 'p.nombre_producto ASC',
+            'reciente': 'p.created_at DESC',
+            'destacado': 'p.destacado DESC, p.nombre_producto ASC',
+        };
+        query += ` ORDER BY ${ordenMap[orden] || ordenMap['destacado']}`;
+        query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+        params.push(limit, offset);
+        
+        const { rows: productos } = await db.query(query, params);
+        
+        // Contar total para paginación
+        let countQuery = `
+            SELECT COUNT(*)::int as total
+            FROM productos p
+            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1 AND p.estado = true AND p.stock_actual > 0
+        `;
+        const countParams = [idLocal];
+        if (buscar) {
+            countQuery += ` AND (p.nombre_producto ILIKE $2 OR p.codigo_barras ILIKE $2)`;
+            countParams.push(`%${buscar}%`);
+        }
+        const { rows: [{ total }] } = await db.query(countQuery, countParams);
+        
+        // Obtener categorías disponibles
+        const { rows: categorias } = await db.query(`
+            SELECT DISTINCT c.nombre_categoria, COUNT(*)::int as cantidad
+            FROM productos p
+            LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1 AND p.estado = true AND p.stock_actual > 0 AND c.nombre_categoria IS NOT NULL
+            GROUP BY c.nombre_categoria
+            ORDER BY cantidad DESC
+        `, [idLocal]);
+        
+        // Info del local
+        const { rows: [local] } = await db.query(
+            'SELECT id_local, nombre_local, direccion, telefono, ciudad FROM locales WHERE id_local = $1',
+            [idLocal]
+        );
+        
+        res.json({
+            local,
+            productos,
+            categorias,
+            paginacion: {
+                total,
+                pagina: parseInt(pagina) || 1,
+                totalPaginas: Math.ceil(total / limit),
+            }
+        });
+    } catch (err) {
+        console.error('Error en tienda pública:', err);
+        res.status(500).json({ error: 'Error al cargar la tienda.' });
     }
 });
 

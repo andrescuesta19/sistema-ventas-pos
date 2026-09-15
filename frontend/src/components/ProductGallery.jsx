@@ -137,13 +137,13 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
             style={{
               position: 'relative',
               flex: 1,
-              minHeight: '350px',
-              maxHeight: '50vh',
+              minHeight: '400px',
+              maxHeight: '65vh',
               background: '#F8FAFC',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              overflow: 'hidden',
+              overflow: zoomed ? 'auto' : 'hidden',
               cursor: zoomed ? 'zoom-out' : 'zoom-in',
             }}
             onClick={() => setZoomed(!zoomed)}
@@ -159,15 +159,17 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
                 animate={{
                   opacity: 1,
                   x: 0,
-                  scale: zoomed ? 1.5 : 1,
+                  scale: zoomed ? 2 : 1,
                 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
+                  maxWidth: zoomed ? 'none' : '100%',
+                  maxHeight: zoomed ? 'none' : '100%',
+                  width: zoomed ? 'auto' : undefined,
+                  height: zoomed ? 'auto' : undefined,
                   objectFit: 'contain',
-                  padding: zoomed ? 0 : '1.5rem',
+                  padding: zoomed ? '1rem' : '1.5rem',
                   userSelect: 'none',
                   transition: 'transform 0.3s ease',
                 }}
