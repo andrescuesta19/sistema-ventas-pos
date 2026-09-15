@@ -35,8 +35,8 @@ const GoogleLoginButton = ({
       // Crear una sesión temporal en el backend para el OAuth flow
       const state = Math.random().toString(36).substring(2);
       
-      // Construir la URL de Google OAuth
-      const redirectUri = encodeURIComponent(`${API_URL}/api/auth/google/callback?state=${state}`);
+      // v2.2.3: redirect_uri SIN parámetros extra (Google lo rechaza)
+      const redirectUri = encodeURIComponent(`${API_URL}/api/auth/google/callback`);
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${GOOGLE_CLIENT_ID}` +
         `&redirect_uri=${redirectUri}` +
