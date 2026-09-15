@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, ShoppingCart, ZoomIn } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ShoppingCart, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
    ProductGallery — Modal de galería de imágenes de productos
@@ -9,26 +9,41 @@ import { X, ChevronLeft, ChevronRight, ShoppingCart, ZoomIn } from 'lucide-react
    - Carrusel con navegación izquierda/derecha
    - Miniaturas clickeables
    - Swipe en móvil (touch events)
-   - Zoom con click en la imagen
+   - Zoom con + / - / reset (niveles: 1x, 1.5x, 2x, 2.5x, 3x)
+   - Click en imagen también alterna zoom
    - Animaciones suaves con Framer Motion
    - Botón de agregar al carrito integrado
    ═══════════════════════════════════════════════════════════════ */
+const ZOOM_LEVELS = [1, 1.5, 2, 2.5, 3];
 const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [zoomed, setZoomed] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(0); // índice en ZOOM_LEVELS
   const [touchStart, setTouchStart] = useState(null);
 
   const allImages = images.length > 0 ? images : (product?.imagen_url ? [product.imagen_url] : []);
+  const zoom = ZOOM_LEVELS[zoomLevel];
+
+  const zoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 1, ZOOM_LEVELS.length - 1));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 1, 0));
+  }, []);
+
+  const zoomReset = useCallback(() => {
+    setZoomLevel(0);
+  }, []);
 
   // Navegación del carrusel
   const goNext = useCallback(() => {
     setActiveIndex(prev => (prev + 1) % allImages.length);
-    setZoomed(false);
+    setZoomLevel(0);
   }, [allImages.length]);
 
   const goPrev = useCallback(() => {
     setActiveIndex(prev => (prev - 1 + allImages.length) % allImages.length);
-    setZoomed(false);
+    setZoomLevel(0);
   }, [allImages.length]);
 
   // Teclado
@@ -37,10 +52,13 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowRight') goNext();
       if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === '+' || e.key === '=') zoomIn();
+      if (e.key === '-') zoomOut();
+      if (e.key === '0') zoomReset();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose, goNext, goPrev]);
+  }, [onClose, goNext, goPrev, zoomIn, zoomOut, zoomReset]);
 
   // Touch swipe para móvil
   const handleTouchStart = (e) => setTouchStart(e.touches[0].clientX);
@@ -143,10 +161,10 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              overflow: zoomed ? 'auto' : 'hidden',
-              cursor: zoomed ? 'zoom-out' : 'zoom-in',
+              overflow: zoom > 1 ? 'auto' : 'hidden',
+              cursor: zoom > 1 ? 'grab' : 'zoom-in',
             }}
-            onClick={() => setZoomed(!zoomed)}
+            onClick={() => zoom > 1 ? zoomReset() : zoomIn()}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
@@ -159,44 +177,117 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
                 animate={{
                   opacity: 1,
                   x: 0,
-                  scale: zoomed ? 2 : 1,
+                  scale: zoom,
                 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  maxWidth: zoomed ? 'none' : '100%',
-                  maxHeight: zoomed ? 'none' : '100%',
-                  width: zoomed ? 'auto' : undefined,
-                  height: zoomed ? 'auto' : undefined,
+                  maxWidth: zoom > 1 ? 'none' : '100%',
+                  maxHeight: zoom > 1 ? 'none' : '100%',
+                  width: zoom > 1 ? 'auto' : undefined,
+                  height: zoom > 1 ? 'auto' : undefined,
                   objectFit: 'contain',
-                  padding: zoomed ? '1rem' : '1.5rem',
+                  padding: zoom > 1 ? '1rem' : '1.5rem',
                   userSelect: 'none',
-                  transition: 'transform 0.3s ease',
                 }}
                 draggable={false}
               />
             </AnimatePresence>
 
-            {/* Indicador de zoom */}
-            {!zoomed && allImages.length > 0 && (
+            {/* Controles de zoom — + / reset / - */}
+            <div style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              zIndex: 5,
+            }}>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+                disabled={zoomLevel >= ZOOM_LEVELS.length - 1}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: zoomLevel >= ZOOM_LEVELS.length - 1 ? '#E2E8F0' : 'rgba(0,0,0,0.6)',
+                  color: zoomLevel >= ZOOM_LEVELS.length - 1 ? '#94A3B8' : '#fff',
+                  cursor: zoomLevel >= ZOOM_LEVELS.length - 1 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <ZoomIn size={16} />
+              </motion.button>
+
               <div style={{
-                position: 'absolute',
-                top: '12px',
-                right: '12px',
-                background: 'rgba(0, 0, 0, 0.6)',
+                width: '34px',
+                height: '24px',
                 borderRadius: '8px',
-                padding: '0.35rem 0.6rem',
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(8px)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.3rem',
+                justifyContent: 'center',
                 color: '#fff',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                pointerEvents: 'none',
+                fontSize: '0.65rem',
+                fontWeight: 700,
               }}>
-                <ZoomIn size={12} /> Click para zoom
+                {zoom}x
               </div>
-            )}
+
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+                disabled={zoomLevel <= 0}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: zoomLevel <= 0 ? '#E2E8F0' : 'rgba(0,0,0,0.6)',
+                  color: zoomLevel <= 0 ? '#94A3B8' : '#fff',
+                  cursor: zoomLevel <= 0 ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <ZoomOut size={16} />
+              </motion.button>
+
+              {zoomLevel > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={(e) => { e.stopPropagation(); zoomReset(); }}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'rgba(42,157,143,0.9)',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <RotateCcw size={14} />
+                </motion.button>
+              )}
+            </div>
 
             {/* Flechas de navegación */}
             {allImages.length > 1 && (
@@ -271,7 +362,7 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
                 {allImages.map((_, i) => (
                   <motion.button
                     key={i}
-                    onClick={(e) => { e.stopPropagation(); setActiveIndex(i); setZoomed(false); }}
+                    onClick={(e) => { e.stopPropagation(); setActiveIndex(i); setZoomLevel(0); }}
                     animate={{
                       scale: i === activeIndex ? 1.2 : 1,
                       background: i === activeIndex ? '#2A9D8F' : 'rgba(255, 255, 255, 0.5)',
@@ -305,7 +396,7 @@ const ProductGallery = ({ product, images = [], onClose, onAddToCart }) => {
                   key={i}
                   whileHover={{ scale: 1.08 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => { setActiveIndex(i); setZoomed(false); }}
+                  onClick={() => { setActiveIndex(i); setZoomLevel(0); }}
                   style={{
                     flexShrink: 0,
                     width: '56px',

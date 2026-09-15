@@ -5343,8 +5343,19 @@ app.get('/api/actualizaciones', async (req, res) => {
     }
 });
 
-// 404 para rutas no definidas (después de todas las rutas)
-app.use((req, res) => {
+// v2.2.2: Catch-all — servir index.html para rutas del frontend (React Router)
+// Esto permite que /tienda/:idLocal, /login, /dashboard, etc. funcionen
+const frontendIndex = frontendPaths.map(fp => path.join(fp, 'index.html')).find(fp => fs.existsSync(fp));
+app.use((req, res, next) => {
+    // Si es API o uploads, pasar al 404
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path.startsWith('/updates/')) {
+        return res.status(404).json({ error: 'Ruta no encontrada.' });
+    }
+    // Si existe el index.html del frontend, servirlo (React Router se encarga)
+    if (frontendIndex) {
+        return res.sendFile(frontendIndex);
+    }
+    // Fallback 404
     res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 

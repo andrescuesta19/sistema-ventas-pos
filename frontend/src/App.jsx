@@ -139,8 +139,8 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
   // Gestión de Usuarios sigue siendo solo del super-admin.
   navItems.push({ to: '/configuracion', icon: Settings, label: 'Configuración' });
 
-  // Link de tienda pública para compartir
-  const tiendaUrl = `${window.location.origin}/tienda/${user?.id_local || 1}`;
+  // Link de tienda pública para compartir (siempre usa Render para acceso internet)
+  const tiendaUrl = `https://sistema-ventas-pos-aeka.onrender.com/tienda/${user?.id_local || 1}`;
   const copiarLinkTienda = async () => {
     try {
       await navigator.clipboard.writeText(tiendaUrl);
@@ -152,7 +152,13 @@ const AppLayout = ({ children, user, onLogout, onSwitchUser, notifCount = 0 }) =
     <div className="app-container">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
+        * { box-sizing: border-box; }
+        select {
+          appearance: auto !important;
+          -webkit-appearance: auto !important;
+          background-color: #fff !important;
+          color: #1E293B !important;
+        }
         .app-container {
           font-family: 'Inter', system-ui, -apple-system, sans-serif;
         }
