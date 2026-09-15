@@ -17,7 +17,7 @@ import { API_URL } from '../config';
    4. Enviamos el JWT al backend para verificar y crear sesión
    ═══════════════════════════════════════════════════════════════ */
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '102211642193-26eg73kc36hean8o3dihmieh34sljfev.apps.googleusercontent.com';
 
 const GoogleLoginButton = ({ 
   onSuccess, 
