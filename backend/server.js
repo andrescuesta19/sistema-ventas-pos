@@ -189,13 +189,13 @@ app.get('/tienda/:idLocal', async (req, res) => {
         const { rows: productos } = await db.query(`
             SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, c.nombre_categoria
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1 AND p.stock_actual > 0 ORDER BY p.stock_actual DESC
+            WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true ORDER BY p.stock_actual DESC
         `, [idLocal]);
 
         const { rows: categorias } = await db.query(`
             SELECT DISTINCT c.nombre_categoria, COUNT(*)::int as cantidad
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1 AND p.stock_actual > 0 AND c.nombre_categoria IS NOT NULL
+            WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true AND c.nombre_categoria IS NOT NULL
             GROUP BY c.nombre_categoria ORDER BY cantidad DESC
         `, [idLocal]);
 
@@ -1751,16 +1751,17 @@ app.get('/api/buscar', requireAuth, requireAprobado, async (req, res) => {
 
 app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        // Verificar que el producto pertenece al local del usuario
         const prodRes = await db.query('SELECT id_local FROM productos WHERE id_producto = $1', [req.params.id]);
         if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado.' });
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url } = req.body;
+        const { nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url, visible_en_tienda } = req.body;
+        const costo = precio_compra ? parseFloat(precio_compra) : 0;
+        const visibilidad = visible_en_tienda !== false;
         await db.query(
-            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, video_url=$7 WHERE id_producto=$8`,
-            [nombre_producto, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url || null, video_url || null, req.params.id]
+            `UPDATE productos SET nombre_producto=$1, precio_compra=$2, precio_venta=$3, stock_actual=$4, stock_minimo=$5, imagen_url=$6, video_url=$7, visible_en_tienda=$8 WHERE id_producto=$9`,
+            [nombre_producto, costo, precio_venta, stock_actual || 0, stock_minimo || 1, imagen_url || null, video_url || null, visibilidad, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1771,14 +1772,18 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo } = req.body;
+        const { id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
+        // codigo_barras y precio_compra son opcionales
+        const serial = codigo_barras || null;
+        const costo = precio_compra ? parseFloat(precio_compra) : 0;
+        const visibilidad = visible_en_tienda !== false; // default true
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id_producto`,
-            [id_local, codigo_barras, nombre_producto, imagen_url || null, video_url || null, precio_compra, precio_venta, stock_actual, stock_minimo]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id_producto`,
+            [id_local, serial, nombre_producto, imagen_url || null, video_url || null, costo, precio_venta, stock_actual || 0, stock_minimo || 1, visibilidad]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
@@ -4581,6 +4586,19 @@ app.delete('/api/productos/:id/video', requireAuth, requireAprobado, async (req,
         console.log('[v1.7.2] Tabla producto_imagenes lista');
     } catch (e) {
         console.error('Error creando tabla producto_imagenes:', e.message);
+    }
+})();
+
+// v2.2.9: Migración - columnas opcionales + visibilidad en tienda
+(async () => {
+    try {
+        await db.query('ALTER TABLE productos ALTER COLUMN codigo_barras DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN precio_compra DROP NOT NULL');
+        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS video_url VARCHAR(500)');
+        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS visible_en_tienda BOOLEAN DEFAULT true');
+        console.log('[v2.2.9] Migración productos aplicada: opcionales + visibilidad');
+    } catch (e) {
+        console.error('[v2.2.9] Migración productos:', e.message);
     }
 })();
 
