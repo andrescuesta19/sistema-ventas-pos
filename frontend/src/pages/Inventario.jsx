@@ -308,11 +308,53 @@ const Inventario = ({ user }) => {
                   <label>Número Serial</label>
                   <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
                 </div>
+                <div></div>
+              </div>
+              {/* ── Precios + Calculadora de Ganancia ── */}
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Precio de Compra (COP)</label>
+                  <input type="number" name="precio_compra" min="0" value={formData.precio_compra} onChange={handleChange} placeholder="Ej: 450000" />
+                </div>
                 <div className="form-group">
                   <label>Precio de Venta (COP)</label>
-                  <input type="number" name="precio_venta" value={formData.precio_venta} onChange={handleChange} required />
+                  <input type="number" name="precio_venta" min="0" value={formData.precio_venta} onChange={handleChange} required placeholder="Ej: 600000" />
                 </div>
               </div>
+              {Number(formData.precio_compra) > 0 && Number(formData.precio_venta) > 0 && (
+                <div style={{
+                  background: Number(formData.precio_venta) >= Number(formData.precio_compra)
+                    ? 'linear-gradient(135deg, rgba(42,157,143,0.12), rgba(38,70,83,0.12))'
+                    : 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(180,40,40,0.12))',
+                  border: `1px solid ${Number(formData.precio_venta) >= Number(formData.precio_compra) ? 'rgba(42,157,143,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  borderRadius: '12px', padding: '1rem 1.25rem', marginTop: '0.5rem', marginBottom: '0.5rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                    <span style={{ fontSize: '1.1rem' }}>💰</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Resumen de Ganancia</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', textAlign: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Ganancia Unitaria</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                        ${Number(formData.precio_venta - formData.precio_compra).toLocaleString('es-CO')}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Margen</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                        {(((Number(formData.precio_venta) - Number(formData.precio_compra)) / Number(formData.precio_compra)) * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', marginBottom: '0.2rem' }}>Ganancia Total (x{formData.stock_actual || 1})</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: Number(formData.precio_venta) >= Number(formData.precio_compra) ? '#2A9D8F' : '#ef4444' }}>
+                        ${((Number(formData.precio_venta) - Number(formData.precio_compra)) * (parseInt(formData.stock_actual) || 1)).toLocaleString('es-CO')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="grid-2">
                 <div className="form-group">
                   <label>Stock Físico Inicial</label>
