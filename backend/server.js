@@ -166,6 +166,76 @@ if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// ── Tienda Pública HTML (ANTES de express.static para evitar conflicto) ──
+// v2.2.5: Lee template HTML y reemplaza datos del local/productos
+// URL: https://sistema-ventas-pos-aeka.onrender.com/tienda/1
+const tiendaTemplatePath = path.join(__dirname, 'tienda-template.html');
+const tiendaTemplate = fs.existsSync(tiendaTemplatePath) ? fs.readFileSync(tiendaTemplatePath, 'utf8') : null;
+
+app.get('/tienda/:idLocal', async (req, res) => {
+    try {
+        const { idLocal } = req.params;
+
+        if (!tiendaTemplate) {
+            return res.status(500).send('Template de tienda no encontrado.');
+        }
+
+        const { rows: [local] } = await db.query(
+            'SELECT id_local, nombre_local, direccion, telefono, ciudad FROM locales WHERE id_local = $1', [idLocal]
+        );
+        if (!local) return res.status(404).send('Tienda no encontrada.');
+
+        const { rows: productos } = await db.query(`
+            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.stock_actual, c.nombre_categoria
+            FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1 AND p.stock_actual > 0 ORDER BY p.stock_actual DESC
+        `, [idLocal]);
+
+        const { rows: categorias } = await db.query(`
+            SELECT DISTINCT c.nombre_categoria, COUNT(*)::int as cantidad
+            FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+            WHERE p.id_local = $1 AND p.stock_actual > 0 AND c.nombre_categoria IS NOT NULL
+            GROUP BY c.nombre_categoria ORDER BY cantidad DESC
+        `, [idLocal]);
+
+        const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
+        const telWA = (local.telefono || '').replace(/\D/g, '');
+
+        const prodsJSON = JSON.stringify(productos.map(p => ({
+            id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta),
+            img: p.imagen_url || '', s: p.stock_actual, c: p.nombre_categoria || ''
+        })));
+
+        const prodsHTML = productos.map(p => {
+            const img = p.imagen_url
+                ? `<img src="${p.imagen_url}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=ni>📦</div>'">`
+                : '<div class="ni">📦</div>';
+            const badge = p.stock_actual <= 5 ? `<span class="bl">¡Últimas ${p.stock_actual}!</span>` : '';
+            const cat = p.nombre_categoria ? `<span class="tg">${p.nombre_categoria}</span>` : '';
+            return `<div class="pc"><div class="pi">${img}${badge}</div><div class="pb">${cat}<h3>${p.nombre_producto}</h3><p class="pp">${fmtCOP(p.precio_venta)}</p><button class="ba" onclick="ac(${p.id_producto})">Agregar</button></div></div>`;
+        }).join('');
+
+        const catsHTML = categorias.map(c =>
+            `<button class="cp" onclick="fc('${c.nombre_categoria}')">${c.nombre_categoria} <span>${c.cantidad}</span></button>`
+        ).join('');
+
+        let html = tiendaTemplate
+            .replace(/\{\{NOMBRE_LOCAL\}\}/g, local.nombre_local || 'Mi Tienda')
+            .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + local.direccion : '')
+            .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + local.ciudad : '')
+            .replace(/\{\{TELEFONO\}\}/g, telWA)
+            .replace(/\{\{TOTAL\}\}/g, String(productos.length))
+            .replace(/\{\{CATEGORIAS\}\}/g, catsHTML)
+            .replace(/\{\{PRODUCTOS\}\}/g, prodsHTML)
+            .replace(/\{\{PRODUCTOS_JSON\}\}/g, prodsJSON);
+
+        res.send(html);
+    } catch (err) {
+        console.error('Tienda HTML error:', err.message);
+        res.status(500).send('Error al cargar la tienda.');
+    }
+});
+
 // v2.2.2: Servir el frontend estático desde el backend
 // Permite que Electron cargue la app via http://localhost:3000
 // (necesario para que Google OAuth funcione con origen http://localhost:3000)

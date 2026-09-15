@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{NOMBRE_LOCAL}} — Tienda Online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: "Inter", sans-serif; background: #0f1923; color: #e2e8f0; -webkit-font-smoothing: antialiased; }
+        ::selection { background: #2A9D8F; color: #fff; }
+
+        /* ── HEADER ── */
+        .hero { background: linear-gradient(135deg, #0f1923 0%, #1a3a2a 50%, #264653 100%); padding: 1.25rem 1.5rem; position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px); border-bottom: 1px solid rgba(42,157,143,.15); }
+        .hi { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .br { display: flex; align-items: center; gap: .75rem; }
+        .lo { width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #2A9D8F, #264653); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: 0 4px 15px rgba(42,157,143,.35); }
+        .br h1 { font-size: 1.25rem; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+        .br p { font-size: .75rem; color: rgba(255,255,255,.5); margin-top: 2px; }
+
+        /* ── CART BUTTON ── */
+        .cw { position: relative; }
+        .cb { background: rgba(42,157,143,.15); border: 1.5px solid rgba(42,157,143,.3); color: #2A9D8F; padding: .6rem 1.1rem; border-radius: 12px; cursor: pointer; font-weight: 700; font-size: .85rem; font-family: inherit; display: flex; align-items: center; gap: .5rem; transition: all .25s ease; position: relative; }
+        .cb:hover { background: #2A9D8F; color: #fff; border-color: #2A9D8F; transform: scale(1.03); }
+        .cb:active { transform: scale(.97); }
+        .badge { position: absolute; top: -6px; right: -6px; background: #ef4444; color: #fff; font-size: .65rem; font-weight: 800; min-width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pop .3s cubic-bezier(.175,.885,.32,1.275); }
+        @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+        /* ── SEARCH ── */
+        .ss { max-width: 1200px; margin: 1.25rem auto; padding: 0 1rem; }
+        .sb { position: relative; }
+        .sb input { width: 100%; padding: .85rem 1rem .85rem 2.8rem; border-radius: 14px; border: 1.5px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04); color: #fff; font-size: .95rem; font-family: inherit; outline: none; transition: all .25s; }
+        .sb input::placeholder { color: rgba(255,255,255,.3); }
+        .sb input:focus { border-color: #2A9D8F; background: rgba(42,157,143,.06); box-shadow: 0 0 0 3px rgba(42,157,143,.1); }
+        .si { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,.3); pointer-events: none; }
+
+        /* ── CATEGORIES ── */
+        .ct { max-width: 1200px; margin: 0 auto; padding: .5rem 1rem 1rem; display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; }
+        .ct::-webkit-scrollbar { display: none; }
+        .cp { padding: .45rem .9rem; border-radius: 20px; border: 1.5px solid rgba(255,255,255,.08); background: rgba(255,255,255,.03); color: rgba(255,255,255,.55); cursor: pointer; white-space: nowrap; font-weight: 600; font-size: .8rem; font-family: inherit; transition: all .25s; display: flex; align-items: center; gap: .35rem; }
+        .cp span { background: rgba(42,157,143,.2); color: #2A9D8F; padding: .1rem .4rem; border-radius: 8px; font-size: .7rem; }
+        .cp:hover, .cp.on { background: #2A9D8F; color: #fff; border-color: #2A9D8F; transform: scale(1.03); }
+        .cp.on span { background: rgba(255,255,255,.25); color: #fff; }
+
+        /* ── PRODUCTS ── */
+        .pd { max-width: 1200px; margin: 0 auto; padding: 0 1rem 3rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+        .pc { background: rgba(255,255,255,.03); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.06); transition: all .3s cubic-bezier(.4,0,.2,1); animation: up .5s ease both; }
+        .pc:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(0,0,0,.3); border-color: rgba(42,157,143,.2); }
+        @keyframes up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .pc:nth-child(2) { animation-delay: .05s; }
+        .pc:nth-child(3) { animation-delay: .1s; }
+        .pc:nth-child(4) { animation-delay: .15s; }
+        .pc:nth-child(5) { animation-delay: .2s; }
+
+        .pi { height: 200px; background: rgba(255,255,255,.02); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+        .pi img { width: 100%; height: 100%; object-fit: contain; padding: .75rem; transition: transform .4s ease; }
+        .pc:hover .pi img { transform: scale(1.08); }
+        .ni { font-size: 3rem; opacity: .2; }
+        .bl { position: absolute; top: 10px; left: 10px; background: rgba(239,68,68,.9); color: #fff; padding: .2rem .55rem; border-radius: 8px; font-size: .65rem; font-weight: 700; }
+
+        .pb { padding: 1rem; }
+        .tg { display: inline-block; background: rgba(42,157,143,.12); color: #2A9D8F; padding: .15rem .55rem; border-radius: 8px; font-size: .65rem; font-weight: 600; margin-bottom: .4rem; letter-spacing: .02em; }
+        .pb h3 { font-size: .95rem; font-weight: 700; color: #e2e8f0; margin-bottom: .3rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .pp { font-size: 1.15rem; font-weight: 800; color: #2A9D8F; margin-bottom: .6rem; }
+
+        .ba { width: 100%; padding: .7rem; border: none; border-radius: 10px; background: linear-gradient(135deg, #2A9D8F, #264653); color: #fff; font-weight: 700; font-size: .85rem; font-family: inherit; cursor: pointer; transition: all .25s; position: relative; overflow: hidden; }
+        .ba:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(42,157,143,.35); }
+        .ba:active { transform: scale(.98); }
+        .ba.ok { background: linear-gradient(135deg, #22c55e, #16a34a); }
+
+        /* ── TOAST ── */
+        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px); background: #22c55e; color: #fff; padding: .7rem 1.5rem; border-radius: 12px; font-weight: 700; font-size: .85rem; opacity: 0; transition: all .35s cubic-bezier(.175,.885,.32,1.275); z-index: 2000; pointer-events: none; box-shadow: 0 8px 25px rgba(34,197,94,.3); }
+        .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ── WHATSAPP ── */
+        .wf { position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 50%; background: #25d366; border: none; font-size: 1.6rem; cursor: pointer; box-shadow: 0 6px 20px rgba(37,211,102,.4); z-index: 1000; display: flex; align-items: center; justify-content: center; transition: all .3s; opacity: 0; transform: scale(0); }
+        .wf.on { opacity: 1; transform: scale(1); }
+        .wf:hover { transform: scale(1.1); box-shadow: 0 8px 25px rgba(37,211,102,.5); }
+
+        .em { text-align: center; padding: 4rem 2rem; grid-column: 1/-1; }
+        .em h3 { color: rgba(255,255,255,.5); }
+
+        footer { text-align: center; padding: 1.5rem; color: rgba(255,255,255,.25); font-size: .75rem; border-top: 1px solid rgba(255,255,255,.05); }
+
+        @media (max-width: 640px) {
+            .pd { grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+            .pi { height: 140px; }
+            .pb h3 { font-size: .82rem; }
+            .pp { font-size: .95rem; }
+        }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <div class="hi">
+            <div class="br">
+                <div class="lo">🏪</div>
+                <div>
+                    <h1>{{NOMBRE_LOCAL}}</h1>
+                    <p>{{DIRECCION}} {{CIUDAD}}</p>
+                </div>
+            </div>
+            <div class="cw">
+                <button class="cb" onclick="oc()">
+                    🛒 <span id="cc">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="ss">
+        <div class="sb">
+            <span class="si">🔍</span>
+            <input id="si" placeholder="Buscar productos..." oninput="ds()">
+        </div>
+    </div>
+
+    <div class="ct">
+        <button class="cp on" onclick="fc('Todos')">Todos <span>{{TOTAL}}</span></button>
+        {{CATEGORIAS}}
+    </div>
+
+    <div class="pd" id="gr">
+        {{PRODUCTOS}}
+    </div>
+
+    <div class="toast" id="to">✓ Agregado al carrito</div>
+    <button class="wf" id="wa" onclick="sw()">💬</button>
+
+    <footer>
+        <p>Desarrollado por Andrés Cuesta • {{NOMBRE_LOCAL}}</p>
+    </footer>
+
+    <script>
+        const D = {{PRODUCTOS_JSON}};
+        const TEL = '{{TELEFONO}}';
+        let C = [];
+
+        function ac(id) {
+            const p = D.find(x => x.id === id);
+            if (!p) return;
+            const e = C.find(x => x.id === id);
+            if (e) e.q++; else C.push({...p, q: 1});
+
+            // Update badge
+            document.getElementById("cc").textContent = C.reduce((a, b) => a + b.q, 0);
+
+            // Show WhatsApp button
+            document.getElementById("wa").classList.add("on");
+
+            // Toast
+            const t = document.getElementById("to");
+            t.classList.add("on");
+            setTimeout(() => t.classList.remove("on"), 1800);
+
+            // Button animation
+            const b = event.target.closest(".ba");
+            if (b) {
+                b.classList.add("ok");
+                b.innerHTML = "✓ Agregado";
+                setTimeout(() => {
+                    b.classList.remove("ok");
+                    b.innerHTML = "Agregar";
+                }, 1200);
+            }
+        }
+
+        function oc() {
+            if (!C.length) { alert("Tu carrito está vacío"); return; }
+            const m = C.map(p => p.n + " x" + p.q + " = $" + (p.p * p.q).toLocaleString()).join("\n");
+            const t = C.reduce((a, b) => a + b.p * b.q, 0);
+            alert("🛒 TU CARRITO:\n\n" + m + "\n\n💰 Total: $" + t.toLocaleString());
+        }
+
+        function sw() {
+            if (!C.length) return;
+            if (!TEL) { alert("No hay número de WhatsApp configurado"); return; }
+            const m = "Hola! Me interesa comprar:\n\n" +
+                C.map(p => "• " + p.n + " x" + p.q + " = $" + (p.p * p.q).toLocaleString()).join("\n") +
+                "\n\n*Total: $" + C.reduce((a, b) => a + b.p * b.q, 0).toLocaleString() + "*";
+            window.open("https://wa.me/" + TEL + "?text=" + encodeURIComponent(m), "_blank");
+        }
+
+        function ds() {
+            fl(document.getElementById("si").value.toLowerCase(), gac());
+        }
+
+        function fc(cat) {
+            document.querySelectorAll(".cp").forEach(b => b.classList.remove("on"));
+            event.target.closest(".cp").classList.add("on");
+            ds();
+        }
+
+        function gac() {
+            const el = document.querySelector(".cp.on");
+            return el ? el.textContent.split(" ")[0] : "Todos";
+        }
+
+        function fl(q, cat) {
+            const g = document.getElementById("gr");
+            let items = D;
+            if (q) items = items.filter(p => p.n.toLowerCase().includes(q));
+            if (cat !== "Todos") items = items.filter(p => p.c === cat);
+
+            if (!items.length) {
+                g.innerHTML = '<div class="em"><h3>No se encontraron productos</h3></div>';
+                return;
+            }
+
+            g.innerHTML = items.map((p, j) =>
+                '<div class="pc" style="animation-delay:' + (j * .05) + 's">' +
+                '<div class="pi">' +
+                (p.img ? '<img src="' + p.img + '" alt="' + p.n + '" loading="lazy">' : '<div class="ni">📦</div>') +
+                (p.s <= 5 ? '<span class="bl">¡Últimas ' + p.s + '!</span>' : '') +
+                '</div><div class="pb">' +
+                (p.c ? '<span class="tg">' + p.c + '</span>' : '') +
+                '<h3>' + p.n + '</h3>' +
+                '<p class="pp">$' + p.p.toLocaleString() + '</p>' +
+                '<button class="ba" onclick="ac(' + p.id + ')">Agregar</button>' +
+                '</div></div>'
+            ).join("");
+        }
+    </script>
+</body>
+</html>
