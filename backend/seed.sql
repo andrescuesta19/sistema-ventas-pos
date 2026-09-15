@@ -11,7 +11,11 @@ INSERT INTO clientes (documento_identidad, nombre_razon_social, telefono, correo
 ('22222222', 'Consumidor Final', '0000000', 'anonimo@pos.com', 0),
 ('10203040', 'Juan Perez', '3001234567', 'juan.perez@email.com', 15);
 
-INSERT INTO categorias (nombre_categoria) VALUES ('Smartphones'), ('Accesorios');
+INSERT INTO categorias (id_categoria, nombre_categoria) VALUES 
+(1, 'Smartphones'), 
+(2, 'Accesorios'), 
+(3, 'General')
+ON CONFLICT (id_categoria) DO NOTHING;
 
 -- PRODUCTOS PARA EL LOCAL 1 (iStore Centro)
 INSERT INTO productos (id_local, codigo_barras, nombre_producto, imagen_url, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo) VALUES 
