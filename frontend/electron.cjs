@@ -348,11 +348,9 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
 
   if (process.env.ELECTRON_DEV === 'true' || process.env.NODE_ENV === 'development') {
     mainWindow.loadURL(devServerUrl);
-  } else {
-    // v2.2.2: En producción, servir el frontend desde el backend local
-    // para que el origen sea http://localhost:3000 (necesario para Google OAuth)
-    mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
   }
+  // En producción: NO cargamos nada aquí. El splash ya está visible.
+  // app.whenReady() cargará la app REAL después de que el backend esté listo.
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -729,9 +727,9 @@ app.whenReady().then(async () => {
     const splashInterval = setInterval(() => {
       elapsed += 1;
       const msg = `Iniciando servidor del sistema... (${elapsed}s)`;
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.executeJavaScript(
-          `document.getElementById('msg').textContent = ${JSON.stringify(msg)};`
+          `var el = document.getElementById('msg'); if(el) el.textContent = ${JSON.stringify(msg)};`
         ).catch(() => {});
       }
     }, 1000);
