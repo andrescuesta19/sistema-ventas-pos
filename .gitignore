@@ -49,3 +49,4 @@ backend/uploads/
 *.exe
 *.nsis
 *.portable
+frontend/app.asar
