@@ -681,16 +681,25 @@ function render(){
     b.classList.toggle('on', b.getAttribute('data-cat') === estado.cat && estado.cat !== ''));
 }
 
+// Optimizar URL de Cloudinary en el cliente (por si el backend no las transformó)
+// c_pad = rellena sin recortar, mantiene imagen completa visible
+function optCld(url, w, h){
+  w = w || 600; h = h || 450;
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  if (url.includes('/w_') || url.includes('/c_')) return url; // ya optimizada
+  return url.replace('/upload/', '/upload/w_' + w + ',h_' + h + ',c_pad,b_auto,f_auto,q_auto/');
+}
+
 function tarjeta(p){
   const marca = marcaDe(p);
   const hayVid = p.vid && p.vid.length > 0;
   // Detectar imágenes externas potencialmente problemáticas (cdn.phototourl, etc.)
   // Si la imagen principal es externa Y la galería tiene imágenes, usar la galería
-  let imgSegura = p.img;
+  let imgSegura = optCld(p.img);
   const imgEsExterna = imgSegura && !imgSegura.includes('res.cloudinary.com') && !imgSegura.startsWith('/');
   const galeriaValida = p.imgs && p.imgs.length > 0 && p.imgs[0].includes('res.cloudinary.com');
   if (imgEsExterna && galeriaValida) {
-    imgSegura = p.imgs[0];
+    imgSegura = optCld(p.imgs[0]);
   } else if (imgEsExterna && !galeriaValida) {
     // Imagen externa sin respaldo: no mostrar para evitar layout roto
     imgSegura = '';
@@ -698,7 +707,7 @@ function tarjeta(p){
   const hayImg = imgSegura && imgSegura.length > 0;
   let media;
   if (hayVid) {
-    media = '<video src="' + esc(p.vid) + '" muted loop playsinline preload="metadata" width="600" height="450" ' +
+    media = '<video src="' + esc(optCld(p.vid)) + '" muted loop playsinline preload="metadata" width="600" height="450" ' +
       'onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>';
   } else if (hayImg) {
     media = '<img src="' + esc(imgSegura) + '" alt="' + esc(p.n) + '" loading="lazy" decoding="async" ' +
@@ -807,16 +816,17 @@ function abrirVisor(id){
   const img = document.getElementById('visorImg'), vid = document.getElementById('visorVid');
   img.style.display = 'none'; vid.style.display = 'none';
 
-  // Collect all images: gallery + main image (deduplicated)
+  // Collect all images: gallery + main image (deduplicated), optimizadas para visor
   visorImgs = [];
   if (p.imgs && p.imgs.length > 0) {
-    visorImgs = [...p.imgs];
+    // Visor usa tamaño más grande (1200x900) para mejor calidad al ampliar
+    visorImgs = [...p.imgs].map(u => optCld(u, 1200, 900));
   } else if (p.img) {
-    visorImgs = [p.img];
+    visorImgs = [optCld(p.img, 1200, 900)];
   }
 
   if (p.vid) {
-    vid.src = p.vid; vid.style.display = '';
+    vid.src = optCld(p.vid, 1200, 900); vid.style.display = '';
     document.getElementById('visorCarousel').style.display = 'none';
   } else if (visorImgs.length > 1) {
     // Show carousel
