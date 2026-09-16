@@ -913,17 +913,21 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
                 p.codigo_barras,
                 p.stock_actual,
                 p.imagen_url,
+                p.marca,
+                p.genero,
+                COALESCE(p.visible_en_tienda, true) as visible_en_tienda,
                 c.nombre_categoria
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1
             AND p.stock_actual > 0
+            AND COALESCE(p.visible_en_tienda, true) = true
         `;
         const params = [idLocal];
         let paramIdx = 2;
         
         if (buscar) {
-            query += ` AND (p.nombre_producto ILIKE $${paramIdx} OR p.codigo_barras ILIKE $${paramIdx})`;
+            query += ` AND (p.nombre_producto ILIKE $${paramIdx} OR p.codigo_barras ILIKE $${paramIdx} OR p.marca ILIKE $${paramIdx})`;
             params.push(`%${buscar}%`);
             paramIdx++;
         }
@@ -953,16 +957,42 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
                 p.imagen_url = baseUrl + p.imagen_url;
             }
         });
+
+        // Cargar imágenes múltiples de la galería para cada producto
+        if (productos.length > 0) {
+            const prodIds = productos.map(p => p.id_producto);
+            const { rows: galImgs } = await db.query(
+                `SELECT id_producto, url, orden FROM producto_imagenes 
+                 WHERE id_producto = ANY($1) ORDER BY orden ASC`, [prodIds]
+            );
+            // Agrupar por producto
+            const porProducto = {};
+            galImgs.forEach(img => {
+                if (!porProducto[img.id_producto]) porProducto[img.id_producto] = [];
+                let url = img.url;
+                if (url && url.startsWith('/uploads/')) url = baseUrl + url;
+                porProducto[img.id_producto].push({ url, orden: img.orden });
+            });
+            // Asignar a cada producto
+            productos.forEach(p => {
+                p.imagenes = porProducto[p.id_producto] || [];
+                // Si tiene galería y la imagen principal no está en la galería, usar la primera de galería
+                if (p.imagenes.length > 0 && !p.imagenes.some(img => img.url === p.imagen_url)) {
+                    p.imagen_url = p.imagenes[0].url;
+                }
+            });
+        }
         
         let countQuery = `
             SELECT COUNT(*)::int as total
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1 AND p.stock_actual > 0
+            AND COALESCE(p.visible_en_tienda, true) = true
         `;
         const countParams = [idLocal];
         if (buscar) {
-            countQuery += ` AND (p.nombre_producto ILIKE $2 OR p.codigo_barras ILIKE $2)`;
+            countQuery += ` AND (p.nombre_producto ILIKE $2 OR p.codigo_barras ILIKE $2 OR p.marca ILIKE $2)`;
             countParams.push(`%${buscar}%`);
         }
         const { rows: [{ total }] } = await db.query(countQuery, countParams);

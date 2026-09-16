@@ -66,9 +66,8 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary] Crash:', error, info);
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    // Redirect al login — usa hash para HashRouter
-    window.location.hash = '#/login';
-    window.location.reload();
+    // v2.2.3: NO usar window.location.reload() — causa pantalla verde en Electron
+    // El redirect se maneja via React Router cuando user=null
   }
   render() {
     if (this.state.hasError) {
@@ -548,8 +547,7 @@ function App() {
   useEffect(() => {
     const onLogoutEvent = () => {
       try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-      window.location.hash = '#/login';
-      window.location.reload();
+      setUser(null); // v2.2.3: SPA navigation, no reload
     };
     window.addEventListener('auth:logout', onLogoutEvent);
     return () => window.removeEventListener('auth:logout', onLogoutEvent);
@@ -571,8 +569,7 @@ function App() {
 
   const handleLogout = () => {
     try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
-    window.location.hash = '#/login';
-    window.location.reload();
+    setUser(null); // React Router redirige a /login via <Navigate>
   };
 
   // Durante loading, no mostrar nada (evita flash de spinner verde)

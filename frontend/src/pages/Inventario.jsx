@@ -5,13 +5,13 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon } from 'lucide-react';
 
 const CATEGORIAS_DEFAULT = [
-  { id_categoria: 1, nombre_categoria: 'Smartphones' },
-  { id_categoria: 2, nombre_categoria: 'Accesorios' },
+  { id_categoria: 1, nombre_categoria: 'Reloj Hombre' },
+  { id_categoria: 2, nombre_categoria: 'Reloj Dama' },
   { id_categoria: 3, nombre_categoria: 'General' },
   { id_categoria: 4, nombre_categoria: 'Relojes' },
-  { id_categoria: 5, nombre_categoria: 'Relojes Hombre' },
-  { id_categoria: 6, nombre_categoria: 'Relojes Mujer' },
-  { id_categoria: 7, nombre_categoria: 'Smartwatches' }
+  { id_categoria: 5, nombre_categoria: 'Smartwatches' },
+  { id_categoria: 6, nombre_categoria: 'Accesorios' },
+  { id_categoria: 7, nombre_categoria: 'Smartphones' }
 ];
 
 const Inventario = ({ user }) => {
