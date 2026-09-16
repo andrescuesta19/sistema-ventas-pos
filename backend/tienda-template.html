@@ -162,8 +162,6 @@ button{font-family:inherit}
 .card__img img,.card__img video{width:auto;height:auto;max-width:100%;max-height:320px;
   object-fit:contain;display:block;margin:auto}
 .no-img{font-size:2.2rem;opacity:.35}
-.tag-stock{position:absolute;top:.6rem;left:.6rem;background:#DC2626;color:#fff;font-size:.66rem;
-  font-weight:700;padding:.2rem .5rem;border-radius:6px}
 .tag-of{position:absolute;top:.6rem;right:.6rem;background:var(--accent);color:#fff;font-size:.66rem;
   font-weight:700;padding:.2rem .5rem;border-radius:6px}
 .card__body{padding:.7rem .85rem .9rem;display:flex;flex-direction:column;gap:.3rem;flex:1}
@@ -723,7 +721,9 @@ function tarjeta(p){
 
   return '<article class="card">' +
     '<div class="card__img" onclick="abrirVisor(' + p.id + ')">' + media +
-      (p.s > 0 && p.s <= 5 ? '<span class="tag-stock">¡Últimas ' + p.s + '!</span>' : '') +
+      // Solo mostrar etiqueta de oferta cuando el producto la tiene configurada.
+      // No mostrar nada basado en stock bajo (la tienda no debe comunicar
+      // escasez al cliente, eso es lógica interna del negocio).
       (enOferta(p) ? '<span class="tag-of">Oferta</span>' : '') +
     '</div>' +
     '<div class="card__body">' +
