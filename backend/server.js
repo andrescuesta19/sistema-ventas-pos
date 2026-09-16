@@ -240,7 +240,7 @@ app.get('/tienda/:idLocal', async (req, res) => {
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
         const { rows: productos } = await db.query(`
-            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, c.nombre_categoria
+            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, p.marca, p.genero, c.nombre_categoria
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true ORDER BY p.stock_actual DESC
         `, [idLocal]);
@@ -256,9 +256,14 @@ app.get('/tienda/:idLocal', async (req, res) => {
                 if (!galeriaMap[g.id_producto]) galeriaMap[g.id_producto] = g.url;
             });
         }
-        // Asignar imagen principal: galería > imagen_url
+        // Asignar imagen principal: galería (solo URLs http/https) > imagen_url
         productos.forEach(p => {
-            p.imagen_url = galeriaMap[p.id_producto] || p.imagen_url || '';
+            const galImg = galeriaMap[p.id_producto] || '';
+            // Only use gallery image if it's an HTTP URL (Cloudinary), not a local path
+            if (galImg && (galImg.startsWith('http://') || galImg.startsWith('https://'))) {
+                p.imagen_url = galImg;
+            }
+            // else keep the original imagen_url (which may be Cloudinary)
         });
 
         const { rows: categorias } = await db.query(`
