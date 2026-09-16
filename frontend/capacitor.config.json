@@ -1,9 +1,0 @@
-{
-  "appId": "com.andrescuesta.pos",
-  "appName": "Sistema de Ventas POS",
-  "webDir": "dist",
-  "server": {
-    "url": "http://192.168.1.58:5173",
-    "cleartext": true
-  }
-}
