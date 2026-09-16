@@ -98,35 +98,56 @@ button{font-family:inherit}
 .chip:hover,.chip.on{opacity:1;color:var(--accent)}
 .chip::after{content:"·";margin-left:1.6rem;opacity:.3}
 
-/* ─────────── LAYOUT (sidebar arriba como filtros, full-width en todos los tamaños) ─────────── */
+/* ─────────── LAYOUT (sidebar como barra de filtros compacta) ─────────── */
 .layout{display:flex;flex-direction:column;gap:1.2rem;padding:1.4rem 1rem 3rem;max-width:1240px;margin:0 auto}
 .side{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1rem 1.2rem;margin-left:0}
+/* Toggle (solo móvil) */
 .side__tog{width:100%;border:0;background:none;font-weight:700;color:var(--primary);cursor:pointer;font-size:.92rem;display:flex;align-items:center;justify-content:space-between;padding:.2rem 0}
 .side__tog::after{content:"+";font-size:1.3rem;font-weight:400;color:var(--accent)}
 .side.open .side__tog::after{content:"−"}
 .side__body{display:none;padding-top:.9rem;border-top:1px solid var(--border);margin-top:.8rem}
 .side__body.on{display:block}
-.side h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx-mut);margin:0 0 .55rem}
-.side h3:first-of-type{margin-top:0}
-/* En escritorio: filtros siempre visibles como barra horizontal */
-@media(min-width:901px){
-  .side__tog{display:none}
-  .side__body{display:flex!important;flex-wrap:wrap;gap:1.2rem 1.8rem;padding-top:0;border-top:0;margin-top:0;align-items:flex-start}
-  .side__body h3{flex:0 0 100%}
-  .side__body > div,.side__body > .rango,.side__body > select.orden,.side__body > .limpiar{flex:1 1 auto;min-width:170px}
-  .side__body > .limpiar{flex:0 0 auto;min-width:140px;margin-top:0;align-self:center}
-}
-.opt{display:block;width:100%;border:0;background:none;text-align:left;padding:.42rem .5rem;border-radius:8px;
-  font-size:.86rem;color:var(--tx-body);cursor:pointer}
+/* Etiquetas y grupos (móvil y escritorio) */
+.f-grupo{margin-bottom:.9rem}
+.f-grupo:last-of-type{margin-bottom:0}
+.f-label{display:block;font-size:.74rem;font-weight:700;color:var(--tx-mut);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:.45rem}
+.f-pills{display:flex;flex-wrap:wrap;gap:.35rem}
+/* Chips/pills de marcas y categorías (también móvil) */
+.opt{display:inline-block;width:auto;padding:.32rem .7rem;font-size:.78rem;
+  border:1px solid var(--border);border-radius:14px;color:var(--tx-body);
+  background:var(--white);cursor:pointer;font-family:inherit;text-align:left;
+  transition:background .15s,color .15s,border-color .15s}
 .opt:hover{background:var(--bg)}
-.opt.on{background:rgba(37,99,235,.09);color:var(--accent);font-weight:600}
-.opt .c{float:right;color:var(--tx-mut);font-size:.76rem}
-.rango{display:flex;gap:.4rem;align-items:center}
-.rango input{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:.42rem .5rem;font-size:.8rem;min-width:0}
-select.orden{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:.45rem;font-size:.84rem;background:var(--white);color:var(--tx)}
-.limpiar{width:100%;margin-top:1rem;border:1.5px solid var(--border);background:none;border-radius:9px;
-  padding:.5rem;font-size:.82rem;color:var(--tx-body);cursor:pointer}
-.limpiar:hover{border-color:var(--accent);color:var(--accent)}
+.opt.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.opt .c{display:inline;float:none;color:var(--tx-mut);font-size:.72rem;margin-left:.25rem}
+.opt.on .c{color:rgba(255,255,255,.85)}
+/* En escritorio: barra de filtros compacta horizontal */
+@media(min-width:901px){
+  .side{padding:.7rem 1rem}
+  .side__tog{display:none}
+  .side__body{display:flex!important;flex-wrap:wrap;align-items:center;gap:.5rem .9rem;
+    padding-top:0;border-top:0;margin-top:0}
+  .f-grupo{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0;
+    padding-right:.9rem;border-right:1px solid var(--border)}
+  .f-grupo:last-of-type{border-right:0}
+  .f-grupo .f-label{margin:0;font-size:.72rem;white-space:nowrap}
+  .f-grupo .f-pills{display:inline-flex;flex-wrap:wrap;gap:.3rem}
+  .f-grupo .rango{display:inline-flex;align-items:center;gap:.25rem}
+  .f-grupo .rango input{width:75px;padding:.3rem .4rem;font-size:.78rem}
+  .limpiar{padding:.4rem .7rem;font-size:.78rem}
+  .f-pills .opt{padding:.25rem .55rem;font-size:.74rem}
+  select.orden{width:auto;min-width:140px;padding:.35rem .5rem;font-size:.78rem;margin:0}
+}
+/* En móvil: ancho completo para legibilidad táctil */
+@media(max-width:900px){
+  .f-grupo .rango{flex-direction:row;flex-wrap:wrap;width:100%}
+  .f-grupo .rango input{flex:1 1 90px;width:auto;min-width:90px}
+  select.orden{width:100%;padding:.5rem;font-size:.88rem}
+  .limpiar{width:100%;margin-top:.6rem}
+  .f-pills .opt{padding:.4rem .75rem;font-size:.82rem}
+  .opt{padding:.4rem .75rem;font-size:.82rem}
+}
 
 /* ─────────── CATÁLOGO ─────────── */
 .cat-top{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
@@ -377,25 +398,36 @@ footer::after{
   <aside class="side">
     <button class="side__tog" onclick="this.parentElement.classList.toggle('open');document.getElementById('sideBody').classList.toggle('on')">☰ Filtrar productos</button>
     <div class="side__body" id="sideBody">
-      <h3>Ordenar por</h3>
-      <select class="orden" id="orden" onchange="setOrden(this.value)">
-        <option value="nuevo">Novedad</option>
-        <option value="precio-asc">Precio: menor a mayor</option>
-        <option value="precio-desc">Precio: mayor a menor</option>
-        <option value="nombre">Nombre A–Z</option>
-      </select>
+      <div class="f-grupo">
+        <span class="f-label">Ordenar:</span>
+        <select class="orden" id="orden" onchange="setOrden(this.value)">
+          <option value="nuevo">Novedad</option>
+          <option value="precio-asc">Precio: menor a mayor</option>
+          <option value="precio-desc">Precio: mayor a menor</option>
+          <option value="nombre">Nombre A–Z</option>
+        </select>
+      </div>
 
-      <h3>Marca</h3>
-      <div id="filtroMarcas"></div>
+      <div class="f-grupo">
+        <span class="f-label">Marca:</span>
+        <div id="filtroMarcas" class="f-pills"></div>
+      </div>
 
-      <h3>Categoría</h3>
-      <div id="filtroCats"></div>
+      <div class="f-grupo">
+        <span class="f-label">Categoría:</span>
+        <div id="filtroCats" class="f-pills"></div>
+      </div>
 
-      <h3>Precio</h3>
-      <div class="rango">
-        <input type="number" id="pmin" placeholder="Mínimo" oninput="setPrecio()">
-        <span style="color:var(--tx-mut)">–</span>
-        <input type="number" id="pmax" placeholder="Máximo" oninput="setPrecio()">
+      <div class="f-grupo">
+        <span class="f-label">Precio:</span>
+        <div class="rango">
+          <input type="number" id="pmin" placeholder="Mín" oninput="setPrecio()">
+          <span style="color:var(--tx-mut)">–</span>
+          <input type="number" id="pmax" placeholder="Máx" oninput="setPrecio()">
+        </div>
+      </div>
+
+      <button class="limpiar" onclick="limpiarFiltros()">Quitar filtros</button>
       </div>
 
       <button class="limpiar" onclick="limpiarFiltros()">Quitar filtros</button>
