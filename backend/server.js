@@ -4841,6 +4841,41 @@ app.delete('/api/productos/:id/imagenes/:idImagen', requireAuth, requireAprobado
     }
 });
 
+// POST /api/tienda/logo — Subir logo de la tienda (para la tienda pública)
+const logosDir = path.join(__dirname, 'logos');
+if (!fs.existsSync(logosDir)) fs.mkdirSync(logosDir, { recursive: true });
+
+const uploadLogo = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) return cb(new Error('Solo se permiten imágenes JPG, PNG, WebP o SVG.'));
+        cb(null, true);
+    }
+});
+
+app.post('/api/tienda/logo', requireAuth, requireAprobado, requireAdmin, uploadLogo.single('logo'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No se recibió imagen.' });
+        let url;
+        if (useCloudinary) {
+            url = await uploadToCloudinary(req.file.buffer, 'logos', 'image');
+        } else {
+            const ext = path.extname(req.file.originalname).toLowerCase();
+            const filename = `cjp-watch-logo${ext}`;
+            const dest = path.join(logosDir, filename);
+            fs.writeFileSync(dest, req.file.buffer);
+            url = `/logos/${filename}`;
+        }
+        res.json({ success: true, url });
+    } catch (err) {
+        console.error('Error subiendo logo:', err);
+        res.status(500).json({ error: 'Error al subir logo.' });
+    }
+});
+
 // =======================================================
 // E-COMMERCE — INTEGRACIONES
 // =======================================================
