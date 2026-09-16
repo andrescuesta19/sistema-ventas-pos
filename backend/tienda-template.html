@@ -73,19 +73,45 @@ button{font-family:inherit}
 .nav-note{padding:1rem 1.2rem;font-size:.78rem;color:var(--tx-mut);line-height:1.5}
 
 /* ─────────── BIENVENIDA CON VIDEO ─────────── */
-.hero{margin-top:var(--head-h);position:relative;min-height:clamp(300px,52vh,460px);
+.hero{margin-top:var(--head-h);position:relative;min-height:clamp(340px,58vh,520px);
   display:grid;align-items:center;justify-content:center;overflow:hidden;
   background:linear-gradient(135deg,var(--primary),#2A5298)}
 .hero__vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,36,.25) 0%,rgba(8,20,36,.55) 50%,rgba(8,20,36,.92) 100%)}
-.hero__tx{position:relative;padding:2.4rem 1rem 2.6rem;max-width:1240px;margin:0 auto;width:100%;color:#fff;text-align:center;display:flex;flex-direction:column;align-items:center}
-.hero__logo{width:100px;height:100px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.3);box-shadow:0 8px 40px rgba(0,0,0,.3);margin-bottom:1.2rem;flex-shrink:0}
+/* Logo gigante de fondo (atraviesa, bleed a la izquierda) */
+.hero__bg-logo{position:absolute;left:-80px;top:50%;transform:translateY(-50%);
+  width:clamp(380px,55vw,640px);height:clamp(380px,55vw,640px);
+  opacity:.10;pointer-events:none;z-index:1;
+  filter:drop-shadow(0 0 60px rgba(37,99,235,.4));
+  animation:heroFloat 8s ease-in-out infinite}
+.hero__bg-logo img{width:100%;height:100%;object-fit:contain}
+@keyframes heroFloat{
+  0%,100%{transform:translateY(-50%) translateX(0) rotate(0deg)}
+  50%{transform:translateY(-50%) translateX(10px) rotate(3deg)}
+}
+.hero__tx{position:relative;z-index:2;padding:2.4rem 1rem 2.8rem;max-width:1240px;margin:0 auto;
+  width:100%;color:#fff;text-align:left;display:flex;flex-direction:column;
+  align-items:flex-start;padding-left:clamp(1rem,7vw,7rem)}
+.hero__logo{width:140px;height:140px;border-radius:50%;overflow:hidden;
+  border:4px solid rgba(255,255,255,.35);box-shadow:0 12px 50px rgba(0,0,0,.45);
+  margin-bottom:1.3rem;flex-shrink:0;
+  animation:heroFloat 6s ease-in-out infinite}
 .hero__logo img{width:100%;height:100%;object-fit:cover}
-.hero__tx h1{font-family:"Playfair Display",serif;font-size:clamp(1.9rem,5.5vw,3.1rem);line-height:1.08;margin-bottom:.5rem}
-.hero__tx p{color:rgba(255,255,255,.85);max-width:46ch;font-size:.95rem}
-.hero__badges{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.1rem;justify-content:center}
+.hero__tx h1{font-family:"Playfair Display",serif;font-size:clamp(2rem,6vw,3.5rem);
+  line-height:1.05;margin-bottom:.7rem;text-shadow:0 4px 24px rgba(0,0,0,.4);max-width:18ch}
+.hero__tx p{color:rgba(255,255,255,.88);max-width:42ch;font-size:1rem;line-height:1.5;
+  text-shadow:0 2px 12px rgba(0,0,0,.4)}
+.hero__badges{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.2rem;justify-content:flex-start}
 .hero__badges div{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);
-  padding:.35rem .8rem;border-radius:20px;font-size:.76rem;color:#fff}
+  padding:.4rem .9rem;border-radius:20px;font-size:.78rem;color:#fff;
+  backdrop-filter:blur(6px)}
+@media(max-width:640px){
+  .hero__tx{text-align:center;align-items:center;padding-left:1rem}
+  .hero__tx h1{font-size:clamp(1.7rem,8vw,2.4rem);max-width:none}
+  .hero__tx p{margin:0 auto}
+  .hero__badges{justify-content:center}
+  .hero__bg-logo{left:-160px;opacity:.07}
+}
 
 /* ─────────── MARQUESINA DE MARCAS ─────────── */
 .marcas{background:var(--white);border-bottom:1px solid var(--border);overflow:hidden;padding:.9rem 0}
@@ -123,7 +149,9 @@ select.orden{width:100%;border:1.5px solid var(--border);border-radius:8px;paddi
 .cat-top{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
 .cat-top h2{font-family:"Playfair Display",serif;font-size:1.5rem;color:var(--primary)}
 .cat-top .cuenta{font-size:.82rem;color:var(--tx-mut)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.1rem}
+@media(min-width:1100px){.grid{grid-template-columns:repeat(5,1fr)}}
+@media(max-width:640px){.grid{grid-template-columns:repeat(2,1fr);gap:.7rem}}
 .card{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;
   display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s}
 .card:hover{box-shadow:var(--shadow-h);transform:translateY(-3px)}
@@ -343,9 +371,13 @@ footer::after{
     <source src="/uploads/hero.mp4" type="video/mp4">
   </video>
   <div class="hero__velo"></div>
+  <div class="hero__bg-logo" aria-hidden="true">
+    <img src="/logos/tienda-logo.png" alt=""
+         onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:18rem;font-family:Playfair Display,serif;opacity:.4&quot;>CJP</div>'">
+  </div>
   <div class="hero__tx">
     <div class="hero__logo">
-      <img src="/logos/tienda-logo.png" alt="CJP WATCH" onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;background:rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:1.8rem;border-radius:50%&quot;>CJP</div>'">
+      <img src="/logos/tienda-logo.png" alt="CJP WATCH" onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;background:rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:2.4rem;border-radius:50%&quot;>CJP</div>'">
     </div>
     <h1>Relojes originales,<br>garantía real</h1>
     <p>Las mejores marcas internacionales con envío a toda Colombia desde Turbo, Antioquia.</p>
@@ -496,7 +528,7 @@ const PHONE = '{{TELEFONO}}';
 
 /* ── Marcas fijas del catálogo ── */
 const MARCAS = ['TechnoMarine', 'MULCO', 'INVICTA'];
-const POR_PAGINA = 15;
+const POR_PAGINA = 10;
 
 const estado = { marca:'', genero:'', cat:'', oferta:false, q:'', orden:'nuevo', min:null, max:null, pagina:1 };
 let carrito = [];
