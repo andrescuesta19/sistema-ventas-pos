@@ -156,9 +156,10 @@ button{font-family:inherit}
   display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:280px;justify-self:center;
   width:100%}
 .card:hover{box-shadow:var(--shadow-h);transform:translateY(-3px)}
-.card__img{position:relative;aspect-ratio:4/3;background:var(--bg);display:grid;place-items:center;cursor:pointer;
-  min-height:160px;overflow:hidden}
-.card__img img,.card__img video{width:100%;height:100%;object-fit:contain;padding:.7rem;display:block;max-width:100%}
+.card__img{position:relative;aspect-ratio:4/3;background:#fafbfc;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;min-height:160px;overflow:hidden;padding:.5rem}
+.card__img img,.card__img video{width:auto;height:auto;max-width:100%;max-height:100%;
+  object-fit:contain;display:block;margin:auto}
 .no-img{font-size:2.2rem;opacity:.35}
 .tag-stock{position:absolute;top:.6rem;left:.6rem;background:#DC2626;color:#fff;font-size:.66rem;
   font-weight:700;padding:.2rem .5rem;border-radius:6px}

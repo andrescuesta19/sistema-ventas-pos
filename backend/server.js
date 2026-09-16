@@ -279,17 +279,38 @@ app.get('/tienda/:idLocal', async (req, res) => {
         const telWA = (local.telefono || '').replace(/\D/g, '');
         const baseUrl = `${req.protocol}://${req.get('host')}`;
 
+        // Optimizar imágenes de Cloudinary con transformaciones para que se vean
+        // completas y bien proporcionadas en las tarjetas (sin recortes)
+        const optimizarCloudinary = (url, w = 600, h = 450) => {
+            if (!url || !url.includes('res.cloudinary.com')) return url;
+            // Si ya tiene transformaciones, no duplicar
+            if (url.includes('/w_') || url.includes('/c_')) return url;
+            // Insertar transformaciones después de /upload/
+            // c_pad = rellenar sin recortar (mantiene proporción completa)
+            // b_auto = fondo automático (blanco/transparente)
+            // f_auto = formato óptimo (WebP si soporta)
+            // q_auto = calidad automática
+            return url.replace('/upload/', `/upload/w_${w},h_${h},c_pad,b_auto,f_auto,q_auto/`);
+        };
+
         const prodsJSON = JSON.stringify(productos.map(p => {
             let img = p.imagen_url || '';
             if (img.startsWith('/uploads/')) {
                 img = baseUrl + img;
+            } else {
+                img = optimizarCloudinary(img, 600, 450);
             }
             let vid = p.video_url || '';
             if (vid.startsWith('/uploads/')) {
                 vid = baseUrl + vid;
+            } else {
+                vid = optimizarCloudinary(vid, 600, 450);
             }
-            // All gallery images (Cloudinary URLs)
-            const imgs = (p._galeria || []).map(url => url.startsWith('/uploads/') ? baseUrl + url : url);
+            // All gallery images (Cloudinary URLs) - también optimizadas
+            const imgs = (p._galeria || []).map(url => {
+                if (url.startsWith('/uploads/')) return baseUrl + url;
+                return optimizarCloudinary(url, 600, 450);
+            });
             return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '', g: p.genero || '', imgs };
         }));
 
