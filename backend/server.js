@@ -244,6 +244,22 @@ app.get('/tienda/:idLocal', async (req, res) => {
             WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true ORDER BY p.stock_actual DESC
         `, [idLocal]);
 
+        // Para cada producto, buscar la primera imagen de la galería
+        const prodIds = productos.map(p => p.id_producto);
+        let galeriaMap = {};
+        if (prodIds.length > 0) {
+            const { rows: galeriaImgs } = await db.query(
+                `SELECT id_producto, url FROM producto_imagenes WHERE id_producto = ANY($1) ORDER BY orden ASC`, [prodIds]
+            );
+            galeriaImgs.forEach(g => {
+                if (!galeriaMap[g.id_producto]) galeriaMap[g.id_producto] = g.url;
+            });
+        }
+        // Asignar imagen principal: galería > imagen_url
+        productos.forEach(p => {
+            p.imagen_url = galeriaMap[p.id_producto] || p.imagen_url || '';
+        });
+
         const { rows: categorias } = await db.query(`
             SELECT DISTINCT c.nombre_categoria, COUNT(*)::int as cantidad
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
@@ -1879,10 +1895,16 @@ app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (re
         if (!nombre_producto || !precio_venta) {
             return res.status(400).json({ error: 'Nombre y precio de venta son requeridos.' });
         }
-        const serial = codigo_barras || null;
+        const serial = codigo_barras && codigo_barras.trim() ? codigo_barras.trim() : null;
         const costo = precio_compra ? parseFloat(precio_compra) : 0;
-        const visibilidad = visible_en_tienda !== false; // default true
-        const catId = id_categoria ? parseInt(id_categoria) : 3; // default General (3)
+        const visibilidad = visible_en_tienda !== false;
+
+        // Verificar categoría: si no existe, usar NULL
+        let catId = null;
+        if (id_categoria) {
+            const catCheck = await db.query('SELECT id_categoria FROM categorias WHERE id_categoria = $1', [parseInt(id_categoria)]);
+            if (catCheck.rows.length > 0) catId = parseInt(id_categoria);
+        }
 
         const { rows } = await db.query(
             `INSERT INTO productos (id_local, codigo_barras, nombre_producto, id_categoria, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
@@ -1891,8 +1913,8 @@ app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (re
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
-        console.error('Error creando producto:', err);
-        res.status(500).json({ error: 'Error interno del servidor al crear producto: ' + (err.message || '') });
+        console.error('Error creando producto:', err.message, err.stack);
+        res.status(500).json({ error: 'Error al guardar producto: ' + err.message });
     }
 });
 
@@ -4728,36 +4750,6 @@ app.delete('/api/productos/:id/video', requireAuth, requireAprobado, async (req,
     }
 })();
 
-// v2.2.9: Migración - columnas opcionales + visibilidad en tienda
-(async () => {
-    try {
-        await db.query('ALTER TABLE productos ALTER COLUMN codigo_barras DROP NOT NULL');
-        await db.query('ALTER TABLE productos ALTER COLUMN precio_compra DROP NOT NULL');
-        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria DROP NOT NULL');
-        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria SET DEFAULT 3');
-        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS video_url VARCHAR(500)');
-        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS visible_en_tienda BOOLEAN DEFAULT true');
-        console.log('[v2.2.9] Migración productos aplicada: opcionales + visibilidad + categorias');
-    } catch (e) {
-        console.error('[v2.2.9] Migración productos:', e.message);
-    }
-})();
-
-// v2.2.10: Agregar categoría 'General' por defecto (id=3)
-(async () => {
-    try {
-        await db.query(`
-            INSERT INTO categorias (id_categoria, nombre_categoria) 
-            VALUES (3, 'General')
-            ON CONFLICT (id_categoria) DO NOTHING
-        `);
-        await db.query(`SELECT setval('categorias_id_categoria_seq', COALESCE((SELECT MAX(id_categoria) FROM categorias), 0) + 1, false)`);
-        console.log('[v2.2.10] Categoría General (id=3) asegurada');
-    } catch (e) {
-        console.error('[v2.2.10] Migración categoría General:', e.message);
-    }
-})();
-
 // POST /api/productos/:id/imagenes — subir una o varias imágenes (multipart, campo "imagenes")
 app.post('/api/productos/:id/imagenes', requireAuth, requireAprobado, uploadProducto.array('imagenes', 10), async (req, res) => {
     try {
@@ -5719,9 +5711,35 @@ app.use((req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-app.listen(PORT, HOST, () => {
-    console.log(`Backend server running on http://${HOST}:${PORT}`);
-    console.log(`   Local:    http://localhost:${PORT}`);
-    console.log(`   Network:  http://0.0.0.0:${PORT}`);
-    console.log(`   Health:   http://localhost:${PORT}/api/health`);
-});
+
+// v2.2.11: Ejecutar migraciones ANTES de abrir el puerto
+// Esto evita que lleguen requests antes de que las columnas existan
+(async () => {
+    // v2.2.9: columnas opcionales + visibilidad
+    try {
+        await db.query('ALTER TABLE productos ALTER COLUMN codigo_barras DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN precio_compra DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria DROP NOT NULL');
+        await db.query('ALTER TABLE productos ALTER COLUMN id_categoria SET DEFAULT 3');
+        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS video_url VARCHAR(500)');
+        await db.query('ALTER TABLE productos ADD COLUMN IF NOT EXISTS visible_en_tienda BOOLEAN DEFAULT true');
+        console.log('[v2.2.9] Migración productos aplicada: opcionales + visibilidad');
+    } catch (e) {
+        console.error('[v2.2.9] Migración productos:', e.message);
+    }
+    // v2.2.10: categoría General
+    try {
+        await db.query(`INSERT INTO categorias (id_categoria, nombre_categoria) VALUES (3, 'General') ON CONFLICT (id_categoria) DO NOTHING`);
+        console.log('[v2.2.10] Categoría General (id=3) asegurada');
+    } catch (e) {
+        console.error('[v2.2.10] Migración categoría General:', e.message);
+    }
+
+    // Abrir puerto DESPUÉS de las migraciones
+    app.listen(PORT, HOST, () => {
+        console.log(`Backend server running on http://${HOST}:${PORT}`);
+        console.log(`   Local:    http://localhost:${PORT}`);
+        console.log(`   Network:  http://0.0.0.0:${PORT}`);
+        console.log(`   Health:   http://localhost:${PORT}/api/health`);
+    });
+})();
