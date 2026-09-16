@@ -281,16 +281,14 @@ app.get('/tienda/:idLocal', async (req, res) => {
 
         // Optimizar imágenes de Cloudinary con transformaciones para que se vean
         // completas y bien proporcionadas en las tarjetas (sin recortes)
-        const optimizarCloudinary = (url, w = 600, h = 450) => {
+        // c_pad = rellena sin recortar (imagen COMPLETA visible)
+        // b_white = fondo blanco explícito (no transparente)
+        const optimizarCloudinary = (url, w = 800, h = 800) => {
             if (!url || !url.includes('res.cloudinary.com')) return url;
             // Si ya tiene transformaciones, no duplicar
-            if (url.includes('/w_') || url.includes('/c_')) return url;
-            // Insertar transformaciones después de /upload/
-            // c_pad = rellenar sin recortar (mantiene proporción completa)
-            // b_auto = fondo automático (blanco/transparente)
-            // f_auto = formato óptimo (WebP si soporta)
-            // q_auto = calidad automática
-            return url.replace('/upload/', `/upload/w_${w},h_${h},c_pad,b_auto,f_auto,q_auto/`);
+            if (/\/w_\d+/.test(url) || /\/c_(pad|fill|fit|scale|crop)/.test(url)) return url;
+            // c_pad con b_white: rellena con blanco sin recortar
+            return url.replace('/upload/', `/upload/w_${w},h_${h},c_pad,b_white,f_auto,q_auto/`);
         };
 
         const prodsJSON = JSON.stringify(productos.map(p => {

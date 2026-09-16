@@ -150,16 +150,16 @@ button{font-family:inherit}
 @media(max-width:640px){
   .grid{grid-template-columns:repeat(2,1fr);gap:.6rem;justify-content:stretch}
   .card{max-width:100%}
-  .card__img{aspect-ratio:1/1;min-height:170px}
   .cat-top h2{font-size:1.2rem;line-height:1.25;max-width:100%;overflow-wrap:break-word;hyphens:auto;padding:0 .4rem}
 }
-.card{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;
-  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:280px;justify-self:center;
-  width:100%}
+.card{background:var(--white);border:1px solid var(--border);border-radius:14px;
+  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:320px;justify-self:center;
+  width:100%;overflow:hidden}
 .card:hover{box-shadow:var(--shadow-h);transform:translateY(-3px)}
-.card__img{position:relative;aspect-ratio:4/3;background:#fafbfc;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;min-height:160px;padding:.5rem}
-.card__img img,.card__img video{width:auto;height:auto;max-width:100%;max-height:100%;
+/* Contenedor de imagen SIN aspect-ratio rígido: se adapta al tamaño natural */
+.card__img{position:relative;background:#ffffff;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:.5rem;min-height:200px;height:auto;width:100%}
+.card__img img,.card__img video{width:auto;height:auto;max-width:100%;max-height:320px;
   object-fit:contain;display:block;margin:auto}
 .no-img{font-size:2.2rem;opacity:.35}
 .tag-stock{position:absolute;top:.6rem;left:.6rem;background:#DC2626;color:#fff;font-size:.66rem;
@@ -683,14 +683,13 @@ function render(){
 }
 
 // Optimizar URL de Cloudinary en el cliente (por si el backend no las transformó)
-// c_pad = rellena sin recortar, mantiene imagen completa visible
+// c_pad con b_white: rellena con blanco sin recortar (imagen completa visible)
 function optCld(url, w, h){
-  w = w || 600; h = h || 450;
+  w = w || 800; h = h || 800;
   if (!url || typeof url !== 'string' || !url.includes('res.cloudinary.com')) return url;
   // Detectar si ya tiene transformaciones (más robusto)
   if (/\/w_\d+/.test(url) || /\/c_(pad|fill|fit|scale|crop)/.test(url)) return url;
-  // Insertar transformaciones
-  return url.replace('/upload/', '/upload/w_' + w + ',h_' + h + ',c_pad,b_auto,f_auto,q_auto/');
+  return url.replace('/upload/', '/upload/w_' + w + ',h_' + h + ',c_pad,b_white,f_auto,q_auto/');
 }
 
 function tarjeta(p){
