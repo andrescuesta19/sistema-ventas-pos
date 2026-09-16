@@ -715,10 +715,14 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             user: {
                 id_usuario: row.id_usuario,
                 nombre: row.nombre,
+                correo: row.correo,
                 rol: row.rol,
                 id_local: row.id_local,
                 nombre_local: row.nombre_local,
                 verificado: row.verificado,
+                telefono: row.telefono,
+                documento_identidad: row.documento_identidad,
+                avatar_url: row.avatar_url,  // v2.2.x: incluir avatar para que persista al login
             }
         });
     } catch (err) {
