@@ -145,30 +145,31 @@ button{font-family:inherit}
 .cat-top{display:flex;align-items:baseline;justify-content:center;gap:1rem;margin-bottom:1.2rem;flex-wrap:wrap;text-align:center}
 .cat-top h2{font-family:"Playfair Display",serif;font-size:1.5rem;color:var(--primary);margin:0}
 .cat-top .cuenta{font-size:.82rem;color:var(--tx-mut);flex-basis:100%;text-align:center}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.1rem;justify-content:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.1rem;justify-content:center}
 @media(min-width:1100px){.grid{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:640px){
   .grid{grid-template-columns:repeat(2,1fr);gap:.7rem;justify-content:stretch}
+  .card{max-width:100%}
   .cat-top h2{font-size:1.2rem;line-height:1.25;max-width:100%;overflow-wrap:break-word;hyphens:auto;padding:0 .4rem}
 }
 .card{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;
-  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s}
+  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:280px;justify-self:center}
 .card:hover{box-shadow:var(--shadow-h);transform:translateY(-3px)}
-.card__img{position:relative;aspect-ratio:1;background:var(--bg);display:grid;place-items:center;cursor:pointer}
-.card__img img,.card__img video{width:100%;height:100%;object-fit:contain;padding:.9rem}
+.card__img{position:relative;aspect-ratio:4/3;background:var(--bg);display:grid;place-items:center;cursor:pointer}
+.card__img img,.card__img video{width:100%;height:100%;object-fit:contain;padding:.7rem}
 .no-img{font-size:2.2rem;opacity:.35}
 .tag-stock{position:absolute;top:.6rem;left:.6rem;background:#DC2626;color:#fff;font-size:.66rem;
   font-weight:700;padding:.2rem .5rem;border-radius:6px}
 .tag-of{position:absolute;top:.6rem;right:.6rem;background:var(--accent);color:#fff;font-size:.66rem;
   font-weight:700;padding:.2rem .5rem;border-radius:6px}
-.card__body{padding:.85rem .9rem 1rem;display:flex;flex-direction:column;gap:.35rem;flex:1}
+.card__body{padding:.7rem .85rem .9rem;display:flex;flex-direction:column;gap:.3rem;flex:1}
 .marca-tag{font-size:.65rem;font-weight:800;letter-spacing:.06em;color:var(--accent);text-transform:uppercase}
-.card h3{font-size:.84rem;font-weight:600;line-height:1.35;color:var(--tx);
+.card h3{font-size:.82rem;font-weight:600;line-height:1.3;color:var(--tx);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.precio{font-size:1.02rem;font-weight:800;color:var(--primary);margin-top:auto}
-.precio s{font-size:.78rem;font-weight:500;color:var(--tx-mut);margin-right:.35rem}
-.add{border:0;background:var(--primary);color:#fff;border-radius:9px;padding:.55rem;font-weight:600;
-  font-size:.82rem;cursor:pointer;margin-top:.5rem}
+.precio{font-size:1rem;font-weight:800;color:var(--primary);margin-top:auto}
+.precio s{font-size:.76rem;font-weight:500;color:var(--tx-mut);margin-right:.35rem}
+.add{border:0;background:var(--primary);color:#fff;border-radius:9px;padding:.5rem;font-weight:600;
+  font-size:.8rem;cursor:pointer;margin-top:.45rem}
 .add:hover{background:var(--accent)}
 .vacio{grid-column:1/-1;text-align:center;padding:4rem 1rem;color:var(--tx-mut)}
 
