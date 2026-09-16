@@ -21,7 +21,7 @@ const Inventario = ({ user }) => {
   const initialForm = {
     codigo_barras: '',
     nombre_producto: '',
-    id_categoria: 3,
+    id_categoria: null,
     imagen_url: '',
     precio_compra: '',
     precio_venta: '',
@@ -118,7 +118,7 @@ const Inventario = ({ user }) => {
     setFormData({
       codigo_barras: prod.codigo_barras || '',
       nombre_producto: prod.nombre_producto || '',
-      id_categoria: prod.id_categoria || 3,
+      id_categoria: prod.id_categoria || null,
       imagen_url: prod.imagen_url || '',
       precio_compra: prod.precio_compra || '',
       precio_venta: prod.precio_venta || '',
@@ -141,7 +141,7 @@ const Inventario = ({ user }) => {
     const payload = {
       ...formData,
       id_local: user?.id_local,
-      id_categoria: parseInt(formData.id_categoria) || 3,
+      id_categoria: formData.id_categoria ? parseInt(formData.id_categoria) : null,
       precio_compra: parseFloat(formData.precio_compra) || 0,
       precio_venta: parseFloat(formData.precio_venta) || 0,
       stock_actual: parseInt(formData.stock_actual) || 0,
