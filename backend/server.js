@@ -1935,12 +1935,30 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         const costo = precio_compra ? parseFloat(precio_compra) : 0;
         const visibilidad = visible_en_tienda !== false;
         const catId = id_categoria ? parseInt(id_categoria) : 3;
+        const serial = codigo_barras && codigo_barras.trim() ? codigo_barras.trim() : null;
+
+        // v2.2.x: Validar codigo_barras único (que no choque con OTRO producto del mismo local)
+        if (serial) {
+            const dupCheck = await db.query(
+                `SELECT id_producto, nombre_producto FROM productos
+                 WHERE id_local = $1 AND codigo_barras = $2 AND id_producto != $3 LIMIT 1`,
+                [prodRes.rows[0].id_local, serial, req.params.id]
+            );
+            if (dupCheck.rows.length > 0) {
+                const existente = dupCheck.rows[0];
+                return res.status(409).json({
+                    error: `El código "${serial}" ya está usado por el producto "${existente.nombre_producto}". Usa un código diferente.`,
+                    codigo_duplicado: true,
+                    producto_existente: { id: existente.id_producto, nombre: existente.nombre_producto }
+                });
+            }
+        }
 
         await db.query(
-            `UPDATE productos 
+            `UPDATE productos
              SET nombre_producto=$1, codigo_barras=$2, id_categoria=$3, precio_compra=$4, precio_venta=$5, stock_actual=$6, stock_minimo=$7, imagen_url=$8, video_url=$9, visible_en_tienda=$10, marca=$11, genero=$12
              WHERE id_producto=$13`,
-            [nombre_producto, codigo_barras || null, catId, costo, parseFloat(precio_venta) || 0, parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, imagen_url || null, video_url || null, visibilidad, marca || null, genero || null, req.params.id]
+            [nombre_producto, serial, catId, costo, parseFloat(precio_venta) || 0, parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, imagen_url || null, video_url || null, visibilidad, marca || null, genero || null, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1967,6 +1985,24 @@ app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (re
         if (id_categoria) {
             const catCheck = await db.query('SELECT id_categoria FROM categorias WHERE id_categoria = $1', [parseInt(id_categoria)]);
             if (catCheck.rows.length > 0) catId = parseInt(id_categoria);
+        }
+
+        // v2.2.x: Validar codigo_barras único ANTES de insertar
+        // (PostgreSQL lo validaría pero con error genérico)
+        if (serial) {
+            const dupCheck = await db.query(
+                `SELECT id_producto, nombre_producto FROM productos
+                 WHERE id_local = $1 AND codigo_barras = $2 LIMIT 1`,
+                [id_local, serial]
+            );
+            if (dupCheck.rows.length > 0) {
+                const existente = dupCheck.rows[0];
+                return res.status(409).json({
+                    error: `El código "${serial}" ya está usado por el producto "${existente.nombre_producto}". Usa un código diferente o déjalo vacío.`,
+                    codigo_duplicado: true,
+                    producto_existente: { id: existente.id_producto, nombre: existente.nombre_producto }
+                });
+            }
         }
 
         const { rows } = await db.query(
