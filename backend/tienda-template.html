@@ -73,45 +73,19 @@ button{font-family:inherit}
 .nav-note{padding:1rem 1.2rem;font-size:.78rem;color:var(--tx-mut);line-height:1.5}
 
 /* ─────────── BIENVENIDA CON VIDEO ─────────── */
-.hero{margin-top:var(--head-h);position:relative;min-height:clamp(340px,58vh,520px);
+.hero{margin-top:var(--head-h);position:relative;min-height:clamp(300px,52vh,460px);
   display:grid;align-items:center;justify-content:center;overflow:hidden;
   background:linear-gradient(135deg,var(--primary),#2A5298)}
 .hero__vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,36,.25) 0%,rgba(8,20,36,.55) 50%,rgba(8,20,36,.92) 100%)}
-/* Logo gigante de fondo (atraviesa, bleed a la izquierda) */
-.hero__bg-logo{position:absolute;left:-80px;top:50%;transform:translateY(-50%);
-  width:clamp(380px,55vw,640px);height:clamp(380px,55vw,640px);
-  opacity:.10;pointer-events:none;z-index:1;
-  filter:drop-shadow(0 0 60px rgba(37,99,235,.4));
-  animation:heroFloat 8s ease-in-out infinite}
-.hero__bg-logo img{width:100%;height:100%;object-fit:contain}
-@keyframes heroFloat{
-  0%,100%{transform:translateY(-50%) translateX(0) rotate(0deg)}
-  50%{transform:translateY(-50%) translateX(10px) rotate(3deg)}
-}
-.hero__tx{position:relative;z-index:2;padding:2.4rem 1rem 2.8rem;max-width:1240px;margin:0 auto;
-  width:100%;color:#fff;text-align:left;display:flex;flex-direction:column;
-  align-items:flex-start;padding-left:clamp(1rem,7vw,7rem)}
-.hero__logo{width:140px;height:140px;border-radius:50%;overflow:hidden;
-  border:4px solid rgba(255,255,255,.35);box-shadow:0 12px 50px rgba(0,0,0,.45);
-  margin-bottom:1.3rem;flex-shrink:0;
-  animation:heroFloat 6s ease-in-out infinite}
+.hero__tx{position:relative;padding:2.4rem 1rem 2.6rem;max-width:1240px;margin:0 auto;width:100%;color:#fff;text-align:center;display:flex;flex-direction:column;align-items:center}
+.hero__logo{width:100px;height:100px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.3);box-shadow:0 8px 40px rgba(0,0,0,.3);margin-bottom:1.2rem;flex-shrink:0}
 .hero__logo img{width:100%;height:100%;object-fit:cover}
-.hero__tx h1{font-family:"Playfair Display",serif;font-size:clamp(2rem,6vw,3.5rem);
-  line-height:1.05;margin-bottom:.7rem;text-shadow:0 4px 24px rgba(0,0,0,.4);max-width:18ch}
-.hero__tx p{color:rgba(255,255,255,.88);max-width:42ch;font-size:1rem;line-height:1.5;
-  text-shadow:0 2px 12px rgba(0,0,0,.4)}
-.hero__badges{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.2rem;justify-content:flex-start}
+.hero__tx h1{font-family:"Playfair Display",serif;font-size:clamp(1.9rem,5.5vw,3.1rem);line-height:1.08;margin-bottom:.5rem}
+.hero__tx p{color:rgba(255,255,255,.85);max-width:46ch;font-size:.95rem}
+.hero__badges{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.1rem;justify-content:center}
 .hero__badges div{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);
-  padding:.4rem .9rem;border-radius:20px;font-size:.78rem;color:#fff;
-  backdrop-filter:blur(6px)}
-@media(max-width:640px){
-  .hero__tx{text-align:center;align-items:center;padding-left:1rem}
-  .hero__tx h1{font-size:clamp(1.7rem,8vw,2.4rem);max-width:none}
-  .hero__tx p{margin:0 auto}
-  .hero__badges{justify-content:center}
-  .hero__bg-logo{left:-160px;opacity:.07}
-}
+  padding:.35rem .8rem;border-radius:20px;font-size:.76rem;color:#fff}
 
 /* ─────────── MARQUESINA DE MARCAS ─────────── */
 .marcas{background:var(--white);border-bottom:1px solid var(--border);overflow:hidden;padding:.9rem 0}
@@ -124,15 +98,24 @@ button{font-family:inherit}
 .chip:hover,.chip.on{opacity:1;color:var(--accent)}
 .chip::after{content:"·";margin-left:1.6rem;opacity:.3}
 
-/* ─────────── LAYOUT ─────────── */
-.layout{display:grid;grid-template-columns:250px 1fr;gap:2rem;padding:1.6rem 1rem 3rem;max-width:1240px;margin:0 auto}
-@media(max-width:900px){.layout{grid-template-columns:1fr;gap:1rem}}
-.side{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1.2rem;height:max-content;position:sticky;top:calc(var(--head-h) + 1rem);margin-left:0}
-@media(max-width:900px){.side{position:static}.side__body{display:none}.side__body.on{display:block}}
-.side h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx-mut);margin:1.1rem 0 .55rem}
+/* ─────────── LAYOUT (sidebar arriba como filtros, full-width en todos los tamaños) ─────────── */
+.layout{display:flex;flex-direction:column;gap:1.2rem;padding:1.4rem 1rem 3rem;max-width:1240px;margin:0 auto}
+.side{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1rem 1.2rem;margin-left:0}
+.side__tog{width:100%;border:0;background:none;font-weight:700;color:var(--primary);cursor:pointer;font-size:.92rem;display:flex;align-items:center;justify-content:space-between;padding:.2rem 0}
+.side__tog::after{content:"+";font-size:1.3rem;font-weight:400;color:var(--accent)}
+.side.open .side__tog::after{content:"−"}
+.side__body{display:none;padding-top:.9rem;border-top:1px solid var(--border);margin-top:.8rem}
+.side__body.on{display:block}
+.side h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--tx-mut);margin:0 0 .55rem}
 .side h3:first-of-type{margin-top:0}
-.side__tog{display:none;width:100%;border:0;background:none;font-weight:700;color:var(--primary);cursor:pointer;font-size:.9rem}
-@media(max-width:900px){.side__tog{display:block}}
+/* En escritorio: filtros siempre visibles como barra horizontal */
+@media(min-width:901px){
+  .side__tog{display:none}
+  .side__body{display:flex!important;flex-wrap:wrap;gap:1.2rem 1.8rem;padding-top:0;border-top:0;margin-top:0;align-items:flex-start}
+  .side__body h3{flex:0 0 100%}
+  .side__body > div,.side__body > .rango,.side__body > select.orden,.side__body > .limpiar{flex:1 1 auto;min-width:170px}
+  .side__body > .limpiar{flex:0 0 auto;min-width:140px;margin-top:0;align-self:center}
+}
 .opt{display:block;width:100%;border:0;background:none;text-align:left;padding:.42rem .5rem;border-radius:8px;
   font-size:.86rem;color:var(--tx-body);cursor:pointer}
 .opt:hover{background:var(--bg)}
@@ -371,13 +354,9 @@ footer::after{
     <source src="/uploads/hero.mp4" type="video/mp4">
   </video>
   <div class="hero__velo"></div>
-  <div class="hero__bg-logo" aria-hidden="true">
-    <img src="/logos/tienda-logo.png" alt=""
-         onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:18rem;font-family:Playfair Display,serif;opacity:.4&quot;>CJP</div>'">
-  </div>
   <div class="hero__tx">
     <div class="hero__logo">
-      <img src="/logos/tienda-logo.png" alt="CJP WATCH" onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;background:rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:2.4rem;border-radius:50%&quot;>CJP</div>'">
+      <img src="/logos/tienda-logo.png" alt="CJP WATCH" onerror="this.parentElement.innerHTML='<div style=&quot;width:100%;height:100%;display:grid;place-items:center;background:rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:1.8rem;border-radius:50%&quot;>CJP</div>'">
     </div>
     <h1>Relojes originales,<br>garantía real</h1>
     <p>Las mejores marcas internacionales con envío a toda Colombia desde Turbo, Antioquia.</p>
@@ -396,7 +375,7 @@ footer::after{
 <!-- ══════════ CATÁLOGO ══════════ -->
 <div class="layout">
   <aside class="side">
-    <button class="side__tog" onclick="document.getElementById('sideBody').classList.toggle('on')">☰ Filtrar productos</button>
+    <button class="side__tog" onclick="this.parentElement.classList.toggle('open');document.getElementById('sideBody').classList.toggle('on')">☰ Filtrar productos</button>
     <div class="side__body" id="sideBody">
       <h3>Ordenar por</h3>
       <select class="orden" id="orden" onchange="setOrden(this.value)">
