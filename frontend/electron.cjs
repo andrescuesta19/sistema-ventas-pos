@@ -740,9 +740,11 @@ app.whenReady().then(async () => {
 
     if (ready) {
       console.log('✅ Backend listo');
-      // Cargamos la app real
+      // Cargamos la app real desde el backend (NO desde el asar)
+      // El backend sirve el frontend en /, así que loadURL es más confiable
+      // que loadFile porque evita problemas de rutas relativas dentro del asar.
       if (mainWindow) {
-        mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+        mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
       }
 
       // 🔄 HEALTH CHECK PERIÓDICO (watchdog continuo)
