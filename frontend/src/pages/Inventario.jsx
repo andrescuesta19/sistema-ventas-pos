@@ -79,9 +79,10 @@ const Inventario = ({ user }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    // Para campos de precio, permitir solo números y puntos (no comas)
+    // Para campos de precio: solo números enteros (sin puntos ni comas, evita
+    // que "410.000" se lea como 410 con decimal)
     if (name === 'precio_compra' || name === 'precio_venta') {
-      const clean = value.replace(/[^0-9.]/g, '');
+      const clean = value.replace(/[^0-9]/g, '');
       setFormData(prev => ({ ...prev, [name]: clean }));
       return;
     }
@@ -89,6 +90,13 @@ const Inventario = ({ user }) => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  // Formatea un número como COP con separador de miles (para mostrar visualmente)
+  const formatearNumeroCOP = (valor) => {
+    if (!valor) return '';
+    const num = String(valor).replace(/[^0-9]/g, '');
+    return num ? Number(num).toLocaleString('es-CO') : '';
   };
 
   const handleImagesChange = (e) => {
@@ -550,11 +558,28 @@ const Inventario = ({ user }) => {
               <div className="grid-2">
                 <div className="form-group">
                   <label>Precio de Compra (COP)</label>
-                  <input type="number" name="precio_compra" min="0" value={formData.precio_compra} onChange={handleChange} placeholder="Ej: 450000" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    name="precio_compra"
+                    min="0"
+                    value={formatearNumeroCOP(formData.precio_compra)}
+                    onChange={handleChange}
+                    placeholder="Ej: 450.000"
+                  />
                 </div>
                 <div className="form-group">
                   <label>Precio de Venta (COP) *</label>
-                  <input type="number" name="precio_venta" min="0" value={formData.precio_venta} onChange={handleChange} required placeholder="Ej: 600000" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    name="precio_venta"
+                    min="0"
+                    value={formatearNumeroCOP(formData.precio_venta)}
+                    onChange={handleChange}
+                    required
+                    placeholder="Ej: 600.000"
+                  />
                 </div>
               </div>
 
