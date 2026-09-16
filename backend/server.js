@@ -330,6 +330,8 @@ app.get('/tienda/:idLocal', async (req, res) => {
         ).join('');
 
         let html = tiendaTemplate
+            .replace(/\{\{BASE_URL\}\}/g, baseUrl)
+            .replace(/\{\{ID_LOCAL\}\}/g, String(idLocal))
             .replace(/\{\{NOMBRE_LOCAL\}\}/g, local.nombre_local || 'Mi Tienda')
             .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + local.direccion : '')
             .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + local.ciudad : '')
