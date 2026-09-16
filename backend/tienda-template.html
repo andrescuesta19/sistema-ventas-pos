@@ -48,7 +48,10 @@
             margin: 0 auto;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.75rem;
+            text-align: center;
         }
         .brand-center {
             display: flex;
@@ -79,9 +82,10 @@
         }
         .brand-name {
             font-family: "Playfair Display", serif;
-            font-size: 1.5rem;
+            font-size: 1.8rem;
             font-weight: 700;
             color: var(--primary);
+            text-align: center;
         }
         .brand-name span { color: var(--accent); }
         .brand-sub {
@@ -633,9 +637,7 @@
                     <div class="brand-loc">📍 Turbo, Antioquia</div>
                 </div>
             </div>
-            <div>
-                <button class="cart-btn" onclick="openCart()">🛒 <span id="cc">0</span></button>
-            </div>
+            <button class="cart-btn" onclick="openCart()" style="position:absolute;top:1rem;right:1.5rem">🛒 <span id="cc">0</span></button>
         </div>
     </header>
 
