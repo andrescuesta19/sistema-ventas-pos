@@ -199,6 +199,16 @@ select.orden{width:100%;border:1.5px solid var(--border);border-radius:8px;paddi
 .visor.on{display:flex}
 .visor__in{text-align:center;max-width:900px;width:100%}
 .visor__in img,.visor__in video{max-width:90vw;max-height:66vh;border-radius:12px;background:#fff}
+.visor__carousel{position:relative;display:flex;align-items:center;justify-content:center;gap:0;min-height:300px}
+.visor__slides{display:flex;overflow:hidden;max-width:80vw;max-height:66vh;border-radius:12px}
+.visor__slides img{width:100%;height:auto;max-height:66vh;object-fit:contain;flex-shrink:0;transition:transform .2s}
+.visor__arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:2rem;width:44px;height:44px;border-radius:50%;cursor:pointer;display:grid;place-items:center;z-index:5;transition:background .2s}
+.visor__arrow:hover{background:rgba(255,255,255,.3)}
+.visor__arrow--left{left:8px}
+.visor__arrow--right{right:8px}
+.visor__dots{display:flex;gap:6px;justify-content:center;margin-top:.7rem}
+.visor__dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);border:0;cursor:pointer;transition:background .2s}
+.visor__dot.active{background:#fff}
 .visor__n{color:#fff;margin-top:.9rem;font-size:.95rem}
 .visor__p{color:var(--silver-l);font-size:1.25rem;font-weight:800;margin-top:.2rem}
 .visor__acc{display:flex;gap:.5rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
@@ -353,16 +363,24 @@ footer{background:var(--primary);color:rgba(255,255,255,.8);padding:2.6rem 1rem 
 <div class="visor" id="visor" onclick="cerrarVisor(event)">
   <button class="visor__x" onclick="cerrarVisor()" aria-label="Cerrar">×</button>
   <div class="visor__in" onclick="event.stopPropagation()">
+    <div class="visor__carousel" id="visorCarousel">
+      <button class="visor__arrow visor__arrow--left" onclick="cambiarImgVisor(-1)" aria-label="Anterior">‹</button>
+      <div class="visor__slides" id="visorSlides"></div>
+      <button class="visor__arrow visor__arrow--right" onclick="cambiarImgVisor(1)" aria-label="Siguiente">›</button>
+    </div>
     <img id="visorImg" src="" alt="" style="display:none">
     <video id="visorVid" controls style="display:none"></video>
+    <div class="visor__dots" id="visorDots"></div>
     <div class="visor__n" id="visorNombre"></div>
     <div class="visor__p" id="visorPrecio"></div>
     <div class="visor__acc">
-      <button onclick="zoom(1.2)">🔍 +</button>
-      <button onclick="zoom(0.8)">🔍 −</button>
-      <button onclick="rotar()">🔄 Rotar</button>
-      <button onclick="agregarDesdeVisor()">🛒 Agregar</button>
+      <button onclick="agregarDesdeVisor()">🛒 Agregar al carrito</button>
+      <button onclick="zoom(1.3)">🔍+ Zoom</button>
+      <button onclick="zoom(0.7)">🔍− Zoom</button>
+      <button onclick="rotar()">↻ Rotar</button>
     </div>
+  </div>
+</div>
   </div>
 </div>
 
@@ -645,18 +663,61 @@ function pedirWhatsApp(){
 }
 
 /* ── Visor ── */
+let visorIdx = 0, visorImgs = [];
 function abrirVisor(id){
   const p = PRODUCTS.find(x => x.id === id); if (!p) return;
   productoActual = p; escala = 1; giro = 0;
   const img = document.getElementById('visorImg'), vid = document.getElementById('visorVid');
   img.style.display = 'none'; vid.style.display = 'none';
-  if (p.vid) { vid.src = p.vid; vid.style.display = ''; }
-  else if (p.img) { img.src = p.img; img.style.transform = 'none'; img.style.display = ''; }
+
+  // Collect all images: gallery + main image (deduplicated)
+  visorImgs = [];
+  if (p.imgs && p.imgs.length > 0) {
+    visorImgs = [...p.imgs];
+  } else if (p.img) {
+    visorImgs = [p.img];
+  }
+
+  if (p.vid) {
+    vid.src = p.vid; vid.style.display = '';
+    document.getElementById('visorCarousel').style.display = 'none';
+  } else if (visorImgs.length > 1) {
+    // Show carousel
+    document.getElementById('visorCarousel').style.display = '';
+    vid.style.display = 'none';
+    visorIdx = 0;
+    renderVisorCarousel();
+  } else if (visorImgs.length === 1) {
+    // Single image — use simple img
+    document.getElementById('visorCarousel').style.display = 'none';
+    img.src = visorImgs[0]; img.style.transform = 'none'; img.style.display = '';
+  } else {
+    document.getElementById('visorCarousel').style.display = 'none';
+  }
+
   document.getElementById('visorNombre').textContent = p.n;
   document.getElementById('visorPrecio').textContent = money(p.p);
   document.getElementById('visor').classList.add('on');
   document.body.style.overflow = 'hidden';
 }
+
+function renderVisorCarousel(){
+  const slides = document.getElementById('visorSlides');
+  const dots = document.getElementById('visorDots');
+  slides.innerHTML = visorImgs.map((url, i) =>
+    `<img src="${url}" alt="Foto ${i+1}" style="display:${i===visorIdx?'':'none'};transform:scale(${escala}) rotate(${giro}deg)" data-i="${i}">`
+  ).join('');
+  dots.innerHTML = visorImgs.map((_, i) =>
+    `<button class="visor__dot${i===visorIdx?' active':''}" onclick="visorGoTo(${i})"></button>`
+  ).join('');
+}
+
+function cambiarImgVisor(dir){
+  if (visorImgs.length < 2) return;
+  visorIdx = (visorIdx + dir + visorImgs.length) % visorImgs.length;
+  renderVisorCarousel();
+}
+function visorGoTo(i){ visorIdx = i; renderVisorCarousel(); }
 function cerrarVisor(e){
   if (e && e.target !== e.currentTarget && !e.target.classList.contains('visor__x')) return;
   const vid = document.getElementById('visorVid'); vid.pause(); vid.removeAttribute('src');
@@ -665,11 +726,15 @@ function cerrarVisor(e){
 }
 function zoom(f){
   escala = Math.max(0.4, Math.min(5, escala * f));
-  document.getElementById('visorImg').style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
+  const slidesImg = document.querySelector('#visorSlides img[data-i="'+visorIdx+'"]');
+  if (slidesImg) slidesImg.style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
+  else document.getElementById('visorImg').style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
 }
 function rotar(){
   giro += 90;
-  document.getElementById('visorImg').style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
+  const slidesImg = document.querySelector('#visorSlides img[data-i="'+visorIdx+'"]');
+  if (slidesImg) slidesImg.style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
+  else document.getElementById('visorImg').style.transform = 'scale(' + escala + ') rotate(' + giro + 'deg)';
 }
 function agregarDesdeVisor(){ if (productoActual) { agregar(productoActual.id); cerrarVisor(); } }
 
