@@ -290,15 +290,15 @@ app.get('/tienda/:idLocal', async (req, res) => {
                 imgSrc = baseUrl + imgSrc;
             }
             const img = imgSrc
-                ? `<img src="${imgSrc}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=ni>📦</div>'">`
-                : '<div class="ni">📦</div>';
-            const badge = p.stock_actual <= 5 ? `<span class="bl">¡Últimas ${p.stock_actual}!</span>` : '';
-            const cat = p.nombre_categoria ? `<span class="tg">${p.nombre_categoria}</span>` : '';
-            return `<div class="pc"><div class="pi">${img}${badge}</div><div class="pb">${cat}<h3>${p.nombre_producto}</h3><p class="pp">${fmtCOP(p.precio_venta)}</p><button class="ba" onclick="ac(${p.id_producto})">Agregar</button></div></div>`;
+                ? `<img src="${imgSrc}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=no-img>📦</div>'">`
+                : '<div class="no-img">📦</div>';
+            const badge = p.stock_actual <= 5 ? `<span class="stock-badge">¡Últimas ${p.stock_actual}!</span>` : '';
+            const cat = p.nombre_categoria ? `<span class="prod-tag">${p.nombre_categoria}</span>` : '';
+            return `<div class="product-card"><div class="prod-img">${img}${badge}</div><div class="prod-body">${cat}<h3>${p.nombre_producto}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${p.id_producto})">Agregar</button></div></div>`;
         }).join('');
 
         const catsHTML = categorias.map(c =>
-            `<button class="cp" onclick="fc('${c.nombre_categoria}')">${c.nombre_categoria} <span>${c.cantidad}</span></button>`
+            `<button class="cat-pill" data-cat="${c.nombre_categoria}" onclick="filterByCategory('${c.nombre_categoria.replace(/'/g, "\\'")}')">${c.nombre_categoria} <span>${c.cantidad}</span></button>`
         ).join('');
 
         let html = tiendaTemplate
