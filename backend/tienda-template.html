@@ -27,15 +27,15 @@ button{font-family:inherit}
 .head{position:fixed;top:0;left:0;right:0;height:var(--head-h);z-index:90;
   background:rgba(255,255,255,.92);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--border);display:flex;align-items:center}
-.head__in{display:flex;align-items:center;gap:.8rem;width:100%;max-width:1240px;margin:0 auto;padding:0 1rem}
+.head__in{display:flex;align-items:center;gap:.9rem;width:100%;max-width:1240px;margin:0 auto;padding:0 1rem;min-height:var(--head-h)}
 .burger{width:40px;height:40px;border:0;background:none;cursor:pointer;display:flex;
-  flex-direction:column;justify-content:center;gap:5px;padding:0 9px;border-radius:9px;flex:0 0 auto}
+  flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;border-radius:9px;flex:0 0 auto}
 .burger:hover{background:var(--bg)}
-.burger span{display:block;height:2px;background:var(--primary);border-radius:2px}
-.head__logo{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--tx);flex:0 0 auto}
-.head__logo img{width:34px;height:34px;border-radius:50%;object-fit:cover}
-.head__logo b{font-family:"Playfair Display",serif;font-size:1.05rem;letter-spacing:.02em}
-.head__logo b span{color:var(--accent)}
+.burger span{display:block;width:22px;height:2px;background:var(--primary);border-radius:2px}
+.head__logo{display:flex;align-items:center;justify-content:center;gap:.55rem;text-decoration:none;color:var(--tx);flex:0 0 auto;height:40px}
+.head__logo img{width:38px;height:38px;border-radius:50%;object-fit:cover;display:block}
+.head__logo b{font-family:"Playfair Display",serif;font-size:1.08rem;letter-spacing:.02em;line-height:1;display:flex;align-items:center}
+.head__logo b span{color:var(--accent);margin-left:.15rem}
 .head__search{flex:1 1 auto;position:relative;max-width:520px}
 .head__search input{width:100%;height:40px;border:1.5px solid var(--border);border-radius:22px;
   padding:0 1rem 0 2.4rem;font-size:.88rem;background:var(--white);color:var(--tx)}
@@ -217,16 +217,84 @@ select.orden{width:100%;border:1.5px solid var(--border);border-radius:8px;paddi
 .visor__x{position:absolute;top:14px;right:18px;border:0;background:none;color:#fff;font-size:2rem;cursor:pointer}
 
 /* ─────────── PIE ─────────── */
-footer{background:var(--primary);color:rgba(255,255,255,.8);padding:2.6rem 1rem 1.4rem;margin-top:2rem}
-.foot{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.8rem}
-.foot h4{color:#fff;font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.8rem}
-.foot button,.foot a{display:block;background:none;border:0;color:rgba(255,255,255,.75);
-  font-size:.85rem;padding:.25rem 0;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit}
-.foot button:hover,.foot a:hover{color:#fff}
-.foot p{font-size:.85rem;line-height:1.6}
-.foot__bot{max-width:1240px;margin:2rem auto 0;padding-top:1.1rem;border-top:1px solid rgba(255,255,255,.15);
-  text-align:center;font-size:.76rem;color:rgba(255,255,255,.6)}
-@media(prefers-reduced-motion:reduce){.pista{animation:none}.card:hover{transform:none}}
+/* ─────────── FOOTER ANIMADO ─────────── */
+footer{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#0f2440 0%,#1E3A5F 35%,#2A5298 70%,#1E3A5F 100%);
+  background-size:300% 300%;
+  animation:footGrad 18s ease-in-out infinite;
+  color:rgba(255,255,255,.85);
+  padding:3.6rem 1rem 1.6rem;margin-top:3rem;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+footer::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(circle at 12% 20%, rgba(37,99,235,.22), transparent 38%),
+    radial-gradient(circle at 88% 80%, rgba(59,130,246,.18), transparent 42%),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.04), transparent 70%);
+}
+footer::after{
+  content:"";position:absolute;top:0;left:-50%;right:-50%;height:2px;z-index:1;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  animation:footLine 4s ease-in-out infinite;
+}
+@keyframes footGrad{
+  0%,100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+@keyframes footLine{
+  0%{transform:translateX(-30%);opacity:0}
+  20%{opacity:1}
+  80%{opacity:1}
+  100%{transform:translateX(30%);opacity:0}
+}
+@keyframes footFloat{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-6px)}
+}
+@keyframes footPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}
+  50%{box-shadow:0 0 0 10px rgba(34,197,94,0)}
+}
+.foot{position:relative;z-index:2;max-width:1240px;margin:0 auto;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2.2rem}
+.foot__brand{display:flex;flex-direction:column;align-items:flex-start;gap:.8rem}
+.foot__brand .foot-logo{
+  display:flex;align-items:center;gap:.65rem;
+  font-family:"Playfair Display",serif;font-size:1.6rem;color:#fff;line-height:1;
+  animation:footFloat 5s ease-in-out infinite;
+}
+.foot__brand .foot-logo img{
+  width:54px;height:54px;border-radius:50%;object-fit:cover;
+  border:2px solid rgba(255,255,255,.25);
+  box-shadow:0 6px 24px rgba(0,0,0,.35);
+}
+.foot__brand .foot-logo span{color:var(--accent-2)}
+.foot__brand .foot-tag{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:rgba(34,197,94,.18);color:#4ade80;
+  border:1px solid rgba(34,197,94,.4);
+  padding:.35rem .75rem;border-radius:20px;font-size:.72rem;font-weight:600;
+  animation:footPulse 2.4s ease-out infinite;
+}
+.foot h4{color:#fff;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.9rem;font-weight:600}
+.foot button,.foot a{display:block;background:none;border:0;color:rgba(255,255,255,.78);
+  font-size:.88rem;padding:.28rem 0;cursor:pointer;text-align:left;text-decoration:none;font-family:inherit;
+  transition:color .2s,padding-left .2s}
+.foot button:hover,.foot a:hover{color:#fff;padding-left:.3rem}
+.foot p{font-size:.88rem;line-height:1.65}
+.foot__bot{position:relative;z-index:2;max-width:1240px;margin:2.2rem auto 0;padding-top:1.2rem;
+  border-top:1px solid rgba(255,255,255,.12);
+  text-align:center;font-size:.78rem;color:rgba(255,255,255,.65)}
+.foot__bot b{color:#fff;font-weight:500}
+@media(prefers-reduced-motion:reduce){
+  footer{animation:none;background-size:cover}
+  footer::after{animation:none;opacity:.4}
+  .foot__brand .foot-logo{animation:none}
+  .foot__brand .foot-tag{animation:none}
+  .pista{animation:none}.card:hover{transform:none}
+}
 </style>
 </head>
 <body>
@@ -387,8 +455,13 @@ footer{background:var(--primary);color:rgba(255,255,255,.8);padding:2.6rem 1rem 
 <!-- ══════════ PIE ══════════ -->
 <footer>
   <div class="foot">
-    <div>
-      <h4>CJP WATCH</h4>
+    <div class="foot__brand">
+      <div class="foot-logo">
+        <img src="/logos/tienda-logo.png" alt="CJP WATCH"
+             onerror="this.outerHTML='<div style=&quot;width:54px;height:54px;border-radius:50%;background:linear-gradient(255deg,#2563EB,#1E3A5F);display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.4rem;font-family:Playfair Display,serif;border:2px solid rgba(255,255,255,.25)&quot;>CJP</div>'">
+        <span>CJP <span>WATCH</span></span>
+      </div>
+      <span class="foot-tag">● 100% ORIGINAL</span>
       <p>Relojería 100% original.<br>Turbo, Antioquia.<br>Envíos a toda Colombia con garantía.</p>
     </div>
     <div>
@@ -408,7 +481,7 @@ footer{background:var(--primary);color:rgba(255,255,255,.8);padding:2.6rem 1rem 
       <p style="margin-top:.5rem;font-size:.8rem">Escríbenos y te asesoramos con tu compra.</p>
     </div>
   </div>
-  <div class="foot__bot">© 2026 CJP WATCH — Todos los derechos reservados · Desarrollado por Andrés Cuesta</div>
+  <div class="foot__bot">© 2026 CJP WATCH — Todos los derechos reservados · <b>Desarrollado por Andrés Cuesta</b></div>
 </footer>
 
 <script>
