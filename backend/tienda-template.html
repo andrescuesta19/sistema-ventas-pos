@@ -100,12 +100,15 @@ button{font-family:inherit}
 
 /* ─────────── LAYOUT (sidebar como barra de filtros compacta) ─────────── */
 .layout{display:flex;flex-direction:column;gap:1.2rem;padding:1.4rem 1rem 3rem;max-width:1240px;margin:0 auto}
-.side{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1rem 1.2rem;margin-left:0}
-/* Toggle (solo móvil) */
-.side__tog{width:100%;border:0;background:none;font-weight:700;color:var(--primary);cursor:pointer;font-size:.92rem;display:flex;align-items:center;justify-content:space-between;padding:.2rem 0}
-.side__tog::after{content:"+";font-size:1.3rem;font-weight:400;color:var(--accent)}
-.side.open .side__tog::after{content:"−"}
-.side__body{display:none;padding-top:.9rem;border-top:1px solid var(--border);margin-top:.8rem}
+.side{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:0;margin-left:0;overflow:hidden}
+/* Toggle centrado con tres puntitos a la derecha */
+.side__tog{width:100%;border:0;background:none;font-weight:700;color:var(--primary);cursor:pointer;
+  font-size:.92rem;display:flex;align-items:center;justify-content:center;gap:.5rem;
+  padding:.85rem 1rem}
+.side__tog::after{content:"⋯";font-size:1.4rem;font-weight:700;line-height:1;
+  color:var(--accent);letter-spacing:.05em}
+.side.open .side__tog::after{content:"✕";font-size:1rem}
+.side__body{display:none;padding:0 1.2rem 1rem;border-top:1px solid var(--border)}
 .side__body.on{display:block}
 /* Etiquetas y grupos (móvil y escritorio) */
 .f-grupo{margin-bottom:.9rem}
@@ -127,7 +130,7 @@ button{font-family:inherit}
   .side{padding:.7rem 1rem}
   .side__tog{display:none}
   .side__body{display:flex!important;flex-wrap:wrap;align-items:center;gap:.5rem .9rem;
-    padding-top:0;border-top:0;margin-top:0}
+    padding:0;border-top:0}
   .f-grupo{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0;
     padding-right:.9rem;border-right:1px solid var(--border)}
   .f-grupo:last-of-type{border-right:0}
