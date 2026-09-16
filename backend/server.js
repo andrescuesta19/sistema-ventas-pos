@@ -12,7 +12,8 @@ const multer = require('multer');
 const { z } = require('zod'); // v2.2.0: validación de inputs
 const speakeasy = require('speakeasy'); // v2.2.0: 2FA TOTP
 const QRCode = require('qrcode'); // v2.2.0: QR para 2FA
-const { v2: cloudinary } = require('cloudinary'); // v2.2.10: Cloudinary para almacenamiento persistente
+let cloudinary = null;
+try { cloudinary = require('cloudinary').v2; } catch (e) { console.log('[cloudinary] No disponible — usando almacenamiento local'); }
 const db = require('./db');
 const dian = require('./dian'); // v1.9.1: facturación electrónica DIAN
 
@@ -32,7 +33,7 @@ const tokenBlacklist = new Set();
 // Configurar CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET en .env
 // Si no está configurado, usa almacenamiento local (desarrollo)
 // ═══════════════════════════════════════════════════════════════
-const useCloudinary = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+const useCloudinary = cloudinary && process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
 if (useCloudinary) {
     cloudinary.config({
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
