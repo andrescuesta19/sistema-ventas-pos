@@ -22,6 +22,8 @@ const Inventario = ({ user }) => {
     codigo_barras: '',
     nombre_producto: '',
     id_categoria: null,
+    marca: '',
+    genero: '',
     imagen_url: '',
     precio_compra: '',
     precio_venta: '',
@@ -125,6 +127,8 @@ const Inventario = ({ user }) => {
       codigo_barras: prod.codigo_barras || '',
       nombre_producto: prod.nombre_producto || '',
       id_categoria: prod.id_categoria || null,
+      marca: prod.marca || '',
+      genero: prod.genero || '',
       imagen_url: prod.imagen_url || '',
       precio_compra: prod.precio_compra || '',
       precio_venta: prod.precio_venta || '',
@@ -457,6 +461,27 @@ const Inventario = ({ user }) => {
                 <div className="form-group">
                   <label>Número Serial / Código de Barras</label>
                   <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
+                </div>
+              </div>
+
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>Marca</label>
+                  <input type="text" name="marca" placeholder="Ej: TechnoMarine, MULCO, INVICTA" value={formData.marca} onChange={handleChange} />
+                  <small style={{ color: 'var(--text-light)', fontSize: '0.75rem' }}>
+                    Si es un reloj conocido, escríbela para filtrar en la tienda web.
+                  </small>
+                </div>
+                <div className="form-group">
+                  <label>Género</label>
+                  <select name="genero" value={formData.genero} onChange={handleChange} style={{ width: '100%', padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                    <option value="">No especificado</option>
+                    <option value="hombre">Hombre</option>
+                    <option value="mujer">Mujer</option>
+                  </select>
+                  <small style={{ color: 'var(--text-light)', fontSize: '0.75rem' }}>
+                    Para filtrar "Relojes de hombre" o "Relojes de mujer" en la tienda.
+                  </small>
                 </div>
               </div>
 

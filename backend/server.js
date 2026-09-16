@@ -1870,16 +1870,16 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         if (prodRes.rows[0].id_local !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { nombre_producto, codigo_barras, id_categoria, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url, visible_en_tienda } = req.body;
+        const { nombre_producto, codigo_barras, id_categoria, marca, genero, precio_compra, precio_venta, stock_actual, stock_minimo, imagen_url, video_url, visible_en_tienda } = req.body;
         const costo = precio_compra ? parseFloat(precio_compra) : 0;
         const visibilidad = visible_en_tienda !== false;
         const catId = id_categoria ? parseInt(id_categoria) : 3;
 
         await db.query(
             `UPDATE productos 
-             SET nombre_producto=$1, codigo_barras=$2, id_categoria=$3, precio_compra=$4, precio_venta=$5, stock_actual=$6, stock_minimo=$7, imagen_url=$8, video_url=$9, visible_en_tienda=$10 
-             WHERE id_producto=$11`,
-            [nombre_producto, codigo_barras || null, catId, costo, parseFloat(precio_venta) || 0, parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, imagen_url || null, video_url || null, visibilidad, req.params.id]
+             SET nombre_producto=$1, codigo_barras=$2, id_categoria=$3, precio_compra=$4, precio_venta=$5, stock_actual=$6, stock_minimo=$7, imagen_url=$8, video_url=$9, visible_en_tienda=$10, marca=$11, genero=$12
+             WHERE id_producto=$13`,
+            [nombre_producto, codigo_barras || null, catId, costo, parseFloat(precio_venta) || 0, parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, imagen_url || null, video_url || null, visibilidad, marca || null, genero || null, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
@@ -1890,7 +1890,7 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 
 app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { id_local, codigo_barras, nombre_producto, id_categoria, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda } = req.body;
+        const { id_local, codigo_barras, nombre_producto, id_categoria, marca, genero, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda } = req.body;
         if (Number(id_local) !== req.user.id_local) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
@@ -1909,9 +1909,9 @@ app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (re
         }
 
         const { rows } = await db.query(
-            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, id_categoria, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id_producto`,
-            [id_local, serial, nombre_producto, catId, imagen_url || null, video_url || null, costo, parseFloat(precio_venta), parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, visibilidad]
+            `INSERT INTO productos (id_local, codigo_barras, nombre_producto, id_categoria, marca, genero, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id_producto`,
+            [id_local, serial, nombre_producto, catId, marca || null, genero || null, imagen_url || null, video_url || null, costo, parseFloat(precio_venta), parseInt(stock_actual) || 0, parseInt(stock_minimo) || 0, visibilidad]
         );
         res.json({ success: true, id_producto: rows[0].id_producto });
     } catch (err) {
