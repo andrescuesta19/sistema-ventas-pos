@@ -255,33 +255,34 @@
             letter-spacing: 0.03em;
         }
 
-        /* ── WELCOME BANNER ── */
+        /* ── WELCOME BANNER (Video Background) ── */
         .welcome-banner {
             max-width: 1200px;
             margin: 0 auto 2rem;
             padding: 0 1rem;
         }
         .welcome-inner {
-            background: linear-gradient(135deg, var(--primary), #2A5298);
             border-radius: 20px;
-            padding: 2.5rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 2rem;
             overflow: hidden;
             position: relative;
+            min-height: 320px;
+            display: flex;
+            align-items: center;
         }
-        .welcome-inner::after {
-            content: '';
+        .welcome-video {
             position: absolute;
-            right: -20%;
-            top: -20%;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%);
-            border-radius: 50%;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
-        .welcome-text { flex: 1; position: relative; z-index: 1; }
+        .welcome-velo {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(30,58,95,0.75) 0%, rgba(6,18,32,0.88) 100%);
+            z-index: 1;
+        }
+        .welcome-text { flex: 1; position: relative; z-index: 2; padding: 2.5rem 2.5rem; }
         .welcome-text h2 {
             font-family: "Playfair Display", serif;
             font-size: 1.8rem;
@@ -301,7 +302,8 @@
             border: 3px solid rgba(255,255,255,0.2);
             flex-shrink: 0;
             position: relative;
-            z-index: 1;
+            z-index: 2;
+            margin-right: 2.5rem;
         }
         .welcome-img img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -587,6 +589,117 @@
         .empty { text-align: center; padding: 5rem 2rem; grid-column: 1/-1; }
         .empty h3 { color: var(--text-muted); font-weight: 500; }
 
+        /* ── MARQUESA DE MARCAS (infinita) ── */
+        .marcas-section {
+            max-width: 1200px;
+            margin: 0 auto 1.5rem;
+            padding: 0 1rem;
+            overflow: hidden;
+        }
+        .marcas-pista {
+            display: flex;
+            width: max-content;
+            animation: correrMarcas 20s linear infinite;
+        }
+        .marcas-section:hover .marcas-pista {
+            animation-play-state: paused;
+        }
+        @keyframes correrMarcas {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+        .marca-chip {
+            padding: 0.55rem 1.3rem;
+            border-radius: 24px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-white);
+            color: var(--text-body);
+            cursor: pointer;
+            white-space: nowrap;
+            font-weight: 700;
+            font-size: 0.82rem;
+            font-family: inherit;
+            transition: all 0.25s;
+            margin-right: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .marca-chip:hover, .marca-chip.on {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        /* ── CARRUSEL DE PRODUCTOS ── */
+        .carousel-section {
+            max-width: 1200px;
+            margin: 0 auto 2rem;
+            padding: 0 1rem;
+        }
+        .carousel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .carousel-header h2 {
+            font-family: "Playfair Display", serif;
+            font-size: 1.4rem;
+            color: var(--primary);
+        }
+        .carousel-arrows {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .carousel-arrow {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: 1.5px solid var(--border);
+            background: var(--bg-white);
+            color: var(--primary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .carousel-arrow:hover {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .carousel-track {
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            padding-bottom: 0.5rem;
+        }
+        .carousel-track::-webkit-scrollbar { display: none; }
+        .carousel-track .product-card {
+            flex: 0 0 260px;
+            scroll-snap-align: start;
+        }
+
+        /* ── PROD-MARCA badge ── */
+        .prod-marca {
+            display: inline-block;
+            background: rgba(30,58,95,0.08);
+            color: var(--primary);
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.6rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
         footer {
             text-align: center; padding: 2rem 1rem; color: var(--text-muted);
             font-size: 0.72rem; border-top: 1px solid var(--border); background: var(--bg-white);
@@ -595,8 +708,9 @@
         @media (max-width: 768px) {
             .hero-title { font-size: 1.8rem; }
             .hero-logo { width: 110px; height: 110px; }
-            .welcome-inner { flex-direction: column; text-align: center; padding: 2rem 1.5rem; }
-            .welcome-img { width: 140px; height: 140px; }
+            .welcome-inner { flex-direction: column; text-align: center; }
+            .welcome-text { padding: 2rem 1.5rem; }
+            .welcome-img { width: 120px; height: 120px; margin: 0 auto 1rem; }
             .products-grid { grid-template-columns: repeat(2, 1fr); gap: 0.85rem; }
             .prod-img { height: 160px; }
             .prod-body { padding: 0.8rem; }
@@ -612,6 +726,7 @@
             .products-grid { grid-template-columns: repeat(2, 1fr); gap: 0.65rem; }
             .prod-img { height: 130px; }
             .add-btn { padding: 0.55rem; font-size: 0.78rem; }
+            .carousel-track .product-card { flex: 0 0 200px; }
         }
     </style>
 </head>
@@ -643,9 +758,14 @@
     </header>
     <button class="cart-fixed" onclick="openCart()">🛒 <span id="cc">0</span></button>
 
-    <!-- WELCOME BANNER -->
+    <!-- WELCOME BANNER with Video Background -->
     <div class="welcome-banner">
-        <div class="welcome-inner">
+        <div class="welcome-inner" id="welcomeInner">
+            <video class="welcome-video" autoplay muted loop playsinline preload="metadata" poster="/logos/tienda-logo.png"
+                   onerror="this.style.display='none'; this.parentElement.style.background='linear-gradient(135deg, var(--primary), #2A5298)'">
+                <source src="" type="video/mp4">
+            </video>
+            <div class="welcome-velo"></div>
             <div class="welcome-text">
                 <h2>Bienvenido a CJP WATCH</h2>
                 <p>Descubre nuestra colección de relojes 100% originales. Las mejores marcas internacionales con garantía y envío a toda Colombia.</p>
@@ -654,6 +774,11 @@
                 <img src="/logos/tienda-logo.png" alt="CJP WATCH" onerror="this.style.display='none'">
             </div>
         </div>
+    </div>
+
+    <!-- MARQUESA DE MARCAS (infinita) -->
+    <div class="marcas-section">
+        <div class="marcas-pista" id="marcasPista"></div>
     </div>
 
     <!-- BRANDS -->
@@ -678,6 +803,18 @@
     <div class="cat-bar">
         <button class="cat-pill on" data-cat="Todos" onclick="filterByCategory('Todos')">Todos <span id="totalCount">{{TOTAL}}</span></button>
         {{CATEGORIAS}}
+    </div>
+
+    <!-- CARRUSEL DE PRODUCTOS DESTACADOS -->
+    <div class="carousel-section" id="carouselSection">
+        <div class="carousel-header">
+            <h2>Productos Destacados</h2>
+            <div class="carousel-arrows">
+                <button class="carousel-arrow" id="carouselPrev" onclick="scrollCarousel(-1)">‹</button>
+                <button class="carousel-arrow" id="carouselNext" onclick="scrollCarousel(1)">›</button>
+            </div>
+        </div>
+        <div class="carousel-track" id="carouselTrack"></div>
     </div>
 
     <!-- PRODUCTS -->
@@ -734,7 +871,49 @@
         let imgScale = 1;
         let imgRotation = 0;
 
-        document.addEventListener('DOMContentLoaded', () => { renderBrands(); });
+        document.addEventListener('DOMContentLoaded', () => { renderBrands(); renderMarcas(); });
+
+        function renderMarcas() {
+            const marcas = {};
+            PRODUCTS.forEach(p => { if (p.m) { marcas[p.m] = (marcas[p.m] || 0) + 1; } });
+            const pista = document.getElementById('marcasPista');
+            const nombres = Object.keys(marcas);
+            if (!nombres.length) {
+                pista.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem;padding:0.5rem">Agrega marcas en los productos del POS para verlas aquí</span>';
+                return;
+            }
+            // Duplicate for infinite loop
+            const items = nombres.map(n =>
+                '<button class="marca-chip" data-marca="' + n + '" onclick="filterByMarca(\'' + n.replace(/'/g, "\\'") + '\')">' + n + '</button>'
+            ).join('');
+            pista.innerHTML = items + items;
+            // Render carousel with first 8 products
+            const track = document.getElementById('carouselTrack');
+            const featured = PRODUCTS.slice(0, 8);
+            track.innerHTML = renderProductCards(featured);
+        }
+
+        function scrollCarousel(dir) {
+            const track = document.getElementById('carouselTrack');
+            const step = 276; // card width + gap
+            track.scrollBy({ left: dir * step, behavior: 'smooth' });
+        }
+
+        function filterByMarca(marca) {
+            // Update active chip
+            document.querySelectorAll('.marca-chip').forEach(b => b.classList.remove('on'));
+            document.querySelectorAll('.marca-chip').forEach(b => {
+                if (b.getAttribute('data-marca') === marca) b.classList.add('on');
+            });
+            // Also update category pills
+            document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('on'));
+            document.querySelector('.cat-pill[data-cat="Todos"]')?.classList.add('on');
+            // Filter products
+            const grid = document.getElementById('productsGrid');
+            const items = marca ? PRODUCTS.filter(p => p.m === marca) : PRODUCTS;
+            if (!items.length) { grid.innerHTML = '<div class="empty"><h3>No se encontraron relojes de ' + marca + '</h3></div>'; return; }
+            grid.innerHTML = renderProductCards(items);
+        }
 
         function renderBrands() {
             const cats = {};
@@ -814,6 +993,27 @@
         function rotateLightbox() { imgRotation += 90; document.getElementById('overlayImg').style.transform = 'scale(' + imgScale + ') rotate(' + imgRotation + 'deg)'; }
         function addFromLightbox() { if (!currentProduct) return; addToCart(currentProduct.id); closeLightbox(); }
 
+        function renderProductCards(items) {
+            return items.map((p, j) => {
+                const hasVid = p.vid && p.vid.length > 0;
+                const hasImg = p.img && p.img.length > 0;
+                let media;
+                if (hasVid) media = '<video src="' + p.vid + '" muted loop playsinline preload="metadata" onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0" onclick="openVideo(' + p.id + ')" style="width:100%;height:100%;object-fit:contain;padding:1rem;cursor:pointer"></video><span class="video-badge">▶ Video</span>';
+                else if (hasImg) media = '<img src="' + p.img + '" alt="' + p.n + '" loading="lazy">';
+                else media = '<div class="no-img">📦</div>';
+                return '<div class="product-card" data-marca="' + (p.m || '') + '" style="animation-delay:' + (j * 0.06) + 's">' +
+                '<div class="prod-img" onclick="' + (hasVid ? 'openVideo(' + p.id + ')' : (hasImg ? 'openLightbox(' + p.id + ')' : '')) + '">' + media +
+                (p.s <= 5 ? '<span class="stock-badge">¡Últimas ' + p.s + '!</span>' : '') +
+                '</div><div class="prod-body">' +
+                (p.c ? '<span class="prod-tag">' + p.c + '</span>' : '') +
+                (p.m ? '<span class="prod-marca">' + p.m + '</span>' : '') +
+                '<h3>' + p.n + '</h3>' +
+                '<div class="prod-price">$' + p.p.toLocaleString() + '</div>' +
+                '<button class="add-btn" onclick="addToCart(' + p.id + ')">Agregar</button>' +
+                '</div></div>';
+            }).join('');
+        }
+
         function filterProducts() {
             const q = document.getElementById('searchInput').value.toLowerCase();
             const pill = document.querySelector('.cat-pill.on');
@@ -823,23 +1023,7 @@
             if (q) items = items.filter(p => p.n.toLowerCase().includes(q));
             if (cat !== 'Todos') items = items.filter(p => p.c === cat);
             if (!items.length) { grid.innerHTML = '<div class="empty"><h3>No se encontraron relojes</h3></div>'; return; }
-            grid.innerHTML = items.map((p, j) => {
-                const hasVid = p.vid && p.vid.length > 0;
-                const hasImg = p.img && p.img.length > 0;
-                let media;
-                if (hasVid) media = '<video src="' + p.vid + '" muted loop playsinline preload="metadata" onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0" onclick="openVideo(' + p.id + ')" style="width:100%;height:100%;object-fit:contain;padding:1rem;cursor:pointer"></video><span class="video-badge">▶ Video</span>';
-                else if (hasImg) media = '<img src="' + p.img + '" alt="' + p.n + '" loading="lazy">';
-                else media = '<div class="no-img">📦</div>';
-                return '<div class="product-card" style="animation-delay:' + (j * 0.06) + 's">' +
-                '<div class="prod-img" onclick="' + (hasVid ? 'openVideo(' + p.id + ')' : (hasImg ? 'openLightbox(' + p.id + ')' : '')) + '">' + media +
-                (p.s <= 5 ? '<span class="stock-badge">¡Últimas ' + p.s + '!</span>' : '') +
-                '</div><div class="prod-body">' +
-                (p.c ? '<span class="prod-tag">' + p.c + '</span>' : '') +
-                '<h3>' + p.n + '</h3>' +
-                '<div class="prod-price">$' + p.p.toLocaleString() + '</div>' +
-                '<button class="add-btn" onclick="addToCart(' + p.id + ')">Agregar</button>' +
-                '</div></div>';
-            }).join('');
+            grid.innerHTML = renderProductCards(items);
         }
         function filterByCategory(cat) {
             document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('on'));
