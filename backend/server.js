@@ -245,25 +245,27 @@ app.get('/tienda/:idLocal', async (req, res) => {
             WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true ORDER BY p.stock_actual DESC
         `, [idLocal]);
 
-        // Para cada producto, buscar la primera imagen de la galería
+        // Para cada producto, buscar TODAS las imágenes de la galería (solo URLs http/https)
         const prodIds = productos.map(p => p.id_producto);
-        let galeriaMap = {};
+        let galeriaMap = {};  // id_producto => [urls...]
         if (prodIds.length > 0) {
             const { rows: galeriaImgs } = await db.query(
                 `SELECT id_producto, url FROM producto_imagenes WHERE id_producto = ANY($1) ORDER BY orden ASC`, [prodIds]
             );
             galeriaImgs.forEach(g => {
-                if (!galeriaMap[g.id_producto]) galeriaMap[g.id_producto] = g.url;
+                if (!galeriaMap[g.id_producto]) galeriaMap[g.id_producto] = [];
+                if (g.url && (g.url.startsWith('http://') || g.url.startsWith('https://'))) {
+                    galeriaMap[g.id_producto].push(g.url);
+                }
             });
         }
-        // Asignar imagen principal: galería (solo URLs http/https) > imagen_url
+        // Asignar imagen principal: primera de galería > imagen_url
         productos.forEach(p => {
-            const galImg = galeriaMap[p.id_producto] || '';
-            // Only use gallery image if it's an HTTP URL (Cloudinary), not a local path
-            if (galImg && (galImg.startsWith('http://') || galImg.startsWith('https://'))) {
-                p.imagen_url = galImg;
+            const galImgs = galeriaMap[p.id_producto] || [];
+            if (galImgs.length > 0) {
+                p.imagen_url = galImgs[0];
             }
-            // else keep the original imagen_url (which may be Cloudinary)
+            p._galeria = galImgs;
         });
 
         const { rows: categorias } = await db.query(`
@@ -286,7 +288,9 @@ app.get('/tienda/:idLocal', async (req, res) => {
             if (vid.startsWith('/uploads/')) {
                 vid = baseUrl + vid;
             }
-            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '', g: p.genero || '' };
+            // All gallery images (Cloudinary URLs)
+            const imgs = (p._galeria || []).map(url => url.startsWith('/uploads/') ? baseUrl + url : url);
+            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '', g: p.genero || '', imgs };
         }));
 
         const prodsHTML = productos.map(p => {
