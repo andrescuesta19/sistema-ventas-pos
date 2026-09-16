@@ -153,10 +153,12 @@ button{font-family:inherit}
   .cat-top h2{font-size:1.2rem;line-height:1.25;max-width:100%;overflow-wrap:break-word;hyphens:auto;padding:0 .4rem}
 }
 .card{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:hidden;
-  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:280px;justify-self:center}
+  display:flex;flex-direction:column;transition:box-shadow .2s,transform .2s;max-width:280px;justify-self:center;
+  width:100%}
 .card:hover{box-shadow:var(--shadow-h);transform:translateY(-3px)}
-.card__img{position:relative;aspect-ratio:4/3;background:var(--bg);display:grid;place-items:center;cursor:pointer}
-.card__img img,.card__img video{width:100%;height:100%;object-fit:contain;padding:.7rem}
+.card__img{position:relative;aspect-ratio:4/3;background:var(--bg);display:grid;place-items:center;cursor:pointer;
+  min-height:160px;overflow:hidden}
+.card__img img,.card__img video{width:100%;height:100%;object-fit:contain;padding:.7rem;display:block;max-width:100%}
 .no-img{font-size:2.2rem;opacity:.35}
 .tag-stock{position:absolute;top:.6rem;left:.6rem;background:#DC2626;color:#fff;font-size:.66rem;
   font-weight:700;padding:.2rem .5rem;border-radius:6px}
@@ -681,13 +683,30 @@ function render(){
 function tarjeta(p){
   const marca = marcaDe(p);
   const hayVid = p.vid && p.vid.length > 0;
-  const hayImg = p.img && p.img.length > 0;
+  // Detectar imágenes externas potencialmente problemáticas (cdn.phototourl, etc.)
+  // Si la imagen principal es externa Y la galería tiene imágenes, usar la galería
+  let imgSegura = p.img;
+  const imgEsExterna = imgSegura && !imgSegura.includes('res.cloudinary.com') && !imgSegura.startsWith('/');
+  const galeriaValida = p.imgs && p.imgs.length > 0 && p.imgs[0].includes('res.cloudinary.com');
+  if (imgEsExterna && galeriaValida) {
+    imgSegura = p.imgs[0];
+  } else if (imgEsExterna && !galeriaValida) {
+    // Imagen externa sin respaldo: no mostrar para evitar layout roto
+    imgSegura = '';
+  }
+  const hayImg = imgSegura && imgSegura.length > 0;
   let media;
-  if (hayVid) media = '<video src="' + esc(p.vid) + '" muted loop playsinline preload="metadata" ' +
+  if (hayVid) {
+    media = '<video src="' + esc(p.vid) + '" muted loop playsinline preload="metadata" width="600" height="450" ' +
       'onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>';
-  else if (hayImg) media = '<img src="' + esc(p.img) + '" alt="' + esc(p.n) + '" loading="lazy" ' +
+  } else if (hayImg) {
+    media = '<img src="' + esc(imgSegura) + '" alt="' + esc(p.n) + '" loading="lazy" decoding="async" ' +
+      'width="600" height="450" ' +
+      'referrerpolicy="no-referrer" ' +
       'onerror="this.outerHTML=\'<div class=no-img>⌚</div>\'">';
-  else media = '<div class="no-img">⌚</div>';
+  } else {
+    media = '<div class="no-img">⌚</div>';
+  }
 
   return '<article class="card">' +
     '<div class="card__img" onclick="abrirVisor(' + p.id + ')">' + media +
