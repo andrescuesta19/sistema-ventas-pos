@@ -272,6 +272,39 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
     logStream.write(msg + '\n');
   });
 
+  // v2.2.x FIX: Detectar tokens JWT viejos (firmados con secret aleatorio anterior)
+  // y limpiarlos automáticamente al arrancar. Solo se ejecuta una vez por versión.
+  const SESSION_FIX_FLAG = 'pos_session_fix_v2.2.4_applied';
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.executeJavaScript(`
+      (function() {
+        try {
+          if (localStorage.getItem('${SESSION_FIX_FLAG}')) return;
+          const token = localStorage.getItem('pos_token');
+          const user = localStorage.getItem('pos_user');
+          // Si hay token+user pero el token no empieza con JWT válido, limpiar
+          if (token && user && token.split('.').length !== 3) {
+            localStorage.removeItem('pos_token');
+            localStorage.removeItem('pos_user');
+          }
+          // También limpiar si el user tiene avatar_url gigante (>200KB base64)
+          // que pueda causar lentitud
+          if (user && user.length > 500000) {
+            try {
+              const u = JSON.parse(user);
+              if (u.avatar_url && u.avatar_url.length > 300000) {
+                u.avatar_url = null;
+                localStorage.setItem('pos_user', JSON.stringify(u));
+              }
+            } catch {}
+          }
+          localStorage.setItem('${SESSION_FIX_FLAG}', '1');
+        } catch (e) {}
+      })();
+    `).catch(() => {});
+  });
+
   // v1.5.5: DevTools ya no se abren automáticamente al iniciar.
   // Para abrirlas: menú Ver → Toggle Developer Tools, o Cmd+Option+I.
   // (Antes había un openDevTools que era temporal de debug y se quedó.)

@@ -531,11 +531,23 @@ function App() {
     const token = getToken();
     const savedUser = getUser();
     if (token && savedUser) {
+      // v2.2.x: Hacemos la validación en paralelo con un timeout de seguridad
+      // Si tarda más de 5s, asumimos que algo falló y mostramos la app sin sesión
+      const safetyTimeout = setTimeout(() => {
+        console.warn('[App] Timeout de validación de sesión (5s). Continuando sin sesión.');
+        try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+        setLoading(false);
+      }, 5000);
+
       apiGet(`${API_URL}/api/auth/me`).then(fresh => {
+        clearTimeout(safetyTimeout);
         setUser(fresh);
         setLoading(false);
       }).catch(() => {
+        clearTimeout(safetyTimeout);
         try { localStorage.removeItem('pos_token'); localStorage.removeItem('pos_user'); } catch {}
+        // v2.2.x: Importante — setLoading(false) ANTES de cualquier otra cosa
+        // para evitar la condición de carrera que dejaba la app en negro
         setLoading(false);
       });
     } else {
