@@ -322,7 +322,7 @@ app.get('/tienda/:idLocal', async (req, res) => {
                 : '<div class="no-img">📦</div>';
             const cat = p.nombre_categoria ? `<span class="prod-tag">${p.nombre_categoria}</span>` : '';
             const marca = p.marca ? `<span class="prod-marca">${p.marca}</span>` : '';
-            return `<div class="product-card" data-marca="${p.marca || ''}"><div class="prod-img">${img}${badge}</div><div class="prod-body">${cat}${marca}<h3>${p.nombre_producto}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${p.id_producto})">Agregar</button></div></div>`;
+            return `<div class="product-card" data-marca="${p.marca || ''}"><div class="prod-img">${img}</div><div class="prod-body">${cat}${marca}<h3>${p.nombre_producto}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${p.id_producto})">Agregar</button></div></div>`;
         }).join('');
 
         const catsHTML = categorias.map(c =>
