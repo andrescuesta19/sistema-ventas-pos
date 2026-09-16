@@ -4676,22 +4676,30 @@ app.post('/api/productos/:id/video', requireAuth, requireAprobado, uploadVideo.s
 
         let videoUrl;
 
+        // Intentar Cloudinary primero; si falla, guardar localmente
         if (useCloudinary) {
-            // Subir a Cloudinary
-            videoUrl = await uploadToCloudinary(req.file.buffer, `productos/${idProd}`, 'video');
-
-            // Eliminar video anterior de Cloudinary si existe
-            const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
-            if (old.rows[0]?.video_url) {
-                await deleteFromCloudinary(old.rows[0].video_url, 'video');
+            try {
+                videoUrl = await uploadToCloudinary(req.file.buffer, `productos/${idProd}`, 'video');
+                // Eliminar video anterior de Cloudinary si existe
+                const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
+                if (old.rows[0]?.video_url) {
+                    await deleteFromCloudinary(old.rows[0].video_url, 'video');
+                }
+            } catch (cloudErr) {
+                console.warn('⚠ Cloudinary falló para video, guardando localmente:', cloudErr.message);
+                videoUrl = null;
             }
-        } else {
-            // Almacenamiento local (desarrollo)
-            videoUrl = `/uploads/productos/${req.file.filename}`;
-
-            // Eliminar video anterior si existe
+        }
+        if (!videoUrl) {
+            // Fallback: guardar en disco local
+            if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+            const ext = path.extname(req.file.originalname).toLowerCase() || '.mp4';
+            const filename = `video_${idProd}_${Date.now()}${ext}`;
+            fs.writeFileSync(path.join(uploadsDir, filename), req.file.buffer);
+            videoUrl = `/uploads/productos/${filename}`;
+            // Eliminar video anterior local si existe
             const old = await db.query('SELECT video_url FROM productos WHERE id_producto=$1 AND id_local=$2', [idProd, idLocal]);
-            if (old.rows[0]?.video_url) {
+            if (old.rows[0]?.video_url && old.rows[0].video_url.startsWith('/uploads/')) {
                 const oldPath = path.join(__dirname, old.rows[0].video_url);
                 if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
             }
@@ -4771,10 +4779,22 @@ app.post('/api/productos/:id/imagenes', requireAuth, requireAprobado, uploadProd
         const urls = [];
         for (const file of req.files) {
             let url;
+            // Intentar Cloudinary primero; si falla, guardar localmente
             if (useCloudinary) {
-                url = await uploadToCloudinary(file.buffer, `productos/${idProd}`, 'image');
-            } else {
-                url = `/uploads/productos/${file.filename}`;
+                try {
+                    url = await uploadToCloudinary(file.buffer, `productos/${idProd}`, 'image');
+                } catch (cloudErr) {
+                    console.warn('⚠ Cloudinary falló, guardando localmente:', cloudErr.message);
+                    url = null;
+                }
+            }
+            if (!url) {
+                // Fallback: guardar en disco local
+                if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+                const ext = path.extname(file.originalname).toLowerCase() || '.png';
+                const filename = `producto_${idProd}_${Date.now()}${ext}`;
+                fs.writeFileSync(path.join(uploadsDir, filename), file.buffer);
+                url = `/uploads/productos/${filename}`;
             }
             await db.query('INSERT INTO producto_imagenes (id_producto, url, orden) VALUES ($1, $2, $3)', [idProd, url, orden]);
             urls.push({ url, orden });

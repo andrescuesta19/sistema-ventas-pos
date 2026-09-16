@@ -73,6 +73,12 @@ const Inventario = ({ user }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    // Para campos de precio, permitir solo números y puntos (no comas)
+    if (name === 'precio_compra' || name === 'precio_venta') {
+      const clean = value.replace(/[^0-9.]/g, '');
+      setFormData(prev => ({ ...prev, [name]: clean }));
+      return;
+    }
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -142,8 +148,8 @@ const Inventario = ({ user }) => {
       ...formData,
       id_local: user?.id_local,
       id_categoria: formData.id_categoria ? parseInt(formData.id_categoria) : null,
-      precio_compra: parseFloat(formData.precio_compra) || 0,
-      precio_venta: parseFloat(formData.precio_venta) || 0,
+      precio_compra: parseFloat(formData.precio_compra?.replace(/,/g, '')) || 0,
+      precio_venta: parseFloat(formData.precio_venta?.replace(/,/g, '')) || 0,
       stock_actual: parseInt(formData.stock_actual) || 0,
       stock_minimo: parseInt(formData.stock_minimo) || 0,
       imagen_url: formData.imagen_url?.trim() || null
