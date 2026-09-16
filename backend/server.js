@@ -281,7 +281,7 @@ app.get('/tienda/:idLocal', async (req, res) => {
             if (vid.startsWith('/uploads/')) {
                 vid = baseUrl + vid;
             }
-            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '' };
+            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '', g: p.genero || '' };
         }));
 
         const prodsHTML = productos.map(p => {
