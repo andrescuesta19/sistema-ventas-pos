@@ -440,6 +440,7 @@ footer::after{
     </div>
     <div class="grid" id="grid"></div>
     <div class="pag" id="pag"></div>
+    <div id="pag-msg" style="text-align:center;margin-top:.5rem"></div>
   </main>
 </div>
 
@@ -735,13 +736,11 @@ function tarjeta(p){
 
 function pintarPaginacion(paginas){
   const cont = document.getElementById('pag');
-  // Mostrar paginación siempre, aunque haya 1 sola página
+  // Botones de paginación (‹ 1 2 3 ›)
   let html = '<button onclick="irPagina(' + (estado.pagina - 1) + ')"' +
              (estado.pagina === 1 ? ' disabled' : '') + '>‹</button>';
   if (paginas <= 1) {
-    // Solo 1 página: mostrar "1" + mensaje "próximamente más"
     html += '<button class="on">1</button>';
-    html += '<span class="pag-info">📦 Más productos próximamente</span>';
   } else {
     for (let i = 1; i <= paginas; i++) {
       if (i === 1 || i === paginas || Math.abs(i - estado.pagina) <= 1) {
@@ -754,6 +753,13 @@ function pintarPaginacion(paginas){
   html += '<button onclick="irPagina(' + (estado.pagina + 1) + ')"' +
           (estado.pagina === paginas ? ' disabled' : '') + '>›</button>';
   cont.innerHTML = html;
+  // Si solo hay 1 página, mostrar mensaje "próximamente" ABAJO de los botones
+  const contMsg = document.getElementById('pag-msg');
+  if (contMsg) {
+    contMsg.innerHTML = paginas <= 1
+      ? '<span class="pag-info">📦 Más productos próximamente</span>'
+      : '';
+  }
 }
 function irPagina(n){ estado.pagina = n; render(); irACatalogo(); }
 
@@ -807,7 +813,9 @@ function pedirWhatsApp(){
   let t = 'Hola CJP WATCH, quiero pedir:\n\n';
   carrito.forEach(i => { t += '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q) + '\n'; });
   t += '\nTotal: ' + money(totalCarrito()) + '\n\n¿Me confirman disponibilidad y envío?';
-  window.open('https://wa.me/' + PHONE + '?text=' + encodeURIComponent(t), '_blank');
+  // Usar api.whatsapp.com/send en vez de wa.me/ — permite iniciar chat
+  // con cualquier número sin necesidad de tenerlo guardado en contactos
+  window.open('https://api.whatsapp.com/send?phone=' + PHONE + '&text=' + encodeURIComponent(t), '_blank');
 }
 
 /* ── Visor ── */
@@ -905,7 +913,9 @@ document.addEventListener('keydown', e => {
 
 /* ── Arranque ── */
 document.addEventListener('DOMContentLoaded', () => {
-  const wa = 'https://wa.me/' + PHONE + '?text=' +
+  // api.whatsapp.com/send permite a cualquier persona iniciar un chat
+  // aunque no tenga el número guardado en sus contactos (wa.me/ no lo permite)
+  const wa = 'https://api.whatsapp.com/send?phone=' + PHONE + '&text=' +
     encodeURIComponent('Hola CJP WATCH, quiero información sobre sus relojes.');
   document.getElementById('waFab').href = wa;
   document.getElementById('footWa').href = wa;
