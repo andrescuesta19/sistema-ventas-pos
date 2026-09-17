@@ -2032,22 +2032,12 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
         const catId = id_categoria ? parseInt(id_categoria) : 3;
         const serial = codigo_barras && codigo_barras.trim() ? codigo_barras.trim() : null;
 
-        // v2.2.x: Validar codigo_barras único (que no choque con OTRO producto del mismo local)
-        if (serial) {
-            const dupCheck = await db.query(
-                `SELECT id_producto, nombre_producto FROM productos
-                 WHERE id_local = $1 AND codigo_barras = $2 AND id_producto != $3 LIMIT 1`,
-                [prodRes.rows[0].id_local, serial, req.params.id]
-            );
-            if (dupCheck.rows.length > 0) {
-                const existente = dupCheck.rows[0];
-                return res.status(409).json({
-                    error: `El código "${serial}" ya está usado por el producto "${existente.nombre_producto}". Usa un código diferente.`,
-                    codigo_duplicado: true,
-                    producto_existente: { id: existente.id_producto, nombre: existente.nombre_producto }
-                });
-            }
-        }
+        // v2.2.5: codigo_barras (modelo/serial) YA NO es único.
+        // Razón: muchas variantes comparten el mismo modelo (ej: TM-318139
+        // con caja en acero, oro, titanio). La unicidad del producto la
+        // garantiza id_producto (PK), no el código.
+        // El campo sigue siendo opcional y editable: si lo llenas, varios
+        // productos del mismo local pueden compartir el mismo modelo.
 
         await db.query(
             `UPDATE productos
@@ -2082,23 +2072,10 @@ app.post('/api/productos', requireAuth, requireAprobado, requireAdmin, async (re
             if (catCheck.rows.length > 0) catId = parseInt(id_categoria);
         }
 
-        // v2.2.x: Validar codigo_barras único ANTES de insertar
-        // (PostgreSQL lo validaría pero con error genérico)
-        if (serial) {
-            const dupCheck = await db.query(
-                `SELECT id_producto, nombre_producto FROM productos
-                 WHERE id_local = $1 AND codigo_barras = $2 LIMIT 1`,
-                [id_local, serial]
-            );
-            if (dupCheck.rows.length > 0) {
-                const existente = dupCheck.rows[0];
-                return res.status(409).json({
-                    error: `El código "${serial}" ya está usado por el producto "${existente.nombre_producto}". Usa un código diferente o déjalo vacío.`,
-                    codigo_duplicado: true,
-                    producto_existente: { id: existente.id_producto, nombre: existente.nombre_producto }
-                });
-            }
-        }
+        // v2.2.5: codigo_barras (modelo/serial) YA NO es único al crear.
+        // Múltiples variantes del mismo modelo se permiten (mismo número
+        // modelo, distinto material/color/variante). id_producto (PK) es
+        // lo que identifica únicamente cada producto.
 
         const { rows } = await db.query(
             `INSERT INTO productos (id_local, codigo_barras, nombre_producto, id_categoria, marca, genero, imagen_url, video_url, precio_compra, precio_venta, stock_actual, stock_minimo, visible_en_tienda)
