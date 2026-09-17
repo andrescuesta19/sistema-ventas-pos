@@ -226,7 +226,16 @@ app.use('/logos', express.static(path.join(__dirname, 'logos')));
 const tiendaTemplatePath = path.join(__dirname, 'tienda-template.html');
 const tiendaTemplate = fs.existsSync(tiendaTemplatePath) ? fs.readFileSync(tiendaTemplatePath, 'utf8') : null;
 
-app.get('/tienda/:idLocal', async (req, res) => {
+// v2.2.x: Rate limit específico para la tienda pública (anti-scraping/abuso)
+const tiendaPublicaLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 min
+    max: 120,             // 120 req/min por IP (más permisivo que el global porque es público)
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Demasiadas solicitudes a la tienda. Intenta en un momento.',
+});
+
+app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
     try {
         const { idLocal } = req.params;
 
@@ -433,6 +442,35 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
+
+// === v2.2.x: Headers de seguridad con Helmet ===
+// Helmet añade headers HTTP que protegen contra XSS, clickjacking, sniffing, etc.
+// Incluye Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, etc.
+let helmet;
+try {
+    helmet = require('helmet');
+    app.use(helmet({
+        contentSecurityPolicy: false, // CSP puede romper la app de Electron; se activa solo en web
+        crossOriginEmbedderPolicy: false, // Algunos CDNs (Cloudinary) lo requieren desactivado
+        crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permitir imágenes cross-origin
+    }));
+    console.log('✓ Helmet (headers de seguridad) activado');
+} catch (err) {
+    console.warn('⚠ helmet no instalado. Ejecuta: npm install helmet');
+}
+
+// === v2.2.x: Honeypot anti-bots ===
+// Campo oculto que SOLO los bots llenan. Si viene con valor, es un bot → bloqueamos silenciosamente.
+// Aplicado a login y endpoints públicos.
+const HONEYPOT_FIELD = 'website_url'; // Nombre confuso (los bots suelen llenar todos los campos)
+function honeypotBlock(req, res, next) {
+    if (req.body && typeof req.body[HONEYPOT_FIELD] === 'string' && req.body[HONEYPOT_FIELD].trim() !== '') {
+        // Bot detectado. Respondemos éxito falso para no dar pistas.
+        console.warn(`[honeypot] Bot bloqueado desde IP ${req.ip} | Field lleno: "${req.body[HONEYPOT_FIELD]}"`);
+        return res.status(200).json({ success: true, message: 'Procesado.' });
+    }
+    next();
+}
 
 // === B3-fix: Rate limiting global ===
 const globalLimiter = rateLimit({
@@ -648,7 +686,7 @@ async function enviarEmail({ to, subject, html, tipo = 'general', codigo_asociad
 const BCRYPT_DUMMY_HASH = '$2b$12$iAv.b8NAI2Teb96n0OmpBeIeXOuy4uYPk6pwDdhWGJDoBCXTaTCMK'; // hash bcrypt válido de "dummy-no-existe" (cost 12)
 
 // === B3-fix: Login con rate limit estricto (anti brute-force) ===
-app.post('/api/auth/login', loginLimiter, async (req, res) => {
+app.post('/api/auth/login', loginLimiter, honeypotBlock, async (req, res) => {
     try {
         const correo = (req.body.correo || '').toString().trim();
         const contrasena = (req.body.contrasena || '').toString();
@@ -1122,7 +1160,7 @@ const registroLimiter = rateLimit({
     message: { error: 'Demasiados intentos de registro desde tu IP. Intenta en 1 hora.' },
 });
 
-app.post('/api/auth/registro', registroLimiter, async (req, res) => {
+app.post('/api/auth/registro', registroLimiter, honeypotBlock, async (req, res) => {
     const client = await db.connect();
     try {
         // Capa 1: Verificar que el registro público está habilitado
@@ -3842,7 +3880,7 @@ app.delete('/api/nomina/pagos/:id', requireAuth, requireAprobado, requireAdmin, 
 })();
 
 // POST /api/soporte/contacto — enviar ticket de soporte (con sesión)
-app.post('/api/soporte/contacto', requireAuth, requireAprobado, async (req, res) => {
+app.post('/api/soporte/contacto', requireAuth, requireAprobado, honeypotBlock, async (req, res) => {
     try {
         const idLocal = Number(req.user.id_local);
         const { nombre, correo, asunto, mensaje } = req.body;
