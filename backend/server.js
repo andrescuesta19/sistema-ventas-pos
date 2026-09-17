@@ -220,6 +220,19 @@ const staticUploadsDir = isProduction ? path.join('/tmp', 'uploads') : path.join
 app.use('/uploads', express.static(staticUploadsDir));
 app.use('/logos', express.static(path.join(__dirname, 'logos')));
 
+// === v2.2.x: Headers de seguridad con Helmet (TEMPRANO para que aplique a tienda) ===
+let helmet;
+try {
+    helmet = require('helmet');
+    app.use(helmet({
+        contentSecurityPolicy: false, // CSP puede romper la app de Electron; se activa solo en web
+        crossOriginEmbedderPolicy: false, // Algunos CDNs (Cloudinary) lo requieren desactivado
+        crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permitir imágenes cross-origin
+    }));
+} catch (err) {
+    console.warn('⚠ helmet no instalado. Ejecuta: npm install helmet');
+}
+
 // ── Tienda Pública HTML (ANTES de express.static para evitar conflicto) ──
 // v2.2.5: Lee template HTML y reemplaza datos del local/productos
 // URL: https://sistema-ventas-pos-aeka.onrender.com/tienda/1
@@ -443,21 +456,8 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// === v2.2.x: Headers de seguridad con Helmet ===
-// Helmet añade headers HTTP que protegen contra XSS, clickjacking, sniffing, etc.
-// Incluye Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, etc.
-let helmet;
-try {
-    helmet = require('helmet');
-    app.use(helmet({
-        contentSecurityPolicy: false, // CSP puede romper la app de Electron; se activa solo en web
-        crossOriginEmbedderPolicy: false, // Algunos CDNs (Cloudinary) lo requieren desactivado
-        crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permitir imágenes cross-origin
-    }));
-    console.log('✓ Helmet (headers de seguridad) activado');
-} catch (err) {
-    console.warn('⚠ helmet no instalado. Ejecuta: npm install helmet');
-}
+// === v2.2.x: Headers de seguridad con Helmet (DEBE ir antes de las rutas) ===
+// Helmet añadido arriba (línea ~224) para que aplique también a /tienda/:idLocal
 
 // === v2.2.x: Honeypot anti-bots ===
 // Campo oculto que SOLO los bots llenan. Si viene con valor, es un bot → bloqueamos silenciosamente.
