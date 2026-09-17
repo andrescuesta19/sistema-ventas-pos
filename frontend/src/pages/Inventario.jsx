@@ -2,7 +2,7 @@ import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete, getToken } from '../api';
 import { resolverUrlImagen } from '../utils/imageUrl';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon, Star, GripVertical, Save } from 'lucide-react';
 
 const CATEGORIAS_DEFAULT = [
   { id_categoria: 1, nombre_categoria: 'Reloj Hombre' },
@@ -21,6 +21,12 @@ const Inventario = ({ user }) => {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+
+  // v2.2.6: gestión de productos destacados
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [destacados, setDestacados] = useState([]);
+  const [savingReorder, setSavingReorder] = useState(false);
+  const [dragIdx, setDragIdx] = useState(null);
 
   const initialForm = {
     codigo_barras: '',
@@ -263,6 +269,71 @@ const Inventario = ({ user }) => {
     }
   };
 
+  // v2.2.6: Toggle de producto destacado
+  const toggleDestacado = async (producto) => {
+    const nuevoEstado = !producto.destacado;
+    try {
+      await fetch(`${API_URL}/api/productos/${producto.id_producto}/destacado`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ destacado: nuevoEstado })
+      }).then(r => { if (!r.ok) throw new Error('Error ' + r.status); return r.json(); });
+      await fetchProductos();
+    } catch (err) {
+      alert('Error al cambiar destacado: ' + err.message);
+    }
+  };
+
+  // v2.2.6: Abrir modal de reordenar destacados
+  const abrirReorderDestacados = async () => {
+    try {
+      const data = await apiGet(`${API_URL}/api/productos/destacados`);
+      setDestacados(Array.isArray(data) ? data : []);
+      setShowReorderModal(true);
+    } catch (err) {
+      alert('Error al cargar destacados: ' + err.message);
+    }
+  };
+
+  // v2.2.6: Drag & drop nativo HTML5 para reordenar
+  const handleDragStart = (idx) => setDragIdx(idx);
+  const handleDragOver = (e) => e.preventDefault();
+  const handleDrop = (idx) => {
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      return;
+    }
+    const newList = [...destacados];
+    const [moved] = newList.splice(dragIdx, 1);
+    newList.splice(idx, 0, moved);
+    setDestacados(newList);
+    setDragIdx(null);
+  };
+
+  const guardarReorder = async () => {
+    setSavingReorder(true);
+    try {
+      const ids = destacados.map(d => d.id_producto);
+      await fetch(`${API_URL}/api/productos/reordenar-destacados`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({ ids })
+      }).then(r => { if (!r.ok) throw new Error('Error ' + r.status); return r.json(); });
+      setShowReorderModal(false);
+      await fetchProductos();
+    } catch (err) {
+      alert('Error al guardar el orden: ' + err.message);
+    } finally {
+      setSavingReorder(false);
+    }
+  };
+
   const abrirGaleria = async (producto) => {
     setGaleria(producto);
     setGaleriaMsg(null);
@@ -331,11 +402,37 @@ const Inventario = ({ user }) => {
           <h2>Gestión de Catálogo</h2>
           <p style={{ color: 'var(--text-light)', fontSize: '0.9rem', margin: 0 }}>
             {productos.length} producto{productos.length !== 1 ? 's' : ''} registrado{productos.length !== 1 ? 's' : ''}
+            {productos.filter(p => p.destacado).length > 0 && (
+              <> · <Star size={12} fill="#F59E0B" style={{ verticalAlign: 'middle' }} /> {productos.filter(p => p.destacado).length} destacado{productos.filter(p => p.destacado).length !== 1 ? 's' : ''}</>
+            )}
           </p>
         </div>
-        <button className="btn-primary flex-row" onClick={abrirCrear}>
-          <Plus size={18} /> Nuevo Producto
-        </button>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button
+            onClick={abrirReorderDestacados}
+            disabled={productos.filter(p => p.destacado).length < 2}
+            title={productos.filter(p => p.destacado).length < 2 ? 'Necesitas al menos 2 productos destacados' : 'Reordenar los productos que aparecen al inicio del catálogo'}
+            style={{
+              backgroundColor: '#FEF3C7',
+              border: '1px solid #F59E0B',
+              color: '#B45309',
+              padding: '0.6rem 1rem',
+              borderRadius: '8px',
+              cursor: productos.filter(p => p.destacado).length < 2 ? 'not-allowed' : 'pointer',
+              opacity: productos.filter(p => p.destacado).length < 2 ? 0.4 : 1,
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <Star size={16} fill="#F59E0B" /> Reordenar Destacados ({productos.filter(p => p.destacado).length})
+          </button>
+          <button className="btn-primary flex-row" onClick={abrirCrear}>
+            <Plus size={18} /> Nuevo Producto
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ padding: '0', overflowX: 'auto' }}>
@@ -348,6 +445,7 @@ const Inventario = ({ user }) => {
               <th style={{ padding: '1rem' }}>Categoría</th>
               <th style={{ padding: '1rem' }}>Precio Venta</th>
               <th style={{ padding: '1rem' }}>Stock</th>
+              <th style={{ padding: '1rem', textAlign: 'center' }} title="Destacado: aparece al inicio en la tienda pública">Dest.</th>
               <th style={{ padding: '1rem', textAlign: 'center' }}>Tienda</th>
               <th style={{ padding: '1rem', textAlign: 'center' }}>Acciones</th>
             </tr>
@@ -388,6 +486,29 @@ const Inventario = ({ user }) => {
                     </span>
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <button
+                      onClick={() => toggleDestacado(p)}
+                      title={p.destacado ? `Destacado #${p.posicion_destacado || '?'} — click para quitar` : 'Click para destacar'}
+                      style={{
+                        background: p.destacado ? '#FEF3C7' : 'transparent',
+                        border: p.destacado ? '1px solid #F59E0B' : '1px dashed #cbd5e1',
+                        color: p.destacado ? '#B45309' : '#94a3b8',
+                        cursor: 'pointer',
+                        padding: '0.35rem 0.6rem',
+                        borderRadius: '8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        transition: 'all .2s'
+                      }}
+                    >
+                      <Star size={14} fill={p.destacado ? '#F59E0B' : 'none'} />
+                      {p.destacado ? `#${p.posicion_destacado || '?'}` : ''}
+                    </button>
+                  </td>
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
                     <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px', cursor: 'pointer' }}>
                       <input type="checkbox" checked={p.visible_en_tienda !== false} onChange={() => toggleVisibilidad(p)}
                         style={{ opacity: 0, width: 0, height: 0 }} />
@@ -425,6 +546,98 @@ const Inventario = ({ user }) => {
           </tbody>
         </table>
       </div>
+
+      {/* v2.2.6: Modal Reordenar Destacados (drag & drop) */}
+      {showReorderModal && (
+        <div className="modal-overlay" onClick={() => setShowReorderModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Star size={18} fill="#F59E0B" /> Reordenar Destacados
+              </h3>
+              <button onClick={() => setShowReorderModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-light)' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-light)', fontSize: '0.85rem', margin: '0.75rem 0' }}>
+              Arrastra las filas para definir el orden en que aparecerán al inicio de la tienda pública. El primero de la lista es el que sale primero.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '50vh', overflowY: 'auto' }}>
+              {destacados.length === 0 && (
+                <p style={{ color: 'var(--text-light)', textAlign: 'center', padding: '2rem' }}>
+                  No tienes productos destacados. Marca la estrella ⭐ en algún producto de la tabla para empezar.
+                </p>
+              )}
+              {destacados.map((d, idx) => {
+                const fotoUrl = resolverUrlImagen(d.imagen_url);
+                return (
+                  <div
+                    key={d.id_producto}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(idx)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.65rem 0.85rem',
+                      background: dragIdx === idx ? '#FEF3C7' : '#f8fafc',
+                      border: '1px solid ' + (dragIdx === idx ? '#F59E0B' : '#e2e8f0'),
+                      borderRadius: '10px',
+                      cursor: 'grab',
+                      transition: 'background .15s'
+                    }}
+                  >
+                    <GripVertical size={18} color="#94a3b8" />
+                    <span style={{ fontWeight: 700, color: '#B45309', minWidth: '24px', textAlign: 'center' }}>
+                      #{idx + 1}
+                    </span>
+                    {fotoUrl ? (
+                      <img src={fotoUrl} alt="" style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '6px' }} />
+                    ) : (
+                      <div style={{ width: '36px', height: '36px', backgroundColor: '#e2e8f0', borderRadius: '6px' }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {d.nombre_producto}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>
+                        {d.marca && `${d.marca} · `}{d.codigo_barras || '—'} · {d.stock_actual} ud.
+                      </div>
+                    </div>
+                    <Star size={14} fill="#F59E0B" />
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button onClick={() => setShowReorderModal(false)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer', fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button
+                onClick={guardarReorder}
+                disabled={savingReorder}
+                style={{
+                  padding: '0.6rem 1rem',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'var(--primary-color)',
+                  color: '#fff',
+                  cursor: savingReorder ? 'wait' : 'pointer',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  opacity: savingReorder ? 0.7 : 1
+                }}
+              >
+                <Save size={16} /> {savingReorder ? 'Guardando...' : 'Guardar orden'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Crear / Editar Producto */}
       {showModal && (
