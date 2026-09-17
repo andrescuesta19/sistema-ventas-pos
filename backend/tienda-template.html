@@ -892,8 +892,9 @@ function abrirVisor(id){
 function renderVisorCarousel(){
   const slides = document.getElementById('visorSlides');
   const dots = document.getElementById('visorDots');
+  // v2.2.x: escapar URL de imagen con esc() para prevenir XSS si la URL viene manipulada
   slides.innerHTML = visorImgs.map((url, i) =>
-    `<img src="${url}" alt="Foto ${i+1}" style="display:${i===visorIdx?'':'none'};transform:scale(${escala}) rotate(${giro}deg)" data-i="${i}">`
+    `<img src="${esc(url)}" alt="Foto ${i+1}" style="display:${i===visorIdx?'':'none'};transform:scale(${escala}) rotate(${giro}deg)" data-i="${i}">`
   ).join('');
   dots.innerHTML = visorImgs.map((_, i) =>
     `<button class="visor__dot${i===visorIdx?' active':''}" onclick="visorGoTo(${i})"></button>`
