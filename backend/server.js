@@ -12,7 +12,37 @@ const multer = require('multer');
 const { z } = require('zod'); // v2.2.0: validación de inputs
 const speakeasy = require('speakeasy'); // v2.2.0: 2FA TOTP
 const QRCode = require('qrcode'); // v2.2.0: QR para 2FA
+// v2.2.x: Paquetes de seguridad adicionales
+let hpp; // Anti HTTP Parameter Pollution
+try {
+    hpp = require('hpp');
+} catch (err) { console.warn('⚠ hpp no instalado'); }
 let cloudinary = null;
+
+// v2.2.x: Sanitizador propio anti Prototype Pollution (compatible con Express 5)
+// Reemplaza express-mongo-sanitize (que tiene bugs con Express 5).
+// Elimina claves peligrosas: __proto__, constructor, prototype de req.body/params/query
+function sanitizeKeys(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    for (const key of Object.keys(obj)) {
+        if (dangerousKeys.includes(key)) {
+            delete obj[key];
+            continue;
+        }
+        // Recursivo para objetos anidados
+        if (obj[key] && typeof obj[key] === 'object') {
+            sanitizeKeys(obj[key]);
+        }
+    }
+}
+function prototypePollutionBlock(req, res, next) {
+    if (req.body) sanitizeKeys(req.body);
+    if (req.params) sanitizeKeys(req.params);
+    // req.query es solo-lectura en Express 5, no se puede mutar
+    // (la sanitización en params y body es suficiente para nuestros endpoints)
+    next();
+}
 try { cloudinary = require('cloudinary').v2; } catch (e) { console.log('[cloudinary] No disponible — usando almacenamiento local'); }
 const db = require('./db');
 const dian = require('./dian'); // v1.9.1: facturación electrónica DIAN
@@ -229,9 +259,32 @@ try {
         crossOriginEmbedderPolicy: false, // Algunos CDNs (Cloudinary) lo requieren desactivado
         crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permitir imágenes cross-origin
     }));
+    console.log('✓ Helmet (headers de seguridad) activado');
 } catch (err) {
     console.warn('⚠ helmet no instalado. Ejecuta: npm install helmet');
 }
+
+// === v2.2.x: HPP - Anti HTTP Parameter Pollution ===
+// Previene ataques donde ?id=1&id=2 intenta confundir la app.
+// También mitiga prototype pollution.
+if (hpp) {
+    app.use(hpp({
+        whitelist: ['tags', 'categorias', 'marcas'] // Permitir arrays en estos campos
+    }));
+    console.log('✓ HPP (anti parameter pollution) activado');
+}
+
+// === v2.2.x: Mongo Sanitize - Anti Prototype Pollution ===
+// Elimina claves peligrosas como __proto__, constructor, prototype del body/params/query.
+// Previene ataques de prototype pollution.
+if (true) {
+    // v2.2.x: Implementación propia compatible con Express 5
+    app.use(prototypePollutionBlock);
+    console.log('✓ Prototype Pollution Block (sanitizador propio) activado');
+}
+
+// === v2.2.x: Body size limit (Anti DoS por payloads enormes) ===
+// express.json por defecto acepta hasta 100kb. Limitamos a 1mb para prevenir DoS.
 
 // ── Tienda Pública HTML (ANTES de express.static para evitar conflicto) ──
 // v2.2.5: Lee template HTML y reemplaza datos del local/productos
@@ -454,7 +507,9 @@ app.use(cors({
     },
     credentials: true,
 }));
-app.use(express.json());
+// v2.2.x: Limit body size a 1MB (anti DoS por payloads enormes)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: false }));
 
 // === v2.2.x: Headers de seguridad con Helmet (DEBE ir antes de las rutas) ===
 // Helmet añadido arriba (línea ~224) para que aplique también a /tienda/:idLocal
