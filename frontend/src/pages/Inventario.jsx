@@ -473,6 +473,9 @@ const Inventario = ({ user }) => {
                 <div className="form-group">
                   <label>Número Serial / Código de Barras</label>
                   <input type="text" name="codigo_barras" placeholder="Ej: SN-12345678" value={formData.codigo_barras} onChange={handleChange} />
+                  <small style={{ color: 'var(--text-light)', fontSize: '0.75rem' }}>
+                    Opcional. Varios productos pueden compartir el mismo modelo (ej: TM-318139 con caja en acero, oro, titanio).
+                  </small>
                 </div>
               </div>
 
