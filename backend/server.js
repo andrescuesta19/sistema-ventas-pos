@@ -1032,6 +1032,7 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
                 p.imagen_url,
                 p.marca,
                 p.genero,
+                COALESCE(p.destacado, FALSE) AS destacado,
                 COALESCE(p.visible_en_tienda, true) as visible_en_tienda,
                 c.nombre_categoria
             FROM productos p
@@ -1061,7 +1062,10 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
             'nombre': 'p.nombre_producto ASC',
             'destacado': 'p.stock_actual DESC',
         };
-        query += ` ORDER BY ${ordenMap[orden] || ordenMap['destacado']}`;
+        // v2.2.6: Los productos destacados SIEMPRE van primero, independientemente
+        // del orden seleccionado (precio/nombre/etc). Dentro de cada grupo (destacados
+        // y no-destacados) se aplica el orden elegido.
+        query += ` ORDER BY COALESCE(p.destacado, FALSE) DESC, COALESCE(p.posicion_destacado, 999999) ASC, ${ordenMap[orden] || ordenMap['destacado']}`;
         query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
         params.push(limit, offset);
         
@@ -2049,6 +2053,126 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
     } catch (err) {
         console.error('Error actualizando producto:', err);
         res.status(500).json({ error: 'Error interno del servidor al actualizar producto: ' + (err.message || '') });
+    }
+});
+
+// v2.2.6: Toggle rápido de "destacado" sin tocar el resto del producto.
+// Útil cuando en el catálogo el admin hace click en el switch ⭐ y no
+// quiere reabrir el formulario completo.
+app.patch('/api/productos/:id/destacado', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { destacado } = req.body;
+        if (typeof destacado !== 'boolean') {
+            return res.status(400).json({ error: 'El campo "destacado" debe ser boolean.' });
+        }
+
+        // Verificar ownership
+        const prodRes = await db.query('SELECT id_local FROM productos WHERE id_producto = $1', [id]);
+        if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado.' });
+        if (prodRes.rows[0].id_local !== req.user.id_local) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+
+        if (destacado) {
+            // Asignar siguiente posicion_destacado disponible para este local
+            const next = await db.query(
+                `SELECT COALESCE(MAX(posicion_destacado), 0) + 1 AS next_pos
+                 FROM productos WHERE id_local = $1 AND destacado = TRUE`,
+                [req.user.id_local]
+            );
+            await db.query(
+                'UPDATE productos SET destacado = TRUE, posicion_destacado = $1 WHERE id_producto = $2',
+                [parseInt(next.rows[0].next_pos) || 1, id]
+            );
+        } else {
+            // Quitar destacado. NO reasignamos posiciones de otros para no "saltar"
+            // huecos — al reordenar manualmente luego se compactan.
+            await db.query(
+                'UPDATE productos SET destacado = FALSE, posicion_destacado = NULL WHERE id_producto = $1',
+                [id]
+            );
+        }
+
+        res.json({ success: true, destacado, posicion_destacado: destacado ? parseInt(next.rows[0].next_pos) : null });
+    } catch (err) {
+        console.error('Error toggle destacado:', err);
+        res.status(500).json({ error: 'Error interno: ' + (err.message || '') });
+    }
+});
+
+// v2.2.6: Reordenar productos destacados en lote (drag & drop).
+// Body: { ids: [12, 7, 3, ...] } en el orden deseado (posición 1, 2, 3...).
+app.post('/api/productos/reordenar-destacados', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'Se requiere un array "ids" no vacío.' });
+        }
+
+        // Verificar que todos los IDs pertenecen al local del usuario y están destacados
+        const check = await db.query(
+            'SELECT id_producto, destacado FROM productos WHERE id_producto = ANY($1) AND id_local = $2',
+            [ids.map(Number), req.user.id_local]
+        );
+        if (check.rows.length !== ids.length) {
+            return res.status(403).json({ error: 'Uno o más productos no pertenecen a tu local.' });
+        }
+
+        // Asignar posición 1..N en el orden recibido. Solo a los destacados.
+        // Lo hacemos en una transacción para atomicidad.
+        await db.query('BEGIN');
+        try {
+            for (let i = 0; i < ids.length; i++) {
+                await db.query(
+                    `UPDATE productos
+                     SET posicion_destacado = $1,
+                         destacado = CASE WHEN $1 IS NOT NULL THEN TRUE ELSE destacado END
+                     WHERE id_producto = $2 AND id_local = $3`,
+                    [i + 1, parseInt(ids[i]), req.user.id_local]
+                );
+            }
+            // Compactar: si después de reordenar quedan huecos (ej: alguien quitó un destacado)
+            // los cerramos asignando ROW_NUMBER() consecutivamente.
+            await db.query(
+                `UPDATE productos p
+                 SET posicion_destacado = sub.rn
+                 FROM (
+                     SELECT id_producto, ROW_NUMBER() OVER (ORDER BY posicion_destacado ASC NULLS LAST) AS rn
+                     FROM productos
+                     WHERE id_local = $1 AND destacado = TRUE
+                 ) sub
+                 WHERE p.id_producto = sub.id_producto`,
+                [req.user.id_local]
+            );
+            await db.query('COMMIT');
+        } catch (txErr) {
+            await db.query('ROLLBACK');
+            throw txErr;
+        }
+
+        res.json({ success: true, total: ids.length });
+    } catch (err) {
+        console.error('Error reordenando destacados:', err);
+        res.status(500).json({ error: 'Error interno: ' + (err.message || '') });
+    }
+});
+
+// v2.2.6: Listar SOLO los productos destacados del local (para el modal de reordenar)
+app.get('/api/productos/destacados', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const { rows } = await db.query(
+            `SELECT id_producto, nombre_producto, marca, codigo_barras, imagen_url,
+                    precio_venta, stock_actual, posicion_destacado
+             FROM productos
+             WHERE id_local = $1 AND destacado = TRUE
+             ORDER BY posicion_destacado ASC NULLS LAST, id_producto ASC`,
+            [req.user.id_local]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('Error listando destacados:', err);
+        res.status(500).json({ error: 'Error interno: ' + (err.message || '') });
     }
 });
 
