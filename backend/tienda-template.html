@@ -432,10 +432,11 @@ footer::after{
       <div class="f-grupo">
         <span class="f-label">Ordenar:</span>
         <select class="orden" id="orden" onchange="setOrden(this.value)">
-          <option value="nuevo">Novedad</option>
+          <option value="">Destacados primero</option>
           <option value="precio-asc">Precio: menor a mayor</option>
           <option value="precio-desc">Precio: mayor a menor</option>
           <option value="nombre">Nombre A–Z</option>
+          <option value="reciente">Más recientes</option>
         </select>
       </div>
 
@@ -570,7 +571,7 @@ const PHONE = '{{TELEFONO}}';
 const MARCAS = ['TechnoMarine', 'MULCO', 'INVICTA'];
 const POR_PAGINA = 10;
 
-const estado = { marca:'', genero:'', cat:'', oferta:false, q:'', orden:'nuevo', min:null, max:null, pagina:1 };
+const estado = { marca:'', genero:'', cat:'', oferta:false, q:'', orden:'', min:null, max:null, pagina:1 };
 let carrito = [];
 let productoActual = null, escala = 1, giro = 0;
 
@@ -648,11 +649,11 @@ function setPrecio(){
 function verTodo(){ limpiarFiltros(); irACatalogo(); }
 function limpiarFiltros(){
   estado.marca = ''; estado.genero = ''; estado.cat = ''; estado.oferta = false;
-  estado.q = ''; estado.min = null; estado.max = null; estado.pagina = 1; estado.orden = 'nuevo';
+  estado.q = ''; estado.min = null; estado.max = null; estado.pagina = 1; estado.orden = '';
   document.getElementById('buscador').value = '';
   document.getElementById('pmin').value = '';
   document.getElementById('pmax').value = '';
-  document.getElementById('orden').value = 'nuevo';
+  document.getElementById('orden').value = '';
   cerrarMenu(); render();
 }
 function irACatalogo(){
@@ -674,7 +675,9 @@ function filtrados(){
   if (estado.orden === 'precio-asc')  items.sort((a, b) => a.p - b.p);
   else if (estado.orden === 'precio-desc') items.sort((a, b) => b.p - a.p);
   else if (estado.orden === 'nombre')  items.sort((a, b) => a.n.localeCompare(b.n, 'es'));
-  else items.sort((a, b) => b.id - a.id);
+  else if (estado.orden === 'reciente') items.sort((a, b) => b.id - a.id);
+  // v2.2.7: SIN orden seleccionado → respetar el orden del backend
+  // (que ya incluye destacados primero por posicion_destacado)
   return items;
 }
 
