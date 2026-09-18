@@ -17,7 +17,7 @@
     "electron:build:portable": "npm run build && electron-builder --win portable --x64",
     "electron:build:all": "npm run build && electron-builder -mwl"
   },
-  "build": {
+"build": {
     "appId": "com.andrescuesta.pos",
     "productName": "Sistema de Ventas POS",
     "copyright": "Copyright © 2026 Andrés Cuesta",
@@ -46,8 +46,12 @@
       "buildResources": "build"
     },
     "asar": true,
-    "compression": "normal",
+    "compression": "maximum",
     "icon": "build/icon",
+    "asarUnpack": [],
+    "electronLanguages": [],
+    "removePackageScripts": true,
+    "executableName": "SistemaVentasPOS",
     "mac": {
       "category": "public.app-category.business",
       "icon": "build/icon.icns",

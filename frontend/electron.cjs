@@ -215,12 +215,33 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      devTools: !app.isPackaged, // v2.2.7: bloquear DevTools si está empaquetado
+      enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.cjs')
     },
     autoHideMenuBar: false,
     show: false,
     backgroundColor: '#f6f8f7' // neutro — evita flash verde al recargar
   });
+
+  // v2.2.7: Anti-ingeniería inversa en producción
+  // Bloquea F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, click derecho
+  if (app.isPackaged) {
+    mainWindow.setMenuBarVisibility(false);
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (
+        input.key === 'F12' ||
+        (input.control && input.shift && (input.key === 'I' || input.key === 'i' || input.key === 'J' || input.key === 'j' || input.key === 'C' || input.key === 'c')) ||
+        (input.control && (input.key === 'U' || input.key === 'u')) ||
+        (input.meta && (input.key === 'U' || input.key === 'u')) // macOS Cmd+U
+      ) {
+        event.preventDefault();
+      }
+    });
+    mainWindow.webContents.on('context-menu', (event) => {
+      event.preventDefault();
+    });
+  }
 
   // Splash screen: mientras el backend arranca, mostramos un HTML inline
   // con un spinner. Cuando el backend responda, cargamos la app real.
