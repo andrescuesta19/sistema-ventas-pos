@@ -16,10 +16,13 @@ const isElectron = typeof window !== 'undefined' &&
   (window.electronAPI?.isElectron || 
    (typeof window.process !== 'undefined' && window.process?.type));
 
-const GoogleLoginButton = ({ 
-  onSuccess, 
-  onError, 
-  text = 'Continuar con Google', 
+const GoogleLoginButton = ({
+  onSuccess,
+  onError,
+  // v2.2.7: callback para cuando el usuario es nuevo y esta pendiente de aprobacion.
+  // Permite a las pantallas mostrar UI especializada en vez de error generico.
+  onPendingApproval,
+  text = 'Continuar con Google',
   disabled = false,
   mode = 'signin'
 }) => {
@@ -115,6 +118,15 @@ const GoogleLoginButton = ({
       const data = await result.json();
 
       if (!result.ok) {
+        // v2.2.7: distinguir "pendiente de aprobacion" de otros errores.
+        // El backend devuelve { pendiente_aprobacion: true, recien_registrado } cuando
+        // es usuario nuevo. En ese caso, lanzamos evento especial para que la UI
+        // muestre pantalla de espera en lugar de error.
+        if (data.pendiente_aprobacion) {
+          onPendingApproval?.(data);
+          setLoading(false);
+          return;
+        }
         onError?.(data.error || 'Error al autenticar con Google');
         setLoading(false);
         return;
