@@ -18,7 +18,8 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import GoogleLoginButton from '../components/GoogleLoginButton';
+// v2.2.7: GoogleLoginButton ya no se usa aquí (movido al flujo de Registro).
+// import GoogleLoginButton from '../components/GoogleLoginButton';
 import { API_URL, DEMO_MODE } from '../config';
 import { setSession } from '../api';
 import { DEMO_USER, DEMO_TOKEN } from '../demoData';
@@ -701,17 +702,24 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                   <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
                 </div>
 
-                {/* v2.2.2: Botón de Google Login */}
-                <GoogleLoginButton
-                  onSuccess={(data) => {
-                    if (data.token && data.user) {
-                      setSession(data.token, data.user);
-                      setSuccess(true);
-                      setTimeout(() => onLogin(data.user), 450);
-                    }
-                  }}
-                  onError={(msg) => setError(msg)}
-                />
+                {/* v2.2.7: Botón de Google Login removido del flujo de LOGIN.
+                   Como pediste el cambio, "Continuar con Google" debe ser solo
+                   para REGISTRARSE (nunca login directo). El botón sigue
+                   disponible en la pantalla de Registro. Aquí mostramos un
+                   mensaje que indica a nuevos usuarios que se registren. */}
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  background: 'rgba(126, 217, 87, 0.06)',
+                  border: '1px solid rgba(126, 217, 87, 0.2)',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  marginTop: '1rem',
+                  fontSize: '0.85rem',
+                  color: 'rgba(255, 255, 255, 0.65)'
+                }}>
+                  ¿Eres nuevo? <strong style={{ color: '#7ed957' }}>Regístrate</strong> abajo.
+                  Tu cuenta será revisada por el administrador antes de poder ingresar.
+                </div>
 
                 <p style={styles.footer}>
                   ¿No tienes cuenta?{' '}

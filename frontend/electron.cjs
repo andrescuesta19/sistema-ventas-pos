@@ -791,7 +791,9 @@ app.whenReady().then(async () => {
       }
     }, 1000);
 
-    const ready = await waitForBackend(BACKEND_PORT, 25000);
+    // v2.2.7: aumentamos a 60s para tolerar conexiones lentas a Neon
+    // (especialmente en primer arranque con Cloudflare delante)
+    const ready = await waitForBackend(BACKEND_PORT, 60000);
     clearInterval(splashInterval);
     backendStarting = false;
 
@@ -846,11 +848,12 @@ app.whenReady().then(async () => {
 </style></head><body>
   <div class="icon">⚠️</div>
   <h1>No se pudo iniciar el servidor</h1>
-  <p>El backend no respondió en el puerto <code>${BACKEND_PORT}</code> después de 25 segundos.</p>
+  <p>El backend no respondió en el puerto <code>${BACKEND_PORT}</code> después de 60 segundos.</p>
   <p>Esto puede pasar si la instalación está incompleta o si el puerto está ocupado.</p>
   <p>Revisa los logs en <code>~/Library/Logs/Sistema de Ventas POS/</code></p>
   <div>
     <button onclick="window.location.reload()">🔄 Reintentar</button>
+    <button onclick="window.location.reload()">🔧 Reinstalar backend</button>
   </div>
   <div class="brand">✦ Desarrollado por Andrés Cuesta</div>
 </body></html>`;
