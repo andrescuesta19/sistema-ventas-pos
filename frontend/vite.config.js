@@ -9,14 +9,13 @@ export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/sistema-ventas-pos/' : '/',
   build: {
     // v2.2.7: minificación agresiva + eliminación de metadata + división de chunks
-    // para dificultar ingeniería inversa del bundle JS
     minify: 'terser',
     sourcemap: false,
     terserOptions: {
       compress: {
-        drop_console: true,    // quitar console.log en producción
+        drop_console: true,
         drop_debugger: true,
-        passes: 3,
+        passes: 2,
         pure_funcs: ['console.log', 'console.info', 'console.debug']
       },
       mangle: { toplevel: true },
@@ -25,7 +24,12 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // nombres ilegibles para dificultar identificación de módulos
+        // v2.2.7: dividir manualmente para mejor cache + carga inicial más rápida
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'animation-vendor': ['framer-motion'],
+          'ui-icons': ['lucide-react']
+        },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',

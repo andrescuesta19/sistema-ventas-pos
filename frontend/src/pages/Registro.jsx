@@ -7,7 +7,8 @@ import {
   ArrowRight, Info, XCircle
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import GoogleLoginButton from '../components/GoogleLoginButton';
+// v2.2.7: GoogleLoginButton removido temporalmente (redirect_uri_mismatch en OAuth)
+// import GoogleLoginButton from '../components/GoogleLoginButton';
 import { API_URL } from '../config';
 import { setSession } from '../api';
 
@@ -442,18 +443,29 @@ const Registro = ({ onRegister }) => {
             </span>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
           </div>
-          <GoogleLoginButton
-            text="Registrarse con Google"
-            onSuccess={(data) => {
-              if (data.token && data.user) {
-                setSession(data.token, data.user);
-                if (onRegister) onRegister(data.user);
-                setInfo('¡Cuenta creada con Google! Pendiente de aprobación.');
-                setTimeout(() => navigate('/dashboard'), 600);
-              }
-            }}
-            onError={(msg) => setError(msg)}
-          />
+
+          {/* v2.2.7: Botón de Google removido temporalmente del Registro.
+             Causa: redirect_uri_mismatch en Google OAuth (URLs no autorizadas
+             en Google Cloud Console). Cuando registres tu app formalmente,
+             vuelve a agregar este botón actualizando las URLs autorizadas.
+
+             Por ahora, los usuarios deben registrarse con el formulario normal
+             de abajo (correo + contraseña). */}
+          <div style={{
+            padding: '0.85rem 1rem',
+            background: 'rgba(126, 217, 87, 0.06)',
+            border: '1px solid rgba(126, 217, 87, 0.2)',
+            borderRadius: '8px',
+            textAlign: 'center',
+            fontSize: '0.85rem',
+            color: 'rgba(255, 255, 255, 0.65)'
+          }}>
+            <strong style={{ color: '#7ed957' }}>📝 Regístrate con el formulario</strong>
+            <br />
+            <span style={{ fontSize: '0.78rem' }}>
+              Completa los datos abajo. Tu cuenta será revisada por el administrador.
+            </span>
+          </div>
 
           <p style={{ textAlign: 'center', marginTop: '1.25rem', color: 'rgba(255, 255, 255, 0.5)', fontSize: '0.88rem' }}>
             <Link to="/login" style={{ color: '#7ed957', textDecoration: 'none', fontWeight: 600 }}>

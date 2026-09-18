@@ -215,7 +215,10 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
-      devTools: !app.isPackaged, // v2.2.7: bloquear DevTools si está empaquetado
+      // v2.2.7: bloqueamos DevTools SOLO en builds de producción (app.isPackaged).
+      // Removimos el bloqueo de atajos F12/Ctrl+Shift+I porque bloqueaba
+      // accidentalmente inputs validos (ej: Ctrl+Shift+I en campos de texto).
+      devTools: !app.isPackaged,
       enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.cjs')
     },
@@ -224,20 +227,10 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
     backgroundColor: '#f6f8f7' // neutro — evita flash verde al recargar
   });
 
-  // v2.2.7: Anti-ingeniería inversa en producción
-  // Bloquea F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, click derecho
+  // v2.2.7: Anti-ingenieria inversa ligera: solo bloquea click derecho en produccion.
+  // (El bloqueo de atajos de teclado puede interferir con inputs normales.)
   if (app.isPackaged) {
     mainWindow.setMenuBarVisibility(false);
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      if (
-        input.key === 'F12' ||
-        (input.control && input.shift && (input.key === 'I' || input.key === 'i' || input.key === 'J' || input.key === 'j' || input.key === 'C' || input.key === 'c')) ||
-        (input.control && (input.key === 'U' || input.key === 'u')) ||
-        (input.meta && (input.key === 'U' || input.key === 'u')) // macOS Cmd+U
-      ) {
-        event.preventDefault();
-      }
-    });
     mainWindow.webContents.on('context-menu', (event) => {
       event.preventDefault();
     });
