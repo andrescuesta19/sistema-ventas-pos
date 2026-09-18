@@ -7,4 +7,29 @@ export default defineConfig({
   // v2.2.3: base '/' para que assets funcionen en rutas como /tienda/1
   // En GitHub Pages se sobreescribe con GITHUB_ACTIONS
   base: process.env.GITHUB_ACTIONS ? '/sistema-ventas-pos/' : '/',
+  build: {
+    // v2.2.7: minificación agresiva + eliminación de metadata + división de chunks
+    // para dificultar ingeniería inversa del bundle JS
+    minify: 'terser',
+    sourcemap: false,
+    terserOptions: {
+      compress: {
+        drop_console: true,    // quitar console.log en producción
+        drop_debugger: true,
+        passes: 3,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      mangle: { toplevel: true },
+      format: { comments: false }
+    },
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        // nombres ilegibles para dificultar identificación de módulos
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
+      }
+    }
+  }
 })
