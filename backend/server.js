@@ -1063,6 +1063,7 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
             'Surrogate-Control': 'no-store',
         });
 
+        const { idLocal } = req.params;
         const { buscar, categoria, orden, pagina } = req.query;
         
         const limit = 50;
