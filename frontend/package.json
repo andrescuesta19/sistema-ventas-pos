@@ -48,7 +48,6 @@
     "asar": true,
     "compression": "normal",
     "icon": "build/icon",
-    "asarUnpack": [],
     "removePackageScripts": true,
     "executableName": "SistemaVentasPOS",
     "mac": {
@@ -155,7 +154,6 @@
     "concurrently": "^9.1.2",
     "electron": "^35.0.0",
     "electron-builder": "^25.1.8",
-    "terser": "^5.51.2",
     "vite": "^5.0.0",
     "wait-on": "^8.0.2"
   }
