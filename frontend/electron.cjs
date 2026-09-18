@@ -248,7 +248,10 @@ function createWindow(loadingMessage = 'Cargando aplicación...') {
   }
 
   // === DEBUG: Capturar errores del renderer ===
-  const errorLog = '/tmp/electron-renderer-errors.log';
+  // v2.2.6: usar app.getPath('temp') para que sea portable entre Mac/Linux/Windows.
+  // Antes usaba '/tmp/' hardcoded que en Windows tira ENOENT porque C:\tmp no existe
+  // para el usuario estándar. Ahora usa la carpeta temporal del SO.
+  const errorLog = path.join(app.getPath('temp'), 'electron-renderer-errors.log');
   const logStream = fs.createWriteStream(errorLog, { flags: 'a' });
   logStream.write(`\n\n=== ${new Date().toISOString()} ===\n`);
 
