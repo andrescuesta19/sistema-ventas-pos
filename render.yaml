@@ -25,6 +25,10 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
       - key: CORS_ORIGINS
         value: https://andrescuesta19.github.io,https://sistema-ventas-pos-aeka.onrender.com
     healthCheckPath: /api/health
