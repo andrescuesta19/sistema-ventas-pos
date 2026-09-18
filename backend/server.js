@@ -305,6 +305,15 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
     try {
         const { idLocal } = req.params;
 
+        // v2.2.7: evitar caché agresivo en Cloudflare/CloudFront para que
+        // cambios (destacar producto, nuevo inventario) se vean de inmediato.
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Surrogate-Control': 'no-store',
+        });
+
         if (!tiendaTemplate) {
             return res.status(500).send('Template de tienda no encontrado.');
         }
@@ -1045,7 +1054,15 @@ app.get('/api/auth/google/callback', async (req, res) => {
 // Permite a los dueños compartir un link con sus clientes
 app.get('/api/tienda/:idLocal', async (req, res) => {
     try {
-        const { idLocal } = req.params;
+        // v2.2.7: anti-caché para que los cambios (destacar/ocultar productos)
+        // se reflejen al instante. Cloudflare cachea por defecto.
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Surrogate-Control': 'no-store',
+        });
+
         const { buscar, categoria, orden, pagina } = req.query;
         
         const limit = 50;
