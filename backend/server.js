@@ -597,13 +597,27 @@ function requireAuth(req, res, next) {
 // Lo aplicamos a endpoints que no son login ni verificación
 async function requireAprobado(req, res, next) {
     try {
+        // v2.2.6: Si es super_admin (tiene id_super en el JWT, no id_usuario),
+        // lo dejamos pasar directamente. El super_admin no requiere verificación/aprobación.
+        if (req.user && (req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin')) {
+            return next();
+        }
+
+        // Si el id_usuario no es un entero válido (por ejemplo, sesión de
+        // super_admin que tiene su propia tabla), devolvemos 401 en vez de
+        // explotar con NaN. Esto evita 500 innecesarios.
+        const idUsuario = parseInt(req.user.id_usuario);
+        if (!Number.isFinite(idUsuario) || idUsuario <= 0) {
+            return res.status(401).json({ error: 'Sesión inválida. Inicia sesión nuevamente.' });
+        }
+
         // v1.5.4: también validar aprobado_por_admin (v1.5.0).
         // Antes solo validaba verificado y estado, lo que dejaba a usuarios
         // pendientes de aprobación del super-admin accediendo a endpoints
         // protegidos (como /api/productos).
         const r = await db.query(
             'SELECT verificado, estado, aprobado_por_admin FROM usuarios WHERE id_usuario = $1',
-            [Number(req.user.id_usuario)]
+            [idUsuario]
         );
         if (r.rows.length === 0) return res.status(401).json({ error: 'Usuario no encontrado.' });
         const u = r.rows[0];
@@ -624,6 +638,10 @@ async function requireAprobado(req, res, next) {
 
 // Middleware: requiere rol Administrador
 function requireAdmin(req, res, next) {
+    // v2.2.6: El super_admin pasa siempre (lo detectamos por tipo o rol).
+    if (req.user && (req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin')) {
+        return next();
+    }
     if (!req.user || !['Administrador', 'Vendedor'].includes(req.user.rol)) {
         return res.status(403).json({ error: 'Se requiere rol de Administrador o Vendedor.' });
     }
@@ -853,7 +871,7 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
             }
             if (!user.aprobado_por_admin) {
                 return res.status(403).json({
-                    error: 'Tu cuenta está pendiente de aprobación.',
+                    error: 'Tu cuenta está pendiente de aprobación del super-administrador.',
                     pendiente_aprobacion: true,
                     correo: user.correo,
                 });
@@ -863,27 +881,33 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
                 await db.query('UPDATE usuarios SET avatar_url = $1 WHERE id_usuario = $2', [photoUrl, user.id_usuario]);
             }
         } else {
-            // v2.2.3: Usuario nuevo de Google — crear como Vendedor pendiente de aprobación
-            // DEBE pasar por SuperAdmin antes de poder usar la app
+            // v2.2.7: Usuario nuevo de Google — crear como Vendedor PENDIENTE de
+            // aprobación y BLOQUEAR el acceso inmediatamente. El frontend verá
+            // pendiente_aprobacion=true y mostrará la pantalla de "espera".
+            // Antes generaba token igual y dejaba entrar al usuario nuevo, lo que
+            // era un agujero de seguridad crítico (cualquiera con Google podía entrar).
             const { rows: locales } = await db.query('SELECT id_local FROM locales ORDER BY id_local LIMIT 1');
             const idLocal = locales[0]?.id_local || 1;
 
             const randomPass = require('crypto').randomBytes(16).toString('hex');
             const hashedPass = await bcrypt.hash(randomPass, 10);
 
-            // v2.2.4: verificado=true porque Google ya verificó el email
+            // verificado=true porque Google ya verificó el email
             // aprobado_por_admin=false para que pase por SuperAdmin
-            const { rows: newUser } = await db.query(`
+            await db.query(`
                 INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, verificado, aprobado_por_admin, estado, avatar_url)
                 VALUES ($1, $2, $3, 'Vendedor', $4, true, false, true, $5)
-                RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
-            user = newUser[0];
-            user.nombre_local = locales[0]?.nombre_local || 'Local';
-
-            // Notificar al SuperAdmin que hay un nuevo registro pendiente
             console.log(`[GoogleAuth] Nuevo usuario registrado: ${email} (${name}) — Pendiente de aprobación`);
+
+            // v2.2.7: NO generar token. Devolver 403 con pendiente_aprobacion.
+            return res.status(403).json({
+                error: 'Registro exitoso. Tu cuenta está pendiente de aprobación por el super-administrador. Te notificaremos cuando puedas ingresar.',
+                pendiente_aprobacion: true,
+                correo: email,
+                recien_registrado: true,
+            });
         }
 
         // Generar JWT
@@ -966,22 +990,26 @@ app.get('/api/auth/google/callback', async (req, res) => {
                 return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=cuenta_desactivada`);
             }
         } else {
-            // v2.2.3: Crear usuario nuevo como Vendedor pendiente de aprobación
+            // v2.2.7: Crear usuario nuevo como Vendedor pendiente de aprobación
+            // y BLOQUEAR el acceso. Antes generaba token y dejaba entrar, lo que
+            // era un agujero crítico. Ahora redirige al login con error de aprobación.
             const { rows: locales } = await db.query('SELECT id_local FROM locales ORDER BY id_local LIMIT 1');
             const idLocal = locales[0]?.id_local || 1;
             const randomPass = require('crypto').randomBytes(16).toString('hex');
             const hashedPass = await bcrypt.hash(randomPass, 10);
 
-            // v2.2.4: verificado=true porque Google ya verificó el email
             const { rows: newUser } = await db.query(`
                 INSERT INTO usuarios (nombre, correo, contrasena_hash, rol, id_local, verificado, aprobado_por_admin, estado, avatar_url)
                 VALUES ($1, $2, $3, 'Vendedor', $4, true, false, true, $5)
                 RETURNING *
             `, [name, email, hashedPass, idLocal, photoUrl]);
 
-            user = newUser[0];
-            user.nombre_local = locales[0]?.nombre_local || 'Local';
             console.log(`[GoogleCallback] Nuevo usuario: ${email} — Pendiente de aprobación`);
+
+            // v2.2.7: NO generar token. Redirigir al login con estado pendiente.
+            return res.redirect(
+                `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=pendiente_aprobacion&email=${encodeURIComponent(email)}&recien_registrado=true`
+            );
         }
 
         // Generar JWT
@@ -2062,28 +2090,38 @@ app.put('/api/productos/:id', requireAuth, requireAprobado, requireAdmin, async 
 app.patch('/api/productos/:id/destacado', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
+        if (!Number.isFinite(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de producto inválido.' });
+        }
         const { destacado } = req.body;
         if (typeof destacado !== 'boolean') {
             return res.status(400).json({ error: 'El campo "destacado" debe ser boolean.' });
         }
 
+        // v2.2.6: El SUPER ADMIN puede asignar destacados en cualquier local
+        // (porque él ve todos). Si el usuario es admin de local, debe coincidir
+        // con el local del producto.
+        const isSuper = req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin';
+
         // Verificar ownership
         const prodRes = await db.query('SELECT id_local FROM productos WHERE id_producto = $1', [id]);
         if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado.' });
-        if (prodRes.rows[0].id_local !== req.user.id_local) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
+
+        const prodLocal = prodRes.rows[0].id_local;
+        let posicionFinal = null;
 
         if (destacado) {
-            // Asignar siguiente posicion_destacado disponible para este local
+            // Asignar siguiente posicion_destacado disponible para ESTE local
+            // (no el local del usuario cuando es super_admin)
             const next = await db.query(
                 `SELECT COALESCE(MAX(posicion_destacado), 0) + 1 AS next_pos
                  FROM productos WHERE id_local = $1 AND destacado = TRUE`,
-                [req.user.id_local]
+                [prodLocal]
             );
+            posicionFinal = parseInt(next.rows[0].next_pos) || 1;
             await db.query(
                 'UPDATE productos SET destacado = TRUE, posicion_destacado = $1 WHERE id_producto = $2',
-                [parseInt(next.rows[0].next_pos) || 1, id]
+                [posicionFinal, id]
             );
         } else {
             // Quitar destacado. NO reasignamos posiciones de otros para no "saltar"
@@ -2094,7 +2132,7 @@ app.patch('/api/productos/:id/destacado', requireAuth, requireAprobado, requireA
             );
         }
 
-        res.json({ success: true, destacado, posicion_destacado: destacado ? parseInt(next.rows[0].next_pos) : null });
+        res.json({ success: true, destacado, posicion_destacado: posicionFinal });
     } catch (err) {
         console.error('Error toggle destacado:', err);
         res.status(500).json({ error: 'Error interno: ' + (err.message || '') });

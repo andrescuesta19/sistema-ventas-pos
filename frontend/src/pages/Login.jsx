@@ -113,6 +113,34 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
     return () => clearTimeout(t);
   }, [step]);
 
+  // v2.2.7: Detectar mensajes de URL (después de Google OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorCode = params.get('error');
+    const isRecienRegistrado = params.get('recien_registrado') === 'true';
+    const emailParam = params.get('email');
+
+    if (errorCode === 'pendiente_aprobacion') {
+      if (isRecienRegistrado) {
+        setError(
+          '✅ Cuenta creada con Google. Tu solicitud fue recibida y está pendiente de aprobación del super-administrador. Te enviaremos un correo cuando puedas ingresar.'
+        );
+      } else {
+        setError(
+          '⏳ Tu cuenta con Google aún está pendiente de aprobación del super-administrador. Te notificaremos cuando esté lista.'
+        );
+      }
+      if (emailParam) setCorreo(decodeURIComponent(emailParam));
+      // Limpia el query string de la URL para que no quede pegado al recargar
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    } else if (errorCode === 'cuenta_desactivada') {
+      setError('Tu cuenta ha sido desactivada. Contacta al administrador.');
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, []);
+
   // PASO 1 → 2
   const handleContinuar = (e) => {
     e.preventDefault();
