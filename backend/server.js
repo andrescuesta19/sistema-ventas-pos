@@ -317,7 +317,9 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         const { rows: productos } = await db.query(`
             SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, p.marca, p.genero, c.nombre_categoria
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
-            WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true ORDER BY p.stock_actual DESC
+            WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true
+            -- v2.2.7: destacados primero (orden manual), luego por stock_actual
+            ORDER BY COALESCE(p.destacado, FALSE) DESC, COALESCE(p.posicion_destacado, 999999) ASC, p.stock_actual DESC
         `, [idLocal]);
 
         // Para cada producto, buscar TODAS las imágenes de la galería (solo URLs http/https)
