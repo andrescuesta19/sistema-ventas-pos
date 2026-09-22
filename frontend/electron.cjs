@@ -93,7 +93,10 @@ function startBackendInProduction() {
       PORT: process.env.PORT || '3000',
       HOST: process.env.HOST || '0.0.0.0',
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    // v2.2.7: usar 'inherit' para que el child use el mismo TTY que el padre.
+    // Antes era ['ignore', 'pipe', 'pipe'] que en macOS a veces hace que el
+    // proceso muera inmediatamente si Electron no esta listo para leer.
+    stdio: ['ignore', 'inherit', 'inherit'],
   });
 
   backendProcess.stdout.on('data', (data) => {
