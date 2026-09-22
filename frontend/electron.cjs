@@ -803,20 +803,16 @@ app.whenReady().then(async () => {
       }
 
       // 🔄 HEALTH CHECK PERIÓDICO (watchdog continuo)
-      // Cada 10s verificamos que el backend responda. Si no responde,
-      // y el proceso tampoco existe, lo reiniciamos automáticamente.
+      // Cada 30s verificamos que el proceso backend este vivo. No se hacen
+      // chequeos de puerto que maten el proceso (eso causaba bucles de reinicio
+      // cuando el backend tardaba >1.5s en arrancar).
       backendHealthCheckInterval = setInterval(async () => {
-        if (!backendProcess) return; // El watchdog de exit ya está manejando
-        const portOpen = await isPortOpen('127.0.0.1', BACKEND_PORT, 1500);
-        if (!portOpen && backendProcess) {
-          console.warn('⚠ Health check: backend no responde en puerto. Forzando reinicio...');
-          try {
-            backendProcess._killed = true;
-            backendProcess.kill('SIGKILL');
-          } catch {}
-          // El handler de exit lo va a detectar y reiniciar
+        // Solo actuar si el proceso REALMENTE murio (no existe)
+        if (!backendProcess || backendProcess.killed || backendProcess.exitCode !== null) {
+          console.warn('⚠ Health check: el proceso backend ya no existe.');
+          // El watchdog de 'exit' se encargara de reiniciar
         }
-      }, 10000);
+      }, 30000);
 
       // v2.1.1: Reportar instalación + check de actualizaciones remotas
       reportarInstalacion();
