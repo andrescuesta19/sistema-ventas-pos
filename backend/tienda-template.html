@@ -278,19 +278,41 @@ button{font-family:inherit}
 .visor__carousel{position:relative;display:flex;align-items:center;justify-content:center;gap:0;min-height:300px}
 .visor__slides{display:flex;overflow:hidden;max-width:80vw;max-height:66vh;border-radius:12px}
 .visor__slides img{width:100%;height:auto;max-height:66vh;object-fit:contain;flex-shrink:0;transition:transform .2s}
-.visor__arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:2rem;width:44px;height:44px;border-radius:50%;cursor:pointer;display:grid;place-items:center;z-index:5;transition:background .2s}
-.visor__arrow:hover{background:rgba(255,255,255,.3)}
+/* v2.2.8: flechas del carousel más visibles (antes muy transparentes).
+   Fondo sólido semi-opaco + sombra para destacar sobre fotos claras. */
+.visor__arrow{position:absolute;top:50%;transform:translateY(-50%);
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.4);color:#fff;
+  font-size:1.8rem;width:44px;height:44px;border-radius:50%;cursor:pointer;
+  display:grid;place-items:center;z-index:5;
+  transition:background .2s, transform .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.visor__arrow:hover{background:rgba(0,0,0,.75)}
+.visor__arrow:active{transform:translateY(-50%) scale(.92)}
 .visor__arrow--left{left:8px}
 .visor__arrow--right{right:8px}
 .visor__dots{display:flex;gap:6px;justify-content:center;margin-top:.7rem}
-.visor__dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);border:0;cursor:pointer;transition:background .2s}
+.visor__dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.4);border:0;cursor:pointer;transition:background .2s}
 .visor__dot.active{background:#fff}
 .visor__n{color:#fff;margin-top:.9rem;font-size:.95rem}
 .visor__p{color:var(--silver-l);font-size:1.25rem;font-weight:800;margin-top:.2rem}
+/* v2.2.8: botones de acción (Agregar/Zoom/Rotar) más opacos y visibles.
+   Antes eran rgba(255,255,255,.1) que desaparecía sobre fotos claras. */
 .visor__acc{display:flex;gap:.5rem;justify-content:center;margin-top:1rem;flex-wrap:wrap}
-.visor__acc button{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;
-  border-radius:9px;padding:.5rem .9rem;cursor:pointer;font-size:.85rem}
-.visor__x{position:absolute;top:14px;right:18px;border:0;background:none;color:#fff;font-size:2rem;cursor:pointer}
+.visor__acc button{border:1px solid rgba(255,255,255,.5);background:rgba(0,0,0,.55);
+  color:#fff;border-radius:9px;padding:.55rem .95rem;cursor:pointer;font-size:.85rem;
+  font-weight:600;transition:background .2s;
+  box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.visor__acc button:hover{background:rgba(0,0,0,.75)}
+/* v2.2.8: botón X de cerrar con fondo sólido circular para que SIEMPRE
+   sea visible sobre cualquier foto (antes era solo texto blanco sin fondo,
+   invisible sobre fondos claros). Hitbox 44x44 para touch móvil. */
+.visor__x{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;
+  background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);color:#fff;
+  font-size:1.6rem;font-weight:300;cursor:pointer;display:grid;place-items:center;
+  line-height:1;z-index:10;transition:background .2s, transform .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.visor__x:hover{background:rgba(0,0,0,.85)}
+.visor__x:active{transform:scale(.92)}
 
 /* ─────────── PIE ─────────── */
 /* ─────────── FOOTER ANIMADO ─────────── */
