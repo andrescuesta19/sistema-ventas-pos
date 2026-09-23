@@ -319,7 +319,7 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         }
 
         const { rows: [local] } = await db.query(
-            'SELECT id_local, nombre_local, direccion, telefono, ciudad FROM locales WHERE id_local = $1', [idLocal]
+            'SELECT id_local, nombre_local, direccion, telefono, telefono_whatsapp_2, ciudad FROM locales WHERE id_local = $1', [idLocal]
         );
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
@@ -363,6 +363,9 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
 
         const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
         const telWA = (local.telefono || '').replace(/\D/g, '');
+        // v2.2.8: Segunda línea de WhatsApp (opcional). Si está vacía, telWA2
+        // queda como string vacío y el template renderiza solo el primer botón.
+        const telWA2 = (local.telefono_whatsapp_2 || '').replace(/\D/g, '');
         const baseUrl = `${req.protocol}://${req.get('host')}`;
 
         // Optimizar imágenes de Cloudinary con transformaciones para que se vean
@@ -422,6 +425,7 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + local.direccion : '')
             .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + local.ciudad : '')
             .replace(/\{\{TELEFONO\}\}/g, telWA)
+            .replace(/\{\{TELEFONO_2\}\}/g, telWA2)
             .replace(/\{\{TOTAL\}\}/g, String(productos.length))
             .replace(/\{\{CATEGORIAS\}\}/g, catsHTML)
             .replace(/\{\{PRODUCTOS\}\}/g, prodsHTML)
@@ -557,6 +561,17 @@ const loginLimiter = rateLimit({
     message: { error: 'Demasiados intentos de login. Espera 15 minutos.' },
     // No contar intentos exitosos (para no molestar al usuario legítimo)
     skipSuccessfulRequests: true,
+});
+
+// v2.2.7: rate limit específico para /api/usuarios/:id/avatar.
+// Previene DoS (cada request puede devolver hasta 250KB de base64) y abuso
+// del disparador de migración a Cloudinary (que cuesta API calls).
+const avatarLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 min
+    max: 30,                 // 30 requests por minuto por IP (más que suficiente para refresh + preload)
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiadas solicitudes de avatar. Espera un momento.' },
 });
 
 // === A2-fix: JWT ===
@@ -845,7 +860,15 @@ app.post('/api/auth/login', loginLimiter, honeypotBlock, async (req, res) => {
                 verificado: row.verificado,
                 telefono: row.telefono,
                 documento_identidad: row.documento_identidad,
-                avatar_url: row.avatar_url,  // v2.2.x: incluir avatar para que persista al login
+                // v2.2.7: NO enviar el avatar_url completo en login.
+                // Si es una URL http(s) (Google, etc.) → enviarla.
+                // Si es base64 (data:image/...) → NO enviarla (puede ser >500KB).
+                // El frontend usará has_avatar para saber si debe llamar
+                // /api/usuarios/:id/avatar para obtenerlo.
+                avatar_url: (typeof row.avatar_url === 'string' && /^https?:\/\//.test(row.avatar_url))
+                    ? row.avatar_url
+                    : null,
+                has_avatar: !!(row.avatar_url && typeof row.avatar_url === 'string' && row.avatar_url.length > 0),
             }
         });
     } catch (err) {
@@ -938,7 +961,11 @@ app.post('/api/auth/google', loginLimiter, async (req, res) => {
                 rol: user.rol,
                 id_local: user.id_local,
                 nombre_local: user.nombre_local,
-                avatar_url: user.avatar_url,
+                // v2.2.7: misma protección — no enviar avatar base64
+                avatar_url: (typeof user.avatar_url === 'string' && /^https?:\/\//.test(user.avatar_url))
+                    ? user.avatar_url
+                    : null,
+                has_avatar: !!(user.avatar_url && typeof user.avatar_url === 'string' && user.avatar_url.length > 0),
             }
         });
     } catch (err) {
@@ -1033,13 +1060,17 @@ app.get('/api/auth/google/callback', async (req, res) => {
         });
 
         // Redirigir al app via pos:// protocol
+        // v2.2.7: misma protección — no enviar avatar base64
         const userData = encodeURIComponent(JSON.stringify({
             id_usuario: user.id_usuario,
             nombre: user.nombre,
             rol: user.rol,
             id_local: user.id_local,
             nombre_local: user.nombre_local,
-            avatar_url: user.avatar_url,
+            avatar_url: (typeof user.avatar_url === 'string' && /^https?:\/\//.test(user.avatar_url))
+                ? user.avatar_url
+                : null,
+            has_avatar: !!(user.avatar_url && typeof user.avatar_url === 'string' && user.avatar_url.length > 0),
         }));
 
         res.redirect(`pos://callback?token=${jwtToken}&user=${userData}`);
@@ -1201,16 +1232,114 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
     // Devolvemos datos actualizados del usuario desde la BD
     try {
         const { rows } = await db.query(`
-            SELECT u.id_usuario, u.nombre, u.correo, u.rol, u.id_local, u.verificado, u.estado, u.documento_identidad, u.telefono, u.avatar_url, l.nombre_local, l.nit, l.direccion, l.ciudad, l.telefono as telefono_local
+            SELECT u.id_usuario, u.nombre, u.correo, u.rol, u.id_local, u.verificado, u.estado, u.documento_identidad, u.telefono, u.avatar_url, l.nombre_local, l.nit, l.direccion, l.ciudad, l.telefono as telefono_local, l.telefono_whatsapp_2
             FROM usuarios u
             LEFT JOIN locales l ON u.id_local = l.id_local
             WHERE u.id_usuario = $1
         `, [Number(req.user.id_usuario)]);
         if (rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
-        res.json(rows[0]);
+        const user = rows[0];
+        // v2.2.7: NO devolver el avatar completo si es base64 (data:image/...)
+        // Puede pesar >500KB y enlentece login + /me. Solo devolver URLs http(s).
+        // Si es base64, el frontend debe llamar /api/usuarios/:id/avatar
+        if (user.avatar_url && typeof user.avatar_url === 'string' && user.avatar_url.startsWith('data:')) {
+            user.has_avatar = true;
+            user.avatar_url = null;
+        } else if (user.avatar_url && typeof user.avatar_url === 'string') {
+            user.has_avatar = true;
+            // dejar user.avatar_url tal cual (es URL http(s))
+        } else {
+            user.has_avatar = false;
+            user.avatar_url = null;
+        }
+        res.json(user);
     } catch (err) {
         console.error('Error en /me:', err);
         res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// =====================================================
+// v2.2.7: AVATAR ON-DEMAND
+// Devuelve el avatar del usuario. Si está como base64 (legacy),
+// lo sube a Cloudinary en background y devuelve la URL.
+// El frontend usa este endpoint en vez de recibir el base64 completo
+// en cada login/me (que podía pesar >500KB).
+// =====================================================
+app.get('/api/usuarios/:id/avatar', avatarLimiter, requireAuth, async (req, res) => {
+    try {
+        const idUsuario = parseInt(req.params.id, 10);
+        if (!idUsuario || isNaN(idUsuario)) {
+            return res.status(400).json({ error: 'ID de usuario inválido.' });
+        }
+        // v2.2.7: sólo el dueño del avatar puede verlo (o el super-admin)
+        const idSolicitante = Number(req.user.id_usuario);
+        const rolSolicitante = req.user.rol;
+        const esSuperAdmin = rolSolicitante === 'SuperAdmin' || rolSolicitante === 'superadmin' || req.user.tipo === 'super_admin';
+        if (idSolicitante !== idUsuario && !esSuperAdmin) {
+            return res.status(403).json({ error: 'No tienes permiso para ver este avatar.' });
+        }
+        const { rows } = await db.query(
+            'SELECT avatar_url FROM usuarios WHERE id_usuario = $1',
+            [idUsuario]
+        );
+        if (rows.length === 0 || !rows[0].avatar_url) {
+            return res.status(404).json({ error: 'Avatar no encontrado.' });
+        }
+        const avatar = rows[0].avatar_url;
+        // Si es URL http(s), devolverla directo
+        if (/^https?:\/\//.test(avatar)) {
+            return res.json({ avatar_url: avatar });
+        }
+        // v2.2.7: Lock en memoria para que N requests simultáneos al mismo
+        // usuario no disparen N migraciones paralelas a Cloudinary.
+        if (avatar.startsWith('data:') && useCloudinary) {
+            const lockKey = `avatar_migration_${idUsuario}`;
+            if (!global[lockKey]) {
+                global[lockKey] = (async () => {
+                    try {
+                        const base64Data = avatar.split(',')[1];
+                        if (!base64Data) return;
+                        // v2.2.7: validar tamaño antes de decodificar (DoS)
+                        // base64 tiene ~1.33x el tamaño original. >10MB = problema.
+                        if (base64Data.length > 15 * 1024 * 1024) {
+                            console.warn(`[Avatar] Migración abortada: base64 demasiado grande (${base64Data.length}B)`);
+                            return;
+                        }
+                        const buffer = Buffer.from(base64Data, 'base64');
+                        const cloudinaryUrl = await uploadToCloudinary(buffer, 'usuarios', 'image');
+                        // v2.2.7: UPDATE condicional — solo si el avatar SIGUE
+                        // siendo el base64 original. Evita TOCTOU si el usuario
+                        // cambió su avatar entre el SELECT y el UPDATE.
+                        await db.query(
+                            'UPDATE usuarios SET avatar_url = $1 WHERE id_usuario = $2 AND avatar_url LIKE $3',
+                            [cloudinaryUrl, idUsuario, 'data:%']
+                        );
+                    } catch (err) {
+                        console.warn('[Avatar] No se pudo migrar a Cloudinary:', err.message);
+                    } finally {
+                        // Liberar el lock después de un breve delay para evitar
+                        // races (si llegan 2 requests en el mismo ms, ambos ven lock=false)
+                        setTimeout(() => { delete global[lockKey]; }, 1000);
+                    }
+                })();
+            }
+        }
+        // v2.2.7: si NO hay Cloudinary configurado Y el avatar es base64 gigante
+        // (>200KB), devolver error 503 para no regresar el payload pesado que
+        // queríamos evitar. El frontend mostrará iniciales mientras el admin
+        // configura Cloudinary.
+        if (avatar.startsWith('data:') && !useCloudinary && avatar.length > 200000) {
+            return res.status(503).json({
+                error: 'Avatar no disponible temporalmente.',
+                fallback: true,
+            });
+        }
+        // Devolver el base64 (primera y única vez — próximas llamadas será Cloudinary)
+        return res.json({ avatar_url: avatar });
+    } catch (err) {
+        console.error('Error en /api/usuarios/:id/avatar:', err);
+        res.status(500).json({ error: 'Error al obtener avatar.' });
     }
 });
 
@@ -1648,7 +1777,7 @@ app.get('/api/locales/me', requireAuth, requireAprobado, async (req, res) => {
     try {
         const idLocal = Number(req.user.id_local);
         const r = await db.query(
-            'SELECT id_local, nombre_local, direccion, nit, telefono, ciudad, email FROM locales WHERE id_local = $1',
+            'SELECT id_local, nombre_local, direccion, nit, telefono, telefono_whatsapp_2, ciudad, email FROM locales WHERE id_local = $1',
             [idLocal]
         );
         if (r.rows.length === 0) return res.status(404).json({ error: 'Local no encontrado.' });
@@ -3708,16 +3837,53 @@ app.put('/api/configuracion', requireSuperAdmin, async (req, res) => {
 // PUT: actualizar datos del local (solo admin)
 app.put('/api/locales/me', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
     try {
-        const { nombre_local, direccion, nit, telefono, ciudad, email } = req.body;
+        // v2.2.8: telefono_whatsapp_2 es OPCIONAL (segunda línea de WhatsApp).
+        // Si llega como string vacío o undefined, se guarda como NULL.
+        const { nombre_local, direccion, nit, telefono, telefono_whatsapp_2, ciudad, email } = req.body;
         if (!nombre_local || !nombre_local.trim()) {
             return res.status(400).json({ error: 'El nombre del local es obligatorio.' });
         }
+        // v2.2.8: validación defensiva de telefono_whatsapp_2.
+        // - Si llega como no-string → 400 (evita TypeError si es array/objeto).
+        // - Si llega con >30 chars → 400 (DoS amplification, columna TEXT en BD).
+        // - Si no es vacío y no encaja con formato E.164 flexible → 400.
+        if (telefono_whatsapp_2 !== undefined && telefono_whatsapp_2 !== null && typeof telefono_whatsapp_2 !== 'string') {
+            return res.status(400).json({ error: 'telefono_whatsapp_2 debe ser un texto.' });
+        }
+        const telWA2Raw = telefono_whatsapp_2 ? String(telefono_whatsapp_2).trim() : '';
+        if (telWA2Raw.length > 30) {
+            return res.status(400).json({ error: 'telefono_whatsapp_2 demasiado largo (máx 30 caracteres).' });
+        }
+        // v2.2.8: validación coherente con el template. El template solo muestra
+        // el segundo botón si sanitizarPhone(PHONE_2).length >= 8. Si aceptamos
+        // números de 7 dígitos en backend, el admin cree haber configurado algo
+        // que NO se muestra en la tienda pública (bug silencioso).
+        if (telWA2Raw && !/^\+?[\d\s\-()]{8,30}$/.test(telWA2Raw)) {
+            return res.status(400).json({ error: 'Formato de telefono_whatsapp_2 inválido. Use dígitos, espacios, + ( ) - y mínimo 8 dígitos.' });
+        }
+        // Misma validación defensiva para telefono (línea principal)
+        if (telefono !== undefined && telefono !== null && typeof telefono !== 'string') {
+            return res.status(400).json({ error: 'telefono debe ser un texto.' });
+        }
+        const telRaw = telefono ? String(telefono).trim() : '';
+        if (telRaw.length > 30) {
+            return res.status(400).json({ error: 'telefono demasiado largo (máx 30 caracteres).' });
+        }
+        if (telRaw && !/^\+?[\d\s\-()]{8,30}$/.test(telRaw)) {
+            return res.status(400).json({ error: 'Formato de telefono inválido. Mínimo 8 dígitos.' });
+        }
+        // v2.2.8: al menos una línea de WhatsApp debe estar configurada.
+        // Si no hay ninguna, la tienda queda sin forma de contacto → bug UX.
+        if (!telRaw && !telWA2Raw) {
+            return res.status(400).json({ error: 'Debes configurar al menos una línea de WhatsApp (principal o secundaria).' });
+        }
         const idLocal = Number(req.user.id_local);
+        const telWA2 = telWA2Raw || null;
         await db.query(
             `UPDATE locales
-             SET nombre_local = $1, direccion = $2, nit = $3, telefono = $4, ciudad = $5, email = $6
-             WHERE id_local = $7`,
-            [nombre_local.trim(), direccion?.trim() || null, nit?.trim() || null, telefono?.trim() || null, ciudad?.trim() || null, email?.trim() || null, idLocal]
+             SET nombre_local = $1, direccion = $2, nit = $3, telefono = $4, telefono_whatsapp_2 = $5, ciudad = $6, email = $7
+             WHERE id_local = $8`,
+            [nombre_local.trim(), direccion?.trim() || null, nit?.trim() || null, telRaw || null, telWA2, ciudad?.trim() || null, email?.trim() || null, idLocal]
         );
         res.json({ success: true });
     } catch (err) {
@@ -3774,13 +3940,37 @@ app.put('/api/auth/mi-perfil', requireAuth, requireAprobado, async (req, res) =>
             if (avatar_url === null || avatar_url === '') {
                 avatarSanitizado = null;
             } else if (typeof avatar_url === 'string') {
-                if (avatar_url.startsWith('data:image/') && avatar_url.length < 800000) {
-                    // data:image/png;base64,... hasta ~600KB de imagen
+                // v2.2.7: lista blanca de tipos MIME permitidos para data URIs.
+                // CRÍTICO: NO aceptamos data:image/svg+xml porque SVG puede
+                // contener <script> que se ejecuta si se abre en nueva pestaña
+                // o se renderiza inline (XSS).
+                const ALLOWED_DATA_PREFIXES = [
+                    'data:image/png',
+                    'data:image/jpeg',
+                    'data:image/jpg',
+                    'data:image/webp',
+                    'data:image/gif',
+                ];
+                const isAllowedData = ALLOWED_DATA_PREFIXES.some(p => avatar_url.startsWith(p));
+                if (isAllowedData && avatar_url.length < 250000) {
+                    // v2.2.7: bajado de 800KB a 250KB para evitar payloads
+                    // gigantes. Imágenes >200KB se recomienda subirlas
+                    // directamente a Cloudinary desde el frontend.
                     avatarSanitizado = avatar_url;
-                } else if (/^https?:\/\//.test(avatar_url) && avatar_url.length < 500) {
+                } else if (isAllowedData) {
+                    return res.status(400).json({
+                        error: 'La imagen es demasiado grande (>200KB). Reduce su tamaño o usa una URL externa.'
+                    });
+                } else if (avatar_url.startsWith('data:image/svg')) {
+                    return res.status(400).json({ error: 'SVG no permitido como avatar (riesgo de seguridad).' });
+                } else if (/^https:\/\//.test(avatar_url) && avatar_url.length < 500) {
+                    // v2.2.7: solo HTTPS (no HTTP) para evitar tracking/beacons
+                    // en red local o MITM.
                     avatarSanitizado = avatar_url;
+                } else if (/^http:\/\//.test(avatar_url)) {
+                    return res.status(400).json({ error: 'Solo se permiten URLs HTTPS (no HTTP).' });
                 } else {
-                    return res.status(400).json({ error: 'avatar_url inválido (debe ser data:image o http(s)).' });
+                    return res.status(400).json({ error: 'avatar_url inválido (debe ser data:image/png|jpeg|webp|gif o https://).' });
                 }
             }
         }

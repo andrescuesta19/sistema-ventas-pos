@@ -23,7 +23,7 @@ const Configuracion = ({ user }) => {
   const [pwdSaving, setPwdSaving] = useState(false);
 
   // Mi local
-  const [local, setLocal] = useState({ nombre_local: '', direccion: '', nit: '', telefono: '', ciudad: '', email: '' });
+  const [local, setLocal] = useState({ nombre_local: '', direccion: '', nit: '', telefono: '', telefono_whatsapp_2: '', ciudad: '', email: '' });
   const [localMsg, setLocalMsg] = useState({ type: '', text: '' });
   const [localSaving, setLocalSaving] = useState(false);
 
@@ -118,6 +118,7 @@ const Configuracion = ({ user }) => {
         direccion: me.direccion || '',
         nit: me.nit || '',
         telefono: me.telefono_local || '',
+        telefono_whatsapp_2: me.telefono_whatsapp_2 || '',
         ciudad: me.ciudad || '',
         email: me.email || '',
       });
@@ -392,11 +393,31 @@ const Configuracion = ({ user }) => {
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.3rem' }}>Teléfono</label>
                 <FieldInput icon={Phone} type="tel" value={local.telefono} onChange={e => setLocal({ ...local, telefono: e.target.value })} disabled={!esAdmin} />
+                {local.telefono && !/^\+?[\d\s\-()]{8,30}$/.test(local.telefono.trim()) && (
+                  <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                    Formato inválido. Mínimo 8 dígitos.
+                  </div>
+                )}
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.3rem' }}>Ciudad</label>
                 <FieldInput icon={MapPin} type="text" value={local.ciudad} onChange={e => setLocal({ ...local, ciudad: e.target.value })} disabled={!esAdmin} />
               </div>
+            </div>
+            {/* v2.2.8: Segunda línea de WhatsApp. Opcional — si está vacía, la tienda
+                pública solo muestra la línea principal. Validación inline coherente
+                con la regex del backend (server.js PUT /api/locales/me): 8-30 chars,
+                dígitos, espacios, +, -, (, ). */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                WhatsApp Línea 2 <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.75rem' }}>(opcional — se muestra como "📱 Otra línea" en la tienda)</span>
+              </label>
+              <FieldInput icon={Phone} type="tel" placeholder="+57 300 123 4567" value={local.telefono_whatsapp_2} onChange={e => setLocal({ ...local, telefono_whatsapp_2: e.target.value })} disabled={!esAdmin} />
+              {local.telefono_whatsapp_2 && !/^\+?[\d\s\-()]{8,30}$/.test(local.telefono_whatsapp_2.trim()) && (
+                <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                  Formato inválido. Mínimo 8 dígitos (puede incluir +, espacios, guiones y paréntesis).
+                </div>
+              )}
             </div>
             {esAdmin && (
               <div style={{ marginTop: '0.5rem' }}>
