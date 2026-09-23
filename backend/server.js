@@ -428,7 +428,14 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         // dinámicos para Open Graph / Twitter Card. Esto permite que al compartir
         // el link por WhatsApp, el cliente vea una VISTA PREVIA del producto
         // (foto + nombre + precio) en lugar del logo genérico.
-        let ogTitulo = null, ogDesc = null, ogImagen = null, ogUrl = null;
+        // Si NO hay ?p válido, los ogTitulo/etc quedan con el fallback genérico
+        // (logo CJP WATCH) que se inyecta directo en el template via .replace().
+        let ogTitulo, ogDesc, ogImagen, ogUrl;
+        let ogTituloFallback = 'CJP WATCH — Relojería 100% Original';
+        let ogDescFallback = 'Las mejores marcas internacionales con envío a toda Colombia desde ' +
+                             (local.nombre_local || 'CJP WATCH') + ', Turbo, Antioquia. Garantía real en cada reloj.';
+        let ogImagenFallback = baseUrl + '/logos/tienda-logo.png';
+        let ogUrlFallback = baseUrl + '/tienda/' + idLocal;
         if (idProductoPreview) {
             // Buscamos el producto SOLO si pertenece al local correcto (evita
             // que un usuario malicioso ?p=999 de otro local rompa el preview).
@@ -446,10 +453,8 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
                 // genera en JPG/PNG según el cliente que la pida).
                 let ogImg = prodPreview.imagen_url || '';
                 if (ogImg && ogImg.startsWith('/uploads/')) ogImg = baseUrl + ogImg;
-                ogImagen = ogImg || (baseUrl + '/logos/tienda-logo.png');
+                ogImagen = ogImg || ogImagenFallback;
             }
-            // Si el producto no existe o no es del local, los ogTitulo/etc quedan
-            // null → el template usa los valores por defecto (logo genérico).
         }
 
         let html = tiendaTemplate
@@ -465,12 +470,12 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             .replace(/\{\{PRODUCTOS\}\}/g, prodsHTML)
             .replace(/\{\{PRODUCTOS_JSON\}\}/g, prodsJSON)
             // v2.2.8: Open Graph dinámico del producto (preview en WhatsApp).
-            // Si no hay ?p=ID válido, los OG_* quedan como string vacío y el
-            // template los reemplaza por el logo CJP WATCH genérico.
-            .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || '')
-            .replace(/\{\{OG_DESC\}\}/g, ogDesc || '')
-            .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || '')
-            .replace(/\{\{OG_URL\}\}/g, ogUrl || '');
+            // Si hay producto (?p=ID válido), usamos los datos del producto.
+            // Si no, usamos los fallbacks (logo CJP WATCH genérico).
+            .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || ogTituloFallback)
+            .replace(/\{\{OG_DESC\}\}/g, ogDesc || ogDescFallback)
+            .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || ogImagenFallback)
+            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback);
 
         res.send(html);
     } catch (err) {

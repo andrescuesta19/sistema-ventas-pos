@@ -15,27 +15,27 @@
      por WhatsApp, el bot de WhatsApp escanea estos meta tags y muestra una
      VISTA PREVIA del producto (foto + nombre + precio) en lugar del logo
      genérico. Si el visitante NO está viendo un producto específico (?p vacío
-     o producto inválido), los placeholders OG_TITULO/OG_DESC/OG_IMAGEN/OG_URL
-     vienen vacíos desde el backend y caen al fallback (logo CJP WATCH). -->
+     o producto inválido), el backend usa el fallback (logo CJP WATCH) — el
+     template solo necesita poner los placeholders, sin concatenar. -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="{{OG_TITULO}}CJP WATCH — Relojería 100% Original">
-<meta property="og:description" content="{{OG_DESC}}Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
-<meta property="og:image" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
-<meta property="og:image:secure_url" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
+<meta property="og:title" content="{{OG_TITULO}}">
+<meta property="og:description" content="{{OG_DESC}}">
+<meta property="og:image" content="{{OG_IMAGEN}}">
+<meta property="og:image:secure_url" content="{{OG_IMAGEN}}">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1254">
 <meta property="og:image:height" content="1254">
-<meta property="og:image:alt" content="{{OG_TITULO}}CJP WATCH - Relojería 100% Original">
-<meta property="og:url" content="{{OG_URL}}{{BASE_URL}}/tienda/{{ID_LOCAL}}">
+<meta property="og:image:alt" content="{{OG_TITULO}}">
+<meta property="og:url" content="{{OG_URL}}">
 <meta property="og:site_name" content="CJP WATCH">
 <meta property="og:locale" content="es_CO">
 
 <!-- Twitter Card (mismos datos dinámicos que Open Graph) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{OG_TITULO}}CJP WATCH — Relojería 100% Original">
-<meta name="twitter:description" content="{{OG_DESC}}Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
-<meta name="twitter:image" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
-<meta name="twitter:image:alt" content="{{OG_TITULO}}CJP WATCH - Relojería 100% Original">
+<meta name="twitter:title" content="{{OG_TITULO}}">
+<meta name="twitter:description" content="{{OG_DESC}}">
+<meta name="twitter:image" content="{{OG_IMAGEN}}">
+<meta name="twitter:image:alt" content="{{OG_TITULO}}">
 
 <!-- Favicon -->
 <link rel="icon" type="image/png" href="/logos/tienda-logo.png">
