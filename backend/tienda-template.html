@@ -523,8 +523,13 @@ footer::after{
 
 <!-- v2.2.8: Solo existe waFab (línea principal). No hay FAB-2 a propósito
      para no saturar la UI móvil con dos botones flotantes. La segunda línea
-     se muestra dentro del carrito (cartWaBtn2) y en el footer (footWa2). -->
-<a class="wa-fab" id="waFab" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+     se muestra dentro del carrito (cartWaBtn2) y en el footer (footWa2).
+     v2.2.8: el mensaje es CONTEXTUAL — si el visitante abrió el visor de un
+     producto, el mensaje menciona ese producto por nombre. Si no, es genérico.
+     El onclick usa location.href (no window.open) para evitar el menú
+     "Compartir" nativo en móviles. -->
+<a class="wa-fab" id="waFab" href="#" target="_blank" rel="noopener"
+   onclick="return abrirFabWa(event)" aria-label="WhatsApp">💬</a>
 
 <!-- ══════════ VISOR ══════════ -->
 <div class="visor" id="visor" onclick="cerrarVisor(event)">
@@ -959,8 +964,12 @@ function actualizarBotonCarrito(){
 const _ultimoWA = { t: 0, url: '' };
 const WA_DEBOUNCE_MS = 600;
 
+// Mensaje genérico compartido por el FAB y el footer cuando no hay
+// producto seleccionado en el visor.
+const FAB_MSG_GENERIC = 'Hola CJP WATCH, quiero información sobre sus relojes.';
+
 // Abre WhatsApp con la URL dada, evitando el menú "Compartir" nativo.
-// Usado por ambos botones del carrito (línea 1 y línea 2).
+// Usado por ambos botones del carrito (línea 1 y línea 2) y por el FAB.
 function _abrirWhatsApp(url, e){
   const ahora = Date.now();
   if (_ultimoWA.url === url && (ahora - _ultimoWA.t) < WA_DEBOUNCE_MS) return false;
@@ -980,6 +989,63 @@ function _abrirWhatsApp(url, e){
   }
   window.location.href = url;
   return false;
+}
+
+// Construye el mensaje del FAB según el contexto actual.
+// - Si hay un producto abierto en el visor → lo menciona por nombre
+// - Si no → mensaje genérico
+// Devuelve la URL lista para asignar al href del FAB.
+function construirLinkFab(){
+  const phoneLimpio = sanitizarPhone(PHONE);
+  let texto = FAB_MSG_GENERIC;
+  if (productoActual && productoActual.n) {
+    texto = 'Hola CJP WATCH, estoy viendo este reloj en su página web:\n\n' +
+            '• ' + productoActual.n + '\n' +
+            '  Precio: ' + money(productoActual.p) + '\n\n' +
+            '¿Me confirman disponibilidad y envío?';
+  }
+  const url = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) +
+              '&text=' + encodeURIComponent(texto);
+  return { texto, url };
+}
+
+// Actualiza el href y la apariencia del FAB según haya producto visible o no.
+// Si PHONE no está configurado, deshabilita el FAB como los demás botones.
+// Llamada desde: DOMContentLoaded (inicio), abrirVisor (mensaje contextual),
+// cerrarVisor (vuelve a genérico).
+function actualizarFabWa(){
+  const fab = document.getElementById('waFab');
+  if (!fab) return;
+  const phoneOk = sanitizarPhone(PHONE).length >= 8;
+  if (!phoneOk) {
+    fab.removeAttribute('href');
+    fab.style.opacity = '0.45';
+    fab.style.pointerEvents = 'none';
+    fab.setAttribute('aria-disabled', 'true');
+    fab.setAttribute('aria-label', 'WhatsApp no disponible');
+    return;
+  }
+  fab.removeAttribute('aria-disabled');
+  fab.style.opacity = '';
+  fab.style.pointerEvents = '';
+  // v2.2.8: aria-label contextual para lectores de pantalla.
+  // Truncamos a 60 chars para no saturar al usuario con nombres largos.
+  fab.setAttribute('aria-label', productoActual && productoActual.n
+    ? 'WhatsApp — consultar sobre ' + String(productoActual.n).slice(0, 60)
+    : 'WhatsApp');
+  fab.href = construirLinkFab().url;
+}
+
+// Handler del onclick del FAB flotante.
+// Mismo patrón que los botones del carrito: location.href (no window.open)
+// para evitar el menú nativo "Compartir" en móviles.
+function abrirFabWa(e){
+  const fab = document.getElementById('waFab');
+  if (!fab || fab.getAttribute('aria-disabled') === 'true') {
+    if (e) e.preventDefault();
+    return false;
+  }
+  return _abrirWhatsApp(fab.href, e);
 }
 
 // Handler del onclick del botón principal del carrito (línea 1).
@@ -1045,6 +1111,9 @@ function abrirVisor(id){
   document.getElementById('visorPrecio').textContent = money(p.p);
   document.getElementById('visor').classList.add('on');
   document.body.style.overflow = 'hidden';
+  // v2.2.8: actualizar el FAB para que el mensaje mencione el producto
+  // que el visitante está viendo. El mensaje se reconstruye al cerrar el visor.
+  actualizarFabWa();
 }
 
 function renderVisorCarousel(){
@@ -1070,6 +1139,11 @@ function cerrarVisor(e){
   const vid = document.getElementById('visorVid'); vid.pause(); vid.removeAttribute('src');
   document.getElementById('visor').classList.remove('on');
   document.body.style.overflow = '';
+  // v2.2.8: resetear productoActual al cerrar el visor para que el FAB
+  // vuelva al mensaje genérico. Sin esto, el FAB seguiría mencionando
+  // el último producto abierto aunque el visitante ya no lo esté viendo.
+  productoActual = null;
+  actualizarFabWa();
 }
 function zoom(f){
   escala = Math.max(0.4, Math.min(5, escala * f));
@@ -1112,27 +1186,29 @@ document.addEventListener('DOMContentLoaded', () => {
   // generar URLs inválidas que muestran error al cliente.
   const phoneOk = phoneLimpio.length >= 8;
   const phone2Ok = phoneLimpio2.length >= 8;
-  const waMsg = encodeURIComponent('Hola CJP WATCH, quiero información sobre sus relojes.');
-  const wa = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) + '&text=' + waMsg;
-  const wa2 = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio2) + '&text=' + waMsg;
-  // Línea principal
-  ['waFab', 'footWa'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (phoneOk) { el.setAttribute('href', wa); }
-    else { el.removeAttribute('href'); el.style.opacity = '0.45'; el.style.pointerEvents = 'none'; }
-  });
-  // Segunda línea (footer). Si no hay PHONE_2, el botón queda oculto.
+  // Footer (siempre genérico: "quiero información sobre sus relojes")
+  const waFooterMsg = encodeURIComponent(FAB_MSG_GENERIC);
+  const waFooter = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) + '&text=' + waFooterMsg;
+  const waFooter2 = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio2) + '&text=' + waFooterMsg;
+  const footWa = document.getElementById('footWa');
+  if (footWa) {
+    if (phoneOk) { footWa.setAttribute('href', waFooter); }
+    else { footWa.removeAttribute('href'); footWa.style.opacity = '0.45'; footWa.style.pointerEvents = 'none'; }
+  }
   const footWa2 = document.getElementById('footWa2');
   if (footWa2) {
     if (phone2Ok) {
-      footWa2.setAttribute('href', wa2);
+      footWa2.setAttribute('href', waFooter2);
       footWa2.style.display = '';
     } else {
       footWa2.removeAttribute('href');
       footWa2.style.display = 'none';
     }
   }
+  // FAB: el mensaje es contextual (menciona el producto del visor si está abierto)
+  // o genérico. Se actualiza en abrirVisor/cerrarVisor y aquí al inicio.
+  // Como al cargar la página no hay visor abierto, queda el mensaje genérico.
+  actualizarFabWa();
   if (!phoneOk) console.warn('[WhatsApp] PHONE no configurado o inválido, botones deshabilitados.');
   else if (!phone2Ok) console.log('[WhatsApp] PHONE_2 no configurado, segundo botón oculto.');
   pintarMarquesina();
