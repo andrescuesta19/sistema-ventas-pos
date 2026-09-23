@@ -484,7 +484,17 @@ footer::after{
   <div class="cart__items" id="cartItems"></div>
   <div class="cart__foot">
     <div class="cart__tot"><span>Total</span><strong id="cartTotal">$ 0</strong></div>
-    <button class="wa-btn" onclick="pedirWhatsApp()">💬 Pedir por WhatsApp</button>
+    <!--
+      v2.2.8: <a> directo en lugar de <button>+onclick → window.open.
+      - <a href="..."> se sigue nativamente: el navegador abre la app/WhatsApp Web
+        SIN disparar el menú "Compartir" del sistema (iOS Safari sí lo dispara con window.open).
+      - El href se actualiza cada vez que el carrito cambia (ver actualizarCarrito()
+        y construirLinkCarrito()).
+      - El onclick SIEMPRE hace preventDefault() + location.href, por lo que
+        target="_blank" es código muerto; no lo ponemos para evitar confusión.
+    -->
+    <a id="cartWaBtn" class="wa-btn" href="#" rel="noopener noreferrer"
+       onclick="return enviarCarritoWhatsApp(event)">💬 Pedir por WhatsApp</a>
   </div>
 </aside>
 
@@ -826,6 +836,9 @@ function actualizarCarrito(){
       '<span>' + i.q + '</span><button onclick="cambiarCantidad(' + i.id + ',1)">+</button></div>' +
       '</div></div>').join('')
     : '<p style="color:var(--tx-mut);font-size:.88rem;text-align:center;padding:2.5rem 1rem">Tu carrito está vacío.</p>';
+  // Refresca el href del botón de WhatsApp para que incluya SIEMPRE los
+  // productos actuales del carrito. Se llama también al inicio (DOMContentLoaded).
+  actualizarBotonCarrito();
 }
 function abrirCarrito(){ ocultarAviso(); document.getElementById('cart').classList.add('on'); document.getElementById('cartBg').classList.add('on'); document.body.style.overflow = 'hidden'; }
 function cerrarCarrito(){ document.getElementById('cart').classList.remove('on'); document.getElementById('cartBg').classList.remove('on'); document.body.style.overflow = ''; }
@@ -842,14 +855,89 @@ function avisar(p){
 function ocultarAviso(){ document.getElementById('toast').classList.remove('on'); }
 
 /* ── WhatsApp ── */
-function pedirWhatsApp(){
-  if (!carrito.length) { alert('Agrega al menos un reloj antes de enviar el pedido.'); return; }
-  let t = 'Hola CJP WATCH, quiero pedir:\n\n';
-  carrito.forEach(i => { t += '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q) + '\n'; });
-  t += '\nTotal: ' + money(totalCarrito()) + '\n\n¿Me confirman disponibilidad y envío?';
-  // Usar api.whatsapp.com/send en vez de wa.me/ — permite iniciar chat
-  // con cualquier número sin necesidad de tenerlo guardado en contactos
-  window.open('https://api.whatsapp.com/send?phone=' + PHONE + '&text=' + encodeURIComponent(t), '_blank');
+
+// Sanitiza el número de teléfono: solo dígitos y el '+' inicial.
+// Centralizado para no duplicar la lógica en carrito + FAB + footer.
+function sanitizarPhone(p){ return String(p || '').replace(/[^\d+]/g, ''); }
+
+// Construye el texto del pedido con los productos del carrito.
+// Sin efectos secundarios: solo lee carrito y PHONE, devuelve datos.
+function construirLinkCarrito(){
+  const phoneLimpio = sanitizarPhone(PHONE);
+  // Límite defensivo: WhatsApp trunca silenciosamente mensajes largos y
+  // algunos navegadores/webviews cortan la URL a ~2000-8000 chars.
+  // Si el carrito es muy grande, mostramos solo los primeros 8 y avisamos.
+  const MAX_LINEAS = 8;
+  const total = carrito.reduce((t, i) => t + i.p * i.q, 0);
+  let lineas = carrito.slice(0, MAX_LINEAS).map(i => '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q));
+  if (carrito.length > MAX_LINEAS) {
+    const restantes = carrito.length - MAX_LINEAS;
+    lineas.push('… y ' + restantes + ' producto' + (restantes === 1 ? '' : 's') + ' más (ver en el carrito)');
+  }
+  const texto = 'Hola CJP WATCH, quiero pedir:\n\n' +
+                lineas.join('\n') + '\n\n' +
+                'Total: ' + money(total) + '\n\n' +
+                '¿Me confirman disponibilidad y envío?';
+  // api.whatsapp.com/send (no wa.me/) para que funcione aunque el cliente
+  // no tenga el número guardado en sus contactos.
+  const url = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) +
+              '&text=' + encodeURIComponent(texto);
+  return { texto, url };
+}
+
+// Actualiza el href del <a> del carrito cada vez que el carrito cambia.
+// Si el carrito está vacío, el botón queda deshabilitado (incluyendo teclado).
+function actualizarBotonCarrito(){
+  const a = document.getElementById('cartWaBtn');
+  if (!a) return;
+  if (!carrito.length) {
+    a.removeAttribute('href');
+    a.setAttribute('aria-disabled', 'true');
+    a.setAttribute('tabindex', '-1');
+    a.style.opacity = '0.45';
+    a.style.pointerEvents = 'none';
+    return;
+  }
+  a.removeAttribute('aria-disabled');
+  a.removeAttribute('tabindex');
+  a.style.opacity = '';
+  a.style.pointerEvents = '';
+  a.href = construirLinkCarrito().url;
+}
+
+// Flag para evitar doble apertura por doble clic (Electron especialmente).
+let _enviandoWA = false;
+
+// Handler del onclick del botón del carrito.
+// Devuelve false para que el <a> NO navegue (porque window.open con _blank
+// en iOS Safari dispara el menú nativo "Compartir" en lugar de abrir WhatsApp).
+// En su lugar, redirigimos con location.href, que sigue el enlace directamente
+// sin mostrar el menú de compartir del sistema.
+function enviarCarritoWhatsApp(e){
+  if (!carrito.length) {
+    if (e) e.preventDefault();
+    alert('Agrega al menos un reloj antes de enviar el pedido.');
+    return false;
+  }
+  if (_enviandoWA) return false;
+  _enviandoWA = true;
+  setTimeout(() => { _enviandoWA = false; }, 600);
+
+  if (e) e.preventDefault();
+  const url = construirLinkCarrito().url;
+  // En Electron (POS embebido), usamos el bridge seguro del preload si existe,
+  // para abrir WhatsApp en el navegador/app externa en lugar de reemplazar
+  // la ventana del POS. En web normal, location.href evita el menú "Compartir"
+  // nativo de iOS Safari y Android Chrome.
+  if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+    Promise.resolve(window.electronAPI.openExternal(url)).catch(err => {
+      console.error('[WhatsApp] openExternal falló:', err);
+      alert('No se pudo abrir WhatsApp. Copia el pedido y envíalo manualmente.');
+    });
+    return false;
+  }
+  window.location.href = url;
+  return false;
 }
 
 /* ── Visor ── */
@@ -949,11 +1037,21 @@ document.addEventListener('keydown', e => {
 /* ── Arranque ── */
 document.addEventListener('DOMContentLoaded', () => {
   // api.whatsapp.com/send permite a cualquier persona iniciar un chat
-  // aunque no tenga el número guardado en sus contactos (wa.me/ no lo permite)
-  const wa = 'https://api.whatsapp.com/send?phone=' + PHONE + '&text=' +
-    encodeURIComponent('Hola CJP WATCH, quiero información sobre sus relojes.');
-  document.getElementById('waFab').href = wa;
-  document.getElementById('footWa').href = wa;
+  // aunque no tenga el número guardado en sus contactos (wa.me/ no lo permite).
+  const phoneLimpio = sanitizarPhone(PHONE);
+  // Defensa: si el placeholder {{TELEFONO}} no se sustituyó en producción
+  // (PHONE vacío), los botones de WhatsApp quedan deshabilitados en lugar de
+  // generar URLs inválidas que muestran error al cliente.
+  const phoneOk = phoneLimpio.length >= 8;
+  const wa = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) +
+    '&text=' + encodeURIComponent('Hola CJP WATCH, quiero información sobre sus relojes.');
+  ['waFab', 'footWa'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (phoneOk) { el.setAttribute('href', wa); }
+    else { el.removeAttribute('href'); el.style.opacity = '0.45'; el.style.pointerEvents = 'none'; }
+  });
+  if (!phoneOk) console.warn('[WhatsApp] PHONE no configurado o inválido, botones deshabilitados.');
   pintarMarquesina();
   pintarNavegacion();
   actualizarCarrito();
