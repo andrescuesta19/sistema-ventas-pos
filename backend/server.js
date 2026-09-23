@@ -304,6 +304,12 @@ const tiendaPublicaLimiter = rateLimit({
 app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
     try {
         const { idLocal } = req.params;
+        // v2.2.8: ?p=ID indica "preview de un producto específico". Cuando el
+        // visitante comparte este link por WhatsApp, el bot de WhatsApp escanea
+        // los meta tags Open Graph y muestra una tarjeta con foto + nombre + precio.
+        // Si el producto no existe o no es del local, se ignoran los meta tags
+        // personalizados y se usan los genéricos (logo CJP WATCH).
+        const idProductoPreview = parseInt(req.query.p, 10) || null;
 
         // v2.2.7: evitar caché agresivo en Cloudflare/CloudFront para que
         // cambios (destacar producto, nuevo inventario) se vean de inmediato.
@@ -418,6 +424,34 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             `<button class="cat-pill" data-cat="${c.nombre_categoria}" onclick="filterByCategory('${c.nombre_categoria.replace(/'/g, "\\'")}')">${c.nombre_categoria} <span>${c.cantidad}</span></button>`
         ).join('');
 
+        // v2.2.8: Si la URL trae ?p=ID, buscar el producto y generar meta tags
+        // dinámicos para Open Graph / Twitter Card. Esto permite que al compartir
+        // el link por WhatsApp, el cliente vea una VISTA PREVIA del producto
+        // (foto + nombre + precio) en lugar del logo genérico.
+        let ogTitulo = null, ogDesc = null, ogImagen = null, ogUrl = null;
+        if (idProductoPreview) {
+            // Buscamos el producto SOLO si pertenece al local correcto (evita
+            // que un usuario malicioso ?p=999 de otro local rompa el preview).
+            const prodPreview = productos.find(p => p.id_producto === idProductoPreview);
+            if (prodPreview) {
+                // URL absoluta del preview (lo que se mete en og:url)
+                ogUrl = baseUrl + '/tienda/' + idLocal + '?p=' + idProductoPreview;
+                ogTitulo = prodPreview.nombre_producto + ' — CJP WATCH';
+                ogDesc = (prodPreview.marca ? prodPreview.marca + ' • ' : '') +
+                         prodPreview.nombre_producto +
+                         ' • Precio: ' + fmtCOP(prodPreview.precio_venta) +
+                         ' • Envío a toda Colombia';
+                // Imagen: usar la principal (URL absoluta). Si es Cloudinary,
+                // la dejamos como está (Cloudinary ya sirve con f_auto y la
+                // genera en JPG/PNG según el cliente que la pida).
+                let ogImg = prodPreview.imagen_url || '';
+                if (ogImg && ogImg.startsWith('/uploads/')) ogImg = baseUrl + ogImg;
+                ogImagen = ogImg || (baseUrl + '/logos/tienda-logo.png');
+            }
+            // Si el producto no existe o no es del local, los ogTitulo/etc quedan
+            // null → el template usa los valores por defecto (logo genérico).
+        }
+
         let html = tiendaTemplate
             .replace(/\{\{BASE_URL\}\}/g, baseUrl)
             .replace(/\{\{ID_LOCAL\}\}/g, String(idLocal))
@@ -429,7 +463,14 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             .replace(/\{\{TOTAL\}\}/g, String(productos.length))
             .replace(/\{\{CATEGORIAS\}\}/g, catsHTML)
             .replace(/\{\{PRODUCTOS\}\}/g, prodsHTML)
-            .replace(/\{\{PRODUCTOS_JSON\}\}/g, prodsJSON);
+            .replace(/\{\{PRODUCTOS_JSON\}\}/g, prodsJSON)
+            // v2.2.8: Open Graph dinámico del producto (preview en WhatsApp).
+            // Si no hay ?p=ID válido, los OG_* quedan como string vacío y el
+            // template los reemplaza por el logo CJP WATCH genérico.
+            .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || '')
+            .replace(/\{\{OG_DESC\}\}/g, ogDesc || '')
+            .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || '')
+            .replace(/\{\{OG_URL\}\}/g, ogUrl || '');
 
         res.send(html);
     } catch (err) {

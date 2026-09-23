@@ -10,26 +10,32 @@
 <meta name="keywords" content="CJP WATCH, relojes originales, relojería, Colombia, Turbo, Antioquia, TechnoMarine, Invicta, Mulco, garantía">
 <meta name="author" content="CJP WATCH">
 
-<!-- Open Graph (Facebook, WhatsApp, LinkedIn, iMessage, Discord, Slack) -->
+<!-- Open Graph (Facebook, WhatsApp, LinkedIn, iMessage, Discord, Slack).
+     v2.2.8: Cuando el visitante comparte la URL /tienda/:id?p=ID_PRODUCTO
+     por WhatsApp, el bot de WhatsApp escanea estos meta tags y muestra una
+     VISTA PREVIA del producto (foto + nombre + precio) en lugar del logo
+     genérico. Si el visitante NO está viendo un producto específico (?p vacío
+     o producto inválido), los placeholders OG_TITULO/OG_DESC/OG_IMAGEN/OG_URL
+     vienen vacíos desde el backend y caen al fallback (logo CJP WATCH). -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="CJP WATCH — Relojería 100% Original">
-<meta property="og:description" content="Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
-<meta property="og:image" content="{{BASE_URL}}/logos/tienda-logo.png">
-<meta property="og:image:secure_url" content="{{BASE_URL}}/logos/tienda-logo.png">
-<meta property="og:image:type" content="image/png">
+<meta property="og:title" content="{{OG_TITULO}}CJP WATCH — Relojería 100% Original">
+<meta property="og:description" content="{{OG_DESC}}Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
+<meta property="og:image" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
+<meta property="og:image:secure_url" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1254">
 <meta property="og:image:height" content="1254">
-<meta property="og:image:alt" content="CJP WATCH - Relojería 100% Original">
-<meta property="og:url" content="{{BASE_URL}}/tienda/{{ID_LOCAL}}">
+<meta property="og:image:alt" content="{{OG_TITULO}}CJP WATCH - Relojería 100% Original">
+<meta property="og:url" content="{{OG_URL}}{{BASE_URL}}/tienda/{{ID_LOCAL}}">
 <meta property="og:site_name" content="CJP WATCH">
 <meta property="og:locale" content="es_CO">
 
-<!-- Twitter Card -->
+<!-- Twitter Card (mismos datos dinámicos que Open Graph) -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CJP WATCH — Relojería 100% Original">
-<meta name="twitter:description" content="Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
-<meta name="twitter:image" content="{{BASE_URL}}/logos/tienda-logo.png">
-<meta name="twitter:image:alt" content="CJP WATCH - Relojería 100% Original">
+<meta name="twitter:title" content="{{OG_TITULO}}CJP WATCH — Relojería 100% Original">
+<meta name="twitter:description" content="{{OG_DESC}}Las mejores marcas internacionales con envío a toda Colombia desde {{NOMBRE_LOCAL}}, Turbo, Antioquia. Garantía real en cada reloj.">
+<meta name="twitter:image" content="{{OG_IMAGEN}}{{BASE_URL}}/logos/tienda-logo.png">
+<meta name="twitter:image:alt" content="{{OG_TITULO}}CJP WATCH - Relojería 100% Original">
 
 <!-- Favicon -->
 <link rel="icon" type="image/png" href="/logos/tienda-logo.png">
@@ -602,6 +608,11 @@ const PHONE = '{{TELEFONO}}';
 // local no la tiene configurada en la BD), queda como string vacío y el
 // segundo botón del carrito + FAB secundario no se renderizan.
 const PHONE_2 = '{{TELEFONO_2}}';
+// v2.2.8: URL absoluta del backend (https://sistema-ventas-pos-aeka.onrender.com).
+// Se usa para armar links con ?p=ID_PRODUCTO que el vendedor puede tocar desde
+// WhatsApp y ver la vista previa del producto con foto + nombre + precio.
+const BASE_URL_JS = '{{BASE_URL}}';
+const TIENDA_PATH = '/tienda/{{ID_LOCAL}}';
 
 /* ── Marcas fijas del catálogo ── */
 const MARCAS = ['TechnoMarine', 'MULCO', 'INVICTA'];
@@ -889,17 +900,33 @@ function sanitizarPhone(p){ return String(p || '').replace(/[^\d+]/g, ''); }
 // Construye el texto del pedido + URL de WhatsApp para un teléfono dado.
 // Sin efectos secundarios. `phone` puede ser la línea principal o la segunda.
 // Si no se pasa phone, usa PHONE (línea principal).
+// v2.2.8: Cada producto incluye un link con ?p=ID para que el vendedor vea
+// la VISTA PREVIA (foto + nombre + precio) en WhatsApp al tocarlo. Para no
+// inflar el mensaje, los links van en líneas cortas separadas del nombre.
 function construirLinkCarrito(phone){
   const phoneUsar = sanitizarPhone(phone || PHONE);
   // Límite defensivo: WhatsApp trunca silenciosamente mensajes largos y
   // algunos navegadores/webviews cortan la URL a ~2000-8000 chars.
-  // Si el carrito es muy grande, mostramos solo los primeros 8 y avisamos.
-  const MAX_LINEAS = 8;
+  // Si el carrito es muy grande, mostramos solo los primeros 5 con link
+  // y el resto solo como texto (para no romper la URL).
+  const MAX_LINEAS_CON_LINK = 5;
+  const MAX_LINEAS_TEXTO = 8;
   const total = carrito.reduce((t, i) => t + i.p * i.q, 0);
-  let lineas = carrito.slice(0, MAX_LINEAS).map(i => '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q));
-  if (carrito.length > MAX_LINEAS) {
-    const restantes = carrito.length - MAX_LINEAS;
-    lineas.push('… y ' + restantes + ' producto' + (restantes === 1 ? '' : 's') + ' más (ver en el carrito)');
+  // Primer bloque: productos CON link de preview (los más importantes)
+  let lineas = carrito.slice(0, MAX_LINEAS_CON_LINK).map(i =>
+    '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q) + '\n' +
+    '  👉 ' + BASE_URL_JS + TIENDA_PATH + '?p=' + i.id
+  );
+  // Segundo bloque: productos restantes SIN link (solo texto)
+  if (carrito.length > MAX_LINEAS_CON_LINK) {
+    const resto = carrito.slice(MAX_LINEAS_CON_LINK, MAX_LINEAS_TEXTO).map(i =>
+      '• ' + i.n + ' (x' + i.q + ') — ' + money(i.p * i.q)
+    );
+    if (resto.length) lineas = lineas.concat(resto);
+    if (carrito.length > MAX_LINEAS_TEXTO) {
+      const restantes = carrito.length - MAX_LINEAS_TEXTO;
+      lineas.push('… y ' + restantes + ' producto' + (restantes === 1 ? '' : 's') + ' más (ver en el carrito)');
+    }
   }
   const texto = 'Hola CJP WATCH, quiero pedir:\n\n' +
                 lineas.join('\n') + '\n\n' +
@@ -993,15 +1020,20 @@ function _abrirWhatsApp(url, e){
 
 // Construye el mensaje del FAB según el contexto actual.
 // - Si hay un producto abierto en el visor → lo menciona por nombre
+//   y agrega un link con ?p=ID para que el vendedor vea la VISTA PREVIA
+//   del producto (foto + nombre + precio) al tocarlo desde WhatsApp.
 // - Si no → mensaje genérico
 // Devuelve la URL lista para asignar al href del FAB.
 function construirLinkFab(){
   const phoneLimpio = sanitizarPhone(PHONE);
   let texto = FAB_MSG_GENERIC;
   if (productoActual && productoActual.n) {
+    // URL absoluta con ?p=ID para que el preview en WhatsApp muestre el producto.
+    const linkPreview = BASE_URL_JS + TIENDA_PATH + '?p=' + productoActual.id;
     texto = 'Hola CJP WATCH, estoy viendo este reloj en su página web:\n\n' +
             '• ' + productoActual.n + '\n' +
-            '  Precio: ' + money(productoActual.p) + '\n\n' +
+            '  Precio: ' + money(productoActual.p) + '\n' +
+            '  👉 Ver con foto: ' + linkPreview + '\n\n' +
             '¿Me confirman disponibilidad y envío?';
   }
   const url = 'https://api.whatsapp.com/send?phone=' + encodeURIComponent(phoneLimpio) +
