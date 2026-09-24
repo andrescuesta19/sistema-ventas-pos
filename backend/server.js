@@ -301,6 +301,40 @@ const tiendaPublicaLimiter = rateLimit({
     message: 'Demasiadas solicitudes a la tienda. Intenta en un momento.',
 });
 
+// ── Páginas legales estáticas (privacidad, cookies, términos, devoluciones) ──
+// v2.2.9: Cumplimiento de Ley 1480/2011 (Estatuto del Consumidor) y Ley 1581/2012 (Habeas Data).
+// Las páginas se sirven como archivos HTML estáticos desde backend/legal/.
+// Cache-Control permite caché razonable para mejorar performance.
+app.get('/legal/:nombre', (req, res) => {
+    const nombre = req.params.nombre.toLowerCase().replace(/[^a-z]/g, '');
+    // Whitelist de páginas permitidas (evita path traversal)
+    const permitidas = {
+        'privacidad': 'privacidad.html',
+        'cookies': 'cookies.html',
+        'terminos': 'terminos.html',
+        'devoluciones': 'devoluciones.html',
+    };
+    const archivo = permitidas[nombre];
+    if (!archivo) {
+        return res.status(404).send(`
+            <!DOCTYPE html><html><head><meta charset="UTF-8"><title>404</title></head>
+            <body style="font-family:sans-serif;text-align:center;padding:4rem">
+            <h1>404 — Página no encontrada</h1>
+            <p><a href="/tienda/1">Volver a la tienda</a></p>
+            </body></html>
+        `);
+    }
+    res.set({
+        'Cache-Control': 'public, max-age=3600', // 1 hora
+    });
+    res.sendFile(path.join(__dirname, 'legal', archivo), (err) => {
+        if (err) {
+            console.error('Error sirviendo /legal/' + nombre + ':', err.message);
+            res.status(500).send('Error al cargar la página legal.');
+        }
+    });
+});
+
 app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
     try {
         const { idLocal } = req.params;
@@ -325,7 +359,7 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         }
 
         const { rows: [local] } = await db.query(
-            'SELECT id_local, nombre_local, direccion, telefono, telefono_whatsapp_2, ciudad FROM locales WHERE id_local = $1', [idLocal]
+            'SELECT id_local, nombre_local, direccion, nit, telefono, telefono_whatsapp_2, ciudad, email FROM locales WHERE id_local = $1', [idLocal]
         );
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
@@ -373,6 +407,17 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
         // queda como string vacío y el template renderiza solo el primer botón.
         const telWA2 = (local.telefono_whatsapp_2 || '').replace(/\D/g, '');
         const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+        // v2.2.9: Datos del comerciante para el footer (Ley 1480 art. 23).
+        // - Datos del responsable: hardcoded (solo hay un operador en este POS).
+        // - NIT y email: leídos de la BD (el admin los configura en
+        //   Configuracion > Local). Si están vacíos, el footer los oculta.
+        const COMERCIO_NIT = (local.nit || '').trim();
+        const COMERCIO_NIT_DISPLAY = COMERCIO_NIT ? 'inline' : 'none';
+        const COMERCIO_REP = 'Andrés Felipe Dávila Cuesta';
+        const COMERCIO_REP_DISPLAY = 'inline';
+        const COMERCIO_EMAIL = (local.email || '').trim();
+        const COMERCIO_EMAIL_DISPLAY = COMERCIO_EMAIL ? 'inline' : 'none';
 
         // Optimizar imágenes de Cloudinary con transformaciones para que se vean
         // completas y bien proporcionadas en las tarjetas (sin recortes)
@@ -464,6 +509,8 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
             .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + local.direccion : '')
             .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + local.ciudad : '')
             .replace(/\{\{TELEFONO\}\}/g, telWA)
+            .replace(/\{\{DIRECCION\}\}/g, local.direccion || '')
+            .replace(/\{\{CIUDAD\}\}/g, local.ciudad || 'Turbo, Antioquia')
             .replace(/\{\{TELEFONO_2\}\}/g, telWA2)
             .replace(/\{\{TOTAL\}\}/g, String(productos.length))
             .replace(/\{\{CATEGORIAS\}\}/g, catsHTML)
@@ -475,7 +522,14 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
             .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || ogTituloFallback)
             .replace(/\{\{OG_DESC\}\}/g, ogDesc || ogDescFallback)
             .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || ogImagenFallback)
-            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback);
+            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback)
+            // v2.2.9: Datos del comerciante (Ley 1480 art. 23).
+            .replace(/\{\{COMERCIO_NIT\}\}/g, COMERCIO_NIT)
+            .replace(/\{\{COMERCIO_NIT_DISPLAY\}\}/g, COMERCIO_NIT_DISPLAY)
+            .replace(/\{\{COMERCIO_REP\}\}/g, COMERCIO_REP)
+            .replace(/\{\{COMERCIO_REP_DISPLAY\}\}/g, COMERCIO_REP_DISPLAY)
+            .replace(/\{\{COMERCIO_EMAIL\}\}/g, COMERCIO_EMAIL)
+            .replace(/\{\{COMERCIO_EMAIL_DISPLAY\}\}/g, COMERCIO_EMAIL_DISPLAY);
 
         res.send(html);
     } catch (err) {

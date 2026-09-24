@@ -613,8 +613,35 @@ footer::after{
       <a id="footWa2" href="#" target="_blank" rel="noopener" style="display:none;margin-top:.4rem">📱 Línea 2: {{TELEFONO_2}}</a>
       <p style="margin-top:.5rem;font-size:.8rem">Escríbenos y te asesoramos con tu compra.</p>
     </div>
+    <!-- v2.2.9: Información del comerciante (Ley 1480 art. 23).
+         Muestra NIT, dirección, email y representante legal. Datos inyectados
+         por el backend. Si NIT o email están NULL en la BD, se oculta ese campo. -->
+    <div>
+      <h4>Información del comerciante</h4>
+      <p style="font-size:.78rem;line-height:1.55;color:rgba(255,255,255,.78);margin:0">
+        <strong style="color:#fff">CJP WATCH</strong><br>
+        <span style="display:{{COMERCIO_NIT_DISPLAY}}">NIT: {{COMERCIO_NIT}}</span>
+        <span style="display:{{COMERCIO_REP_DISPLAY}}">Representante: {{COMERCIO_REP}}</span><br>
+        📍 {{DIRECCION}}, {{CIUDAD}}<br>
+        📞 {{TELEFONO}}<br>
+        <a href="mailto:{{COMERCIO_EMAIL}}" style="color:inherit;text-decoration:underline;display:{{COMERCIO_EMAIL_DISPLAY}}">✉️ {{COMERCIO_EMAIL}}</a>
+      </p>
+    </div>
+    <!-- v2.2.9: Links a páginas legales (Ley 1480 + Ley 1581/2012). -->
+    <div>
+      <h4>Legal</h4>
+      <a href="/legal/privacidad">🔒 Política de privacidad</a>
+      <a href="/legal/cookies">🍪 Política de cookies</a>
+      <a href="/legal/terminos">📜 Términos y condiciones</a>
+      <a href="/legal/devoluciones">↩️ Devoluciones y garantía</a>
+    </div>
   </div>
-  <div class="foot__bot">© 2026 CJP WATCH — Todos los derechos reservados · <b>Desarrollado por Andrés Cuesta</b></div>
+  <div class="foot__bot">
+    © 2026 CJP WATCH — Todos los derechos reservados ·
+    <b>Desarrollado por Andrés Cuesta</b> ·
+    <a href="/legal/privacidad" style="color:inherit;text-decoration:underline">Privacidad</a> ·
+    <a href="/legal/terminos" style="color:inherit;text-decoration:underline">Términos</a>
+  </div>
 </footer>
 
 <script>
