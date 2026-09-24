@@ -4,11 +4,12 @@ node_modules/
 .pnp.js
 
 # === Environment & Secrets ===
+# Ignora TODOS los .env (incluidos .env.production, .env.local, etc.)
+# Excepciones: solo los *.example (plantillas públicas sin secretos)
 .env
-.env.local
-.env.*.local
-*.env
+.env.*
 !.env.example
+!.env.production.example
 
 # === Build outputs ===
 dist/

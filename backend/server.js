@@ -247,7 +247,16 @@ if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 
 // Servir archivos estáticos: en producción desde /tmp/uploads, en desarrollo desde backend/uploads
 const staticUploadsDir = isProduction ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
-app.use('/uploads', express.static(staticUploadsDir));
+// v2.2.9: SEGURIDAD — deshabilitar listado de directorio (antes cualquier visitante
+// podía ver todos los archivos subidos: avatares, imágenes de productos, videos).
+// También agregar headers anti-MIME-sniffing.
+app.use('/uploads', express.static(staticUploadsDir, {
+    index: false,                       // no listar contenido del directorio
+    dotfiles: 'deny',                   // no servir archivos ocultos (.env, .git)
+    setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+    },
+}));
 app.use('/logos', express.static(path.join(__dirname, 'logos')));
 
 // === v2.2.x: Headers de seguridad con Helmet (TEMPRANO para que aplique a tienda) ===
@@ -457,16 +466,21 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
             if (imgSrc.startsWith('/uploads/')) {
                 imgSrc = baseUrl + imgSrc;
             }
+            // v2.2.9: SEGURIDAD — escapar TODO input del usuario antes de
+            // inyectar en HTML. Antes había XSS almacenado: un admin/vendedor
+            // malicioso podía inyectar HTML/JS en nombre_producto, marca o
+            // nombre_categoria, que se ejecutaría en el navegador de cada
+            // visitante de la tienda pública.
             const img = imgSrc
-                ? `<img src="${imgSrc}" alt="${p.nombre_producto}" loading="lazy" onerror="this.outerHTML='<div class=no-img>📦</div>'">`
+                ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(p.nombre_producto)}" loading="lazy" onerror="this.outerHTML='<div class=no-img>📦</div>'">`
                 : '<div class="no-img">📦</div>';
-            const cat = p.nombre_categoria ? `<span class="prod-tag">${p.nombre_categoria}</span>` : '';
-            const marca = p.marca ? `<span class="prod-marca">${p.marca}</span>` : '';
-            return `<div class="product-card" data-marca="${p.marca || ''}"><div class="prod-img">${img}</div><div class="prod-body">${cat}${marca}<h3>${p.nombre_producto}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${p.id_producto})">Agregar</button></div></div>`;
+            const cat = p.nombre_categoria ? `<span class="prod-tag">${escapeHtml(p.nombre_categoria)}</span>` : '';
+            const marca = p.marca ? `<span class="prod-marca">${escapeHtml(p.marca)}</span>` : '';
+            return `<div class="product-card" data-marca="${escapeHtml(p.marca || '')}"><div class="prod-img">${img}</div><div class="prod-body">${cat}${marca}<h3>${escapeHtml(p.nombre_producto)}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${Number(p.id_producto) || 0})">Agregar</button></div></div>`;
         }).join('');
 
         const catsHTML = categorias.map(c =>
-            `<button class="cat-pill" data-cat="${c.nombre_categoria}" onclick="filterByCategory('${c.nombre_categoria.replace(/'/g, "\\'")}')">${c.nombre_categoria} <span>${c.cantidad}</span></button>`
+            `<button class="cat-pill" data-cat="${escapeHtml(c.nombre_categoria)}" onclick="filterByCategory('${escapeHtml(c.nombre_categoria).replace(/'/g, "\\'")}')">${escapeHtml(c.nombre_categoria)} <span>${c.cantidad}</span></button>`
         ).join('');
 
         // v2.2.8: Si la URL trae ?p=ID, buscar el producto y generar meta tags
@@ -505,12 +519,15 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
         let html = tiendaTemplate
             .replace(/\{\{BASE_URL\}\}/g, baseUrl)
             .replace(/\{\{ID_LOCAL\}\}/g, String(idLocal))
-            .replace(/\{\{NOMBRE_LOCAL\}\}/g, local.nombre_local || 'Mi Tienda')
-            .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + local.direccion : '')
-            .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + local.ciudad : '')
+            // v2.2.9: SEGURIDAD — escapar valores que vienen de la BD
+            // (un admin local malicioso podría meter HTML/JS en nombre_local,
+            // direccion o ciudad).
+            .replace(/\{\{NOMBRE_LOCAL\}\}/g, escapeHtml(local.nombre_local || 'Mi Tienda'))
+            .replace(/\{\{DIRECCION\}\}/g, local.direccion ? '📍 ' + escapeHtml(local.direccion) : '')
+            .replace(/\{\{CIUDAD\}\}/g, local.ciudad ? ' • ' + escapeHtml(local.ciudad) : '')
             .replace(/\{\{TELEFONO\}\}/g, telWA)
-            .replace(/\{\{DIRECCION\}\}/g, local.direccion || '')
-            .replace(/\{\{CIUDAD\}\}/g, local.ciudad || 'Turbo, Antioquia')
+            .replace(/\{\{DIRECCION\}\}/g, escapeHtml(local.direccion || ''))
+            .replace(/\{\{CIUDAD\}\}/g, escapeHtml(local.ciudad || 'Turbo, Antioquia'))
             .replace(/\{\{TELEFONO_2\}\}/g, telWA2)
             .replace(/\{\{TOTAL\}\}/g, String(productos.length))
             .replace(/\{\{CATEGORIAS\}\}/g, catsHTML)
@@ -608,9 +625,20 @@ const ALLOWED_ORIGINS = [
   // Render (se actualiza después del deploy)
   ...(process.env.CORS_ORIGINS || '').split(',').filter(Boolean),
 ];
-// Permitir cualquier origen *.trycloudflare.com y *.onrender.com
-const isAllowedTunnel = (origin) =>
-  origin && (origin.includes('.trycloudflare.com') || origin.includes('.onrender.com'));
+// v2.2.9: SEGURIDAD — antes se permitían CUALQUIER subdominio de trycloudflare.com
+// y onrender.com. Eso permitía a un atacante crear un túnel (evil.trycloudflare.com)
+// y hacer requests autenticados al backend con credenciales. Ahora SOLO se
+// permite el subdominio oficial del backend de Render, y los túneles deben
+// declararse explícitamente vía env CORS_ORIGINS_EXTRA.
+const isAllowedTunnel = (origin) => {
+  if (!origin) return false;
+  // Solo el subdominio oficial del backend en Render
+  if (origin === 'https://sistema-ventas-pos-aeka.onrender.com') return true;
+  // Túneles explícitos vía variable de entorno (separados por por)
+  const extra = (process.env.CORS_ORIGINS_EXTRA || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (extra.includes(origin)) return true;
+  return false;
+};
 
 app.use(cors({
     origin: (origin, callback) => {
@@ -763,8 +791,25 @@ async function requireAprobado(req, res, next) {
 }
 
 // Middleware: requiere rol Administrador
+// v2.2.9: SEGURIDAD — antes permitía 'Vendedor' también, lo cual era una escalada
+// de privilegios (un Vendedor podía modificar usuarios, productos, certificados DIAN, etc.).
+// Ahora SOLO Administrador (y super_admin) pasan.
 function requireAdmin(req, res, next) {
-    // v2.2.6: El super_admin pasa siempre (lo detectamos por tipo o rol).
+    // El super_admin pasa siempre (lo detectamos por tipo o rol).
+    if (req.user && (req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin')) {
+        return next();
+    }
+    if (!req.user || req.user.rol !== 'Administrador') {
+        return res.status(403).json({ error: 'Se requiere rol de Administrador.' });
+    }
+    next();
+}
+
+// Middleware: requiere rol Administrador O Vendedor (para endpoints donde
+// el Vendedor tiene permiso legítimo, como crear productos o registrar ventas).
+// Antes se usaba requireAdmin que erróneamente aceptaba ambos, ahora se usa
+// este middleware explícito para dejar claro el permiso.
+function requireAdminOrVendedor(req, res, next) {
     if (req.user && (req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin')) {
         return next();
     }
@@ -1201,11 +1246,15 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
         const offset = ((parseInt(pagina) || 1) - 1) * limit;
         
         let query = `
-            SELECT 
+            SELECT
                 p.id_producto,
                 p.nombre_producto,
                 p.precio_venta,
-                p.precio_compra as precio_anterior,
+                -- v2.2.9: SEGURIDAD — NO exponer precio_compra en endpoint público.
+                -- Antes se exponía como 'precio_anterior' pero el frontend lo recibía
+                -- como costo real, permitiendo a competidores deducir márgenes.
+                -- Si en el futuro se quiere mostrar un "precio tachado" de oferta,
+                -- agregar columna separada precio_oferta_anterior.
                 p.codigo_barras,
                 p.stock_actual,
                 p.imagen_url,
@@ -1892,11 +1941,20 @@ app.get('/api/locales/:id', requireAuth, requireAprobado, async (req, res) => {
     try {
         const idLocal = Number(req.params.id);
         if (isNaN(idLocal)) return res.status(400).json({ error: 'id inválido.' });
-        // Solo el admin del local o un usuario del mismo local puede leerlo
-        if (idLocal !== Number(req.user.id_local) && req.user.rol !== 'Administrador') {
+        // v2.2.9: SEGURIDAD — antes esta validación era un OR lógico mal armado
+        // que permitía a cualquier Administrador leer datos de OTROS locales
+        // (cross-tenant leak). Ahora solo super_admin puede leer locales ajenos.
+        const esSuper = req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin';
+        if (!esSuper && idLocal !== Number(req.user.id_local)) {
             return res.status(403).json({ error: 'No autorizado.' });
         }
-        const { rows } = await db.query(`SELECT * FROM locales WHERE id_local = $1`, [idLocal]);
+        // NO usar SELECT *: listar columnas explícitamente evita exponer
+        // columnas nuevas que se agreguen en el futuro (defensa en profundidad).
+        const { rows } = await db.query(
+            `SELECT id_local, nombre_local, direccion, nit, telefono, telefono_whatsapp_2, ciudad, email
+             FROM locales WHERE id_local = $1`, [idLocal]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: 'Local no encontrado.' });
         res.json(rows[0]);
     } catch (err) {
         console.error('Error en /locales/:id:', err);
@@ -6349,7 +6407,12 @@ app.get('/api/actualizaciones/ultima', async (req, res) => {
     }
 });
 
-app.post('/api/actualizaciones/crear', uploadUpdate.single('archivo'), async (req, res) => {
+// v2.2.9: SEGURIDAD CRÍTICA — antes este endpoint NO tenía autenticación.
+// Cualquier persona en internet podía subir binarios .exe/.dmg/.zip/.msi y
+// publicarlos como actualización oficial. Los clientes Electron con
+// auto-update habrían descargado y ejecutado malware. Ahora requiere
+// requireSuperAdmin.
+app.post('/api/actualizaciones/crear', requireSuperAdmin, uploadUpdate.single('archivo'), async (req, res) => {
     try {
         const { version, changelog, url_descarga } = req.body;
         if (!version) return res.status(400).json({ error: 'Versión requerida' });
@@ -6376,7 +6439,10 @@ app.post('/api/actualizaciones/crear', uploadUpdate.single('archivo'), async (re
     }
 });
 
-app.get('/api/actualizaciones', async (req, res) => {
+// v2.2.9: SEGURIDAD — antes público. Lista todas las actualizaciones y URLs
+// de descarga. Ahora requireSuperAdmin. El endpoint público sigue siendo
+// /api/actualizaciones/ultima (que es lo que la app usa para auto-actualizar).
+app.get('/api/actualizaciones', requireSuperAdmin, async (req, res) => {
     try {
         const result = await db.query('SELECT * FROM actualizaciones ORDER BY fecha_publicacion DESC LIMIT 20');
         res.json(result.rows);
