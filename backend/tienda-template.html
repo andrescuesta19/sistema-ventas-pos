@@ -212,6 +212,14 @@ button{font-family:inherit}
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .precio{font-size:1rem;font-weight:800;color:var(--primary);margin-top:auto}
 .precio s{font-size:.76rem;font-weight:500;color:var(--tx-mut);margin-right:.35rem}
+/* v2.2.10: precio con oferta — precio tachado + precio nuevo destacado. */
+.precio--oferta{display:flex;align-items:baseline;gap:.4rem;flex-wrap:wrap}
+.precio__old{font-size:.78rem;font-weight:500;color:var(--tx-mut);text-decoration:line-through}
+.precio__new{color:#dc2626;font-size:1.1rem}
+.precio__desc{background:#dc2626;color:#fff;font-size:.65rem;font-weight:700;
+  padding:.1rem .5rem;border-radius:6px;letter-spacing:.02em}
+/* v2.2.10: tarjeta en oferta con borde sutil para destacar. */
+.card--oferta{border:1px solid rgba(220,38,38,.18)}
 .add{border:0;background:var(--primary);color:#fff;border-radius:9px;padding:.5rem;font-weight:600;
   font-size:.8rem;cursor:pointer;margin-top:.45rem}
 .add:hover{background:var(--accent)}
@@ -688,7 +696,12 @@ function generoDe(p){
   if (/\b(hombre|men|caballero|masculin)/.test(t)) return 'hombre';
   return '';
 }
-function enOferta(p){ return !!(p.pa && Number(p.pa) > Number(p.p)); }
+// v2.2.10: antes leía p.pa (precio_anterior) que era realmente el precio_compra
+// (costo). Ahora usa los nuevos campos 'o' (precio_oferta) y 'oa' (oferta_activa)
+// que el backend inyecta desde la BD. Un producto está en oferta si:
+//   - oferta_activa (oa) es true
+//   - precio_oferta (o) es un número menor que precio_venta (p)
+function enOferta(p){ return !!(p.oa && p.o != null && Number(p.o) < Number(p.p)); }
 function money(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO'); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function contarMarca(m){ return PRODUCTS.filter(p => marcaDe(p) === m).length; }
@@ -852,17 +865,25 @@ function tarjeta(p){
     media = '<div class="no-img">⌚</div>';
   }
 
-  return '<article class="card">' +
+  // v2.2.10: precio de oferta con badge y tachado.
+  // - Si enOferta(p) → badge OFERTA + precio tachado (precio_venta) + precio destacado (precio_oferta)
+  // - Si NO hay oferta → solo precio normal
+  const enOfertap = enOferta(p);
+  const precioHTML = enOfertap
+    ? '<div class="precio precio--oferta">' +
+        '<s class="precio__old">' + money(p.p) + '</s>' +
+        '<strong class="precio__new">' + money(p.o) + '</strong>' +
+        (p.od ? '<span class="precio__desc">−' + p.od + '%</span>' : '') +
+      '</div>'
+    : '<div class="precio">' + money(p.p) + '</div>';
+  return '<article class="card' + (enOfertap ? ' card--oferta' : '') + '">' +
     '<div class="card__img" onclick="abrirVisor(' + p.id + ')">' + media +
-      // Solo mostrar etiqueta de oferta cuando el producto la tiene configurada.
-      // No mostrar nada basado en stock bajo (la tienda no debe comunicar
-      // escasez al cliente, eso es lógica interna del negocio).
-      (enOferta(p) ? '<span class="tag-of">Oferta</span>' : '') +
+      (enOfertap ? '<span class="tag-of">Oferta</span>' : '') +
     '</div>' +
     '<div class="card__body">' +
       (marca ? '<span class="marca-tag">' + esc(marca) + '</span>' : '') +
       '<h3>' + esc(p.n) + '</h3>' +
-      '<div class="precio">' + (enOferta(p) ? '<s>' + money(p.pa) + '</s>' : '') + money(p.p) + '</div>' +
+      precioHTML +
       '<button class="add" onclick="agregar(' + p.id + ')">Agregar</button>' +
     '</div></article>';
 }

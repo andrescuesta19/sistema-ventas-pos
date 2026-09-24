@@ -373,11 +373,18 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
         const { rows: productos } = await db.query(`
-            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.imagen_url, p.video_url, p.stock_actual, p.marca, p.genero, c.nombre_categoria
+            SELECT p.id_producto, p.nombre_producto, p.precio_venta, p.precio_oferta, p.oferta_activa,
+                   p.fecha_inicio_oferta, p.fecha_fin_oferta,
+                   p.imagen_url, p.video_url, p.stock_actual, p.marca, p.genero, c.nombre_categoria
             FROM productos p LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1 AND p.stock_actual > 0 AND COALESCE(p.visible_en_tienda, true) = true
             -- v2.2.7: destacados primero (orden manual), luego por stock_actual
-            ORDER BY COALESCE(p.destacado, FALSE) DESC, COALESCE(p.posicion_destacado, 999999) ASC, p.stock_actual DESC
+            -- v2.2.10: productos en oferta van antes (promoción al cliente)
+            ORDER BY
+                COALESCE(p.oferta_activa, FALSE) DESC,
+                COALESCE(p.destacado, FALSE) DESC,
+                COALESCE(p.posicion_destacado, 999999) ASC,
+                p.stock_actual DESC
         `, [idLocal]);
 
         // Para cada producto, buscar TODAS las imágenes de la galería (solo URLs http/https)
@@ -447,7 +454,28 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
                 if (url.startsWith('/uploads/')) return baseUrl + url;
                 return optimizarCloudinary(url, 600, 450);
             });
-            return { id: p.id_producto, n: p.nombre_producto, p: Number(p.precio_venta), img, vid, s: p.stock_actual, c: p.nombre_categoria || '', m: p.marca || '', g: p.genero || '', imgs };
+            // v2.2.10: agregamos campos de oferta al JSON.
+// 'o' = precio_oferta (null si no hay)
+// 'oa' = oferta_activa (boolean)
+// 'od' = porcentaje de descuento (calculado en backend, lo usa el frontend para mostrar "−15%")
+const precioOferta = p.oferta_activa && p.precio_oferta ? Number(p.precio_oferta) : null;
+const descuentoPct = precioOferta && Number(p.precio_venta) > 0
+    ? Math.round((1 - precioOferta / Number(p.precio_venta)) * 100)
+    : null;
+return {
+    id: p.id_producto,
+    n: p.nombre_producto,
+    p: Number(p.precio_venta),
+    o: precioOferta,        // precio con oferta (null si no)
+    oa: !!p.oferta_activa,  // oferta activa
+    od: descuentoPct,       // % de descuento
+    img, vid,
+    s: p.stock_actual,
+    c: p.nombre_categoria || '',
+    m: p.marca || '',
+    g: p.genero || '',
+    imgs
+};
         }));
 
         const prodsHTML = productos.map(p => {
@@ -465,7 +493,21 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
                 : '<div class="no-img">📦</div>';
             const cat = p.nombre_categoria ? `<span class="prod-tag">${escapeHtml(p.nombre_categoria)}</span>` : '';
             const marca = p.marca ? `<span class="prod-marca">${escapeHtml(p.marca)}</span>` : '';
-            return `<div class="product-card" data-marca="${escapeHtml(p.marca || '')}"><div class="prod-img">${img}</div><div class="prod-body">${cat}${marca}<h3>${escapeHtml(p.nombre_producto)}</h3><div class="prod-price">${fmtCOP(p.precio_venta)}</div><button class="add-btn" onclick="addToCart(${Number(p.id_producto) || 0})">Agregar</button></div></div>`;
+            // v2.2.10: badge OFERTA + precio tachado cuando hay oferta activa.
+            // precio_oferta es menor que precio_venta siempre.
+            const enOferta = p.oferta_activa && p.precio_oferta && Number(p.precio_oferta) < Number(p.precio_venta);
+            const descuento = enOferta
+                ? Math.round((1 - Number(p.precio_oferta) / Number(p.precio_venta)) * 100)
+                : 0;
+            const precioHTML = enOferta
+                ? `<div class="prod-price prod-price--oferta">
+                       <span class="prod-price-old">${fmtCOP(p.precio_venta)}</span>
+                       <span class="prod-price-new">${fmtCOP(p.precio_oferta)}</span>
+                       <span class="prod-price-tag">−${descuento}%</span>
+                   </div>`
+                : `<div class="prod-price">${fmtCOP(p.precio_venta)}</div>`;
+            const ofertaBadge = enOferta ? '<span class="prod-offer-badge">OFERTA</span>' : '';
+            return `<div class="product-card${enOferta ? ' product-card--oferta' : ''}" data-marca="${escapeHtml(p.marca || '')}"><div class="prod-img">${img}${ofertaBadge}</div><div class="prod-body">${cat}${marca}<h3>${escapeHtml(p.nombre_producto)}</h3>${precioHTML}<button class="add-btn" onclick="addToCart(${Number(p.id_producto) || 0})">Agregar</button></div></div>`;
         }).join('');
 
         const catsHTML = categorias.map(c =>
@@ -1232,19 +1274,22 @@ app.get('/api/tienda/:idLocal', async (req, res) => {
                 p.id_producto,
                 p.nombre_producto,
                 p.precio_venta,
-                -- v2.2.9: SEGURIDAD — NO exponer precio_compra en endpoint público.
-                -- Antes se exponía como 'precio_anterior' pero el frontend lo recibía
-                -- como costo real, permitiendo a competidores deducir márgenes.
-                -- Si en el futuro se quiere mostrar un "precio tachado" de oferta,
-                -- agregar columna separada precio_oferta_anterior.
+                p.precio_compra,
+                p.precio_oferta,
+                p.oferta_activa,
+                p.fecha_inicio_oferta,
+                p.fecha_fin_oferta,
                 p.codigo_barras,
                 p.stock_actual,
+                p.stock_minimo,
                 p.imagen_url,
+                p.video_url,
                 p.marca,
                 p.genero,
                 COALESCE(p.destacado, FALSE) AS destacado,
                 COALESCE(p.visible_en_tienda, true) as visible_en_tienda,
-                c.nombre_categoria
+                c.nombre_categoria,
+                c.id_categoria
             FROM productos p
             LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
             WHERE p.id_local = $1
@@ -2425,6 +2470,164 @@ app.patch('/api/productos/:id/destacado', requireAuth, requireAprobado, requireA
     } catch (err) {
         console.error('Error toggle destacado:', err);
         res.status(500).json({ error: 'Error interno: ' + (err.message || '') });
+    }
+});
+
+// ── OFERTAS DE PRODUCTOS (v2.2.10) ──
+// Endpoints REST para gestionar descuentos temporales desde el POS.
+// Solo administradores. La tienda web (/api/tienda/:idLocal) lee
+// directamente las columnas precio_oferta y oferta_activa, así que los
+// cambios se reflejan al instante sin redeploy.
+
+// PUT /api/productos/:id/oferta
+// Body: { precio_oferta: 580000, oferta_activa: true, fecha_inicio_oferta: '...', fecha_fin_oferta: '...' }
+// precio_oferta es OBLIGATORIO y debe ser MENOR que precio_venta.
+// Para desactivar una oferta sin perder el valor guardado, envía oferta_activa:false.
+// Para eliminar la oferta completamente, envía precio_oferta: null.
+app.put('/api/productos/:id/oferta', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de producto inválido.' });
+        }
+        const { precio_oferta, oferta_activa, fecha_inicio_oferta, fecha_fin_oferta } = req.body;
+
+        // Verificar que el producto existe y pertenece al local del usuario
+        const prod = await db.query(
+            `SELECT id_producto, id_local, precio_venta FROM productos WHERE id_producto = $1`,
+            [id]
+        );
+        if (prod.rows.length === 0) {
+            return res.status(404).json({ error: 'Producto no encontrado.' });
+        }
+        // v2.2.10: multi-tenant check. Solo super_admin puede cambiar ofertas
+        // de productos de OTROS locales.
+        const esSuper = req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin';
+        if (!esSuper && Number(prod.rows[0].id_local) !== Number(req.user.id_local)) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        const precioVentaActual = Number(prod.rows[0].precio_venta);
+
+        // Validaciones
+        if (precio_oferta !== null && precio_oferta !== undefined) {
+            if (typeof precio_oferta !== 'number' || !Number.isFinite(precio_oferta)) {
+                return res.status(400).json({ error: 'precio_oferta debe ser un número válido.' });
+            }
+            if (precio_oferta <= 0) {
+                return res.status(400).json({ error: 'precio_oferta debe ser mayor que 0.' });
+            }
+            if (precio_oferta >= precioVentaActual) {
+                return res.status(400).json({ error: `precio_oferta debe ser menor que el precio de venta (${precioVentaActual}). Una oferta no puede ser igual o mayor al precio normal.` });
+            }
+        }
+        if (oferta_activa !== undefined && typeof oferta_activa !== 'boolean') {
+            return res.status(400).json({ error: 'oferta_activa debe ser boolean.' });
+        }
+
+        // Construir UPDATE dinámico solo con campos enviados
+        const sets = [];
+        const params = [];
+        let idx = 1;
+        if (precio_oferta !== undefined) {
+            sets.push(`precio_oferta = $${idx++}`);
+            params.push(precio_oferta === null ? null : precio_oferta);
+        }
+        if (oferta_activa !== undefined) {
+            sets.push(`oferta_activa = $${idx++}`);
+            params.push(oferta_activa);
+        }
+        if (fecha_inicio_oferta !== undefined) {
+            sets.push(`fecha_inicio_oferta = $${idx++}`);
+            params.push(fecha_inicio_oferta === null ? null : fecha_inicio_oferta);
+        }
+        if (fecha_fin_oferta !== undefined) {
+            sets.push(`fecha_fin_oferta = $${idx++}`);
+            params.push(fecha_fin_oferta === null ? null : fecha_fin_oferta);
+        }
+
+        if (sets.length === 0) {
+            return res.status(400).json({ error: 'No se proporcionaron campos para actualizar.' });
+        }
+
+        params.push(id);
+        await db.query(
+            `UPDATE productos SET ${sets.join(', ')} WHERE id_producto = $${idx}`,
+            params
+        );
+
+        const result = await db.query(
+            `SELECT id_producto, precio_oferta, oferta_activa, fecha_inicio_oferta, fecha_fin_oferta, precio_venta
+             FROM productos WHERE id_producto = $1`,
+            [id]
+        );
+        res.json({ success: true, producto: result.rows[0] });
+    } catch (err) {
+        console.error('Error en PUT /productos/:id/oferta:', err.message);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// DELETE /api/productos/:id/oferta
+// Elimina completamente la oferta (precio_oferta=NULL, oferta_activa=false).
+app.delete('/api/productos/:id/oferta', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id) || id <= 0) {
+            return res.status(400).json({ error: 'ID de producto inválido.' });
+        }
+        // Multi-tenant check
+        const prod = await db.query(
+            `SELECT id_producto, id_local FROM productos WHERE id_producto = $1`,
+            [id]
+        );
+        if (prod.rows.length === 0) {
+            return res.status(404).json({ error: 'Producto no encontrado.' });
+        }
+        const esSuper = req.user.tipo === 'super_admin' || req.user.rol === 'super_admin' || req.user.rol === 'SuperAdmin';
+        if (!esSuper && Number(prod.rows[0].id_local) !== Number(req.user.id_local)) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        await db.query(
+            `UPDATE productos
+             SET precio_oferta = NULL, oferta_activa = false,
+                 fecha_inicio_oferta = NULL, fecha_fin_oferta = NULL
+             WHERE id_producto = $1`,
+            [id]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Error en DELETE /productos/:id/oferta:', err.message);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+// GET /api/productos/en-oferta
+// Lista todos los productos del local que tienen oferta activa.
+// Útil para una pestaña "Ofertas" en el POS.
+app.get('/api/productos/en-oferta', requireAuth, requireAprobado, requireAdmin, async (req, res) => {
+    try {
+        const idLocal = Number(req.user.id_local);
+        const { rows } = await db.query(
+            `SELECT id_producto, nombre_producto, precio_venta, precio_oferta, oferta_activa,
+                    fecha_inicio_oferta, fecha_fin_oferta, stock_actual, imagen_url, marca, genero
+             FROM productos
+             WHERE id_local = $1 AND oferta_activa = TRUE AND precio_oferta IS NOT NULL
+             ORDER BY fecha_inicio_oferta DESC NULLS LAST, id_producto DESC`,
+            [idLocal]
+        );
+        // Calcular % descuento en cada uno
+        const enriched = rows.map(p => ({
+            ...p,
+            precio_venta_num: Number(p.precio_venta),
+            precio_oferta_num: Number(p.precio_oferta),
+            descuento_pct: Number(p.precio_venta) > 0
+                ? Math.round((1 - Number(p.precio_oferta) / Number(p.precio_venta)) * 100)
+                : 0,
+        }));
+        res.json({ success: true, productos: enriched, total: enriched.length });
+    } catch (err) {
+        console.error('Error en GET /productos/en-oferta:', err.message);
+        res.status(500).json({ error: 'Error interno del servidor.' });
     }
 });
 
