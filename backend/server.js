@@ -417,17 +417,6 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
         const telWA2 = (local.telefono_whatsapp_2 || '').replace(/\D/g, '');
         const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-        // v2.2.9: Datos del comerciante para el footer (Ley 1480 art. 23).
-        // - Datos del responsable: hardcoded (solo hay un operador en este POS).
-        // - NIT y email: leídos de la BD (el admin los configura en
-        //   Configuracion > Local). Si están vacíos, el footer los oculta.
-        const COMERCIO_NIT = (local.nit || '').trim();
-        const COMERCIO_NIT_DISPLAY = COMERCIO_NIT ? 'inline' : 'none';
-        const COMERCIO_REP = 'Andrés Felipe Dávila Cuesta';
-        const COMERCIO_REP_DISPLAY = 'inline';
-        const COMERCIO_EMAIL = (local.email || '').trim();
-        const COMERCIO_EMAIL_DISPLAY = COMERCIO_EMAIL ? 'inline' : 'none';
-
         // Optimizar imágenes de Cloudinary con transformaciones para que se vean
         // completas y bien proporcionadas en las tarjetas (sin recortes)
         // c_pad = rellena sin recortar (imagen COMPLETA visible)
@@ -539,14 +528,7 @@ const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', curren
             .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || ogTituloFallback)
             .replace(/\{\{OG_DESC\}\}/g, ogDesc || ogDescFallback)
             .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || ogImagenFallback)
-            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback)
-            // v2.2.9: Datos del comerciante (Ley 1480 art. 23).
-            .replace(/\{\{COMERCIO_NIT\}\}/g, COMERCIO_NIT)
-            .replace(/\{\{COMERCIO_NIT_DISPLAY\}\}/g, COMERCIO_NIT_DISPLAY)
-            .replace(/\{\{COMERCIO_REP\}\}/g, COMERCIO_REP)
-            .replace(/\{\{COMERCIO_REP_DISPLAY\}\}/g, COMERCIO_REP_DISPLAY)
-            .replace(/\{\{COMERCIO_EMAIL\}\}/g, COMERCIO_EMAIL)
-            .replace(/\{\{COMERCIO_EMAIL_DISPLAY\}\}/g, COMERCIO_EMAIL_DISPLAY);
+            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback);
 
         res.send(html);
     } catch (err) {

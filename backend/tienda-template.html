@@ -45,6 +45,11 @@
 <style>
 :root{
   --primary:#1E3A5F; --accent:#2563EB; --accent-2:#3B82F6;
+  /* v2.2.9: Paleta extendida para transiciones de color suaves.
+     --accent-3: azul claro (transición header/body)
+     --accent-4: azul muy claro con tinte (transición body/footer)
+     El degradado va de oscuro (header/footer) a claro (body) sin saltos duros. */
+  --accent-3:#DBEAFE; --accent-4:#EFF6FF;
   --silver:#B0B8C4; --silver-l:#D4D8DD;
   --bg:#F5F5F7; --white:#FFFFFF;
   --tx:#1A1A2E; --tx-body:#4A4A5A; --tx-mut:#8A8A9A;
@@ -54,34 +59,52 @@
   --head-h:62px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Inter",system-ui,sans-serif;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{
+  font-family:"Inter",system-ui,sans-serif;color:var(--tx);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  /* v2.2.9: Degradado sutil de blanco a azul muy claro.
+     El header (encima) tiene su propio degradado azul claro→blanco.
+     El body empieza en blanco (parte alta) y baja a azul claro (parte baja).
+     El footer sigue con su azul oscuro.
+     Resultado: una onda de color continua sin saltos duros. */
+  background:linear-gradient(180deg,#FFFFFF 0%,#F5F8FC 35%,#DBEAFE 75%,#BFDBFE 100%);
+  background-attachment:fixed;
+}
 img{max-width:100%}
 button{font-family:inherit}
 ::selection{background:var(--accent);color:#fff}
 .wrap{max-width:1240px;margin:0 auto;padding:0 1rem}
 
 /* ─────────── HEADER FIJO ─────────── */
+/* v2.2.9: Header con degradado azul claro → blanco en lugar de fondo
+   sólido blanco. Se integra con el body sin separación dura. */
 .head{position:fixed;top:0;left:0;right:0;height:var(--head-h);z-index:90;
-  background:rgba(255,255,255,.92);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);display:flex;align-items:center}
+  background:linear-gradient(180deg,rgba(30,58,95,.96) 0%,rgba(37,99,235,.92) 50%,rgba(59,130,246,.85) 100%);
+  backdrop-filter:blur(12px);
+  box-shadow:0 2px 12px rgba(0,0,0,.10);
+  display:flex;align-items:center;color:#fff}
 .head__in{display:flex;align-items:center;gap:.9rem;width:100%;max-width:1240px;margin:0 auto;padding:0 1rem;min-height:var(--head-h)}
-.burger{width:40px;height:40px;border:0;background:none;cursor:pointer;display:flex;
-  flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;border-radius:9px;flex:0 0 auto}
-.burger:hover{background:var(--bg)}
-.burger span{display:block;width:22px;height:2px;background:var(--primary);border-radius:2px}
-.head__logo{display:flex;align-items:center;justify-content:center;gap:.55rem;text-decoration:none;color:var(--tx);flex:0 0 auto;height:40px}
-.head__logo img{width:38px;height:38px;border-radius:50%;object-fit:cover;display:block}
-.head__logo b{font-family:"Playfair Display",serif;font-size:1.08rem;letter-spacing:.02em;line-height:1;display:flex;align-items:center}
-.head__logo b span{color:var(--accent);margin-left:.15rem}
+.burger{width:40px;height:40px;border:0;background:transparent;cursor:pointer;display:flex;
+  flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;border-radius:9px;flex:0 0 auto;transition:background .2s}
+.burger:hover{background:rgba(255,255,255,.18)}
+.burger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px}
+/* v2.2.9: Logo y textos del header ahora blancos para contrastar con el degradado azul. */
+.head__logo{display:flex;align-items:center;justify-content:center;gap:.55rem;text-decoration:none;color:#fff;flex:0 0 auto;height:40px}
+.head__logo img{width:38px;height:38px;border-radius:50%;object-fit:cover;display:block;
+  border:2px solid rgba(255,255,255,.5)}
+.head__logo b{font-family:"Playfair Display",serif;font-size:1.08rem;letter-spacing:.02em;line-height:1;display:flex;align-items:center;color:#fff}
+.head__logo b span{color:#93C5FD;margin-left:.15rem}
 .head__search{flex:1 1 auto;position:relative;max-width:520px}
-.head__search input{width:100%;height:40px;border:1.5px solid var(--border);border-radius:22px;
-  padding:0 1rem 0 2.4rem;font-size:.88rem;background:var(--white);color:var(--tx)}
-.head__search input:focus{outline:none;border-color:var(--accent)}
-.head__search .ico{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.55}
-.cart-btn{position:relative;border:0;background:var(--primary);color:#fff;height:40px;padding:0 .95rem;
-  border-radius:22px;cursor:pointer;font-weight:600;font-size:.85rem;flex:0 0 auto}
-.cart-btn:hover{background:var(--accent)}
-.cart-btn .n{background:#fff;color:var(--primary);border-radius:10px;padding:0 .4rem;margin-left:.35rem;font-size:.75rem}
+.head__search input{width:100%;height:40px;border:1.5px solid rgba(255,255,255,.35);border-radius:22px;
+  padding:0 1rem 0 2.4rem;font-size:.88rem;background:rgba(255,255,255,.95);color:var(--tx)}
+.head__search input::placeholder{color:#9CA3AF}
+.head__search input:focus{outline:none;border-color:#fff;background:#fff}
+.head__search .ico{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.55;color:var(--tx)}
+.cart-btn{position:relative;border:0;background:#fff;color:var(--primary);height:40px;padding:0 .95rem;
+  border-radius:22px;cursor:pointer;font-weight:600;font-size:.85rem;flex:0 0 auto;
+  box-shadow:0 2px 8px rgba(0,0,0,.15);transition:transform .15s,box-shadow .15s}
+.cart-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.cart-btn .n{background:var(--accent);color:#fff;border-radius:10px;padding:0 .4rem;margin-left:.35rem;font-size:.75rem}
 @media(max-width:640px){
   .head__logo b{display:none}
   .head__search input{font-size:.8rem}
@@ -110,11 +133,14 @@ button{font-family:inherit}
 .nav-note{padding:1rem 1.2rem;font-size:.78rem;color:var(--tx-mut);line-height:1.5}
 
 /* ─────────── BIENVENIDA CON VIDEO ─────────── */
+/* v2.2.9: Degradado azul que se conecta con el header y el body.
+   Arriba (top): azul medio (encaja con el header azul claro).
+   Abajo (bottom): azul oscuro que se funde con el body. */
 .hero{margin-top:var(--head-h);position:relative;min-height:clamp(300px,52vh,460px);
   display:grid;align-items:center;justify-content:center;overflow:hidden;
-  background:linear-gradient(135deg,var(--primary),#2A5298)}
+  background:linear-gradient(180deg,#2563EB 0%,#1E40AF 50%,#1E3A5F 100%)}
 .hero__vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,36,.25) 0%,rgba(8,20,36,.55) 50%,rgba(8,20,36,.92) 100%)}
+.hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,58,95,.20) 0%,rgba(30,58,95,.50) 50%,rgba(30,58,95,.85) 100%)}
 .hero__tx{position:relative;padding:2.4rem 1rem 2.6rem;max-width:1240px;margin:0 auto;width:100%;color:#fff;text-align:center;display:flex;flex-direction:column;align-items:center}
 .hero__logo{width:100px;height:100px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.3);box-shadow:0 8px 40px rgba(0,0,0,.3);margin-bottom:1.2rem;flex-shrink:0}
 .hero__logo img{width:100%;height:100%;object-fit:cover}
@@ -125,7 +151,7 @@ button{font-family:inherit}
   padding:.35rem .8rem;border-radius:20px;font-size:.76rem;color:#fff}
 
 /* ─────────── MARQUESINA DE MARCAS ─────────── */
-.marcas{background:var(--white);border-bottom:1px solid var(--border);overflow:hidden;padding:.9rem 0}
+.marcas{background:rgba(255,255,255,.6);border-bottom:1px solid rgba(0,0,0,.05);overflow:hidden;padding:.9rem 0;backdrop-filter:blur(8px)}
 .pista{display:flex;width:max-content;animation:correr 30s linear infinite}
 .marcas:hover .pista,.pista:focus-within{animation-play-state:paused}
 @keyframes correr{from{transform:translateX(0)}to{transform:translateX(-50%)}}
@@ -316,11 +342,13 @@ button{font-family:inherit}
 
 /* ─────────── PIE ─────────── */
 /* ─────────── FOOTER ANIMADO ─────────── */
+/* v2.2.9: Degradado azul oscuro → medio para integrar con el body.
+   El body termina en azul claro (BFDBFE), el footer arranca en azul oscuro.
+   Transición visual sin saltos. */
 footer{
   position:relative;overflow:hidden;
-  background:linear-gradient(135deg,#0f2440 0%,#1E3A5F 35%,#2A5298 70%,#1E3A5F 100%);
-  background-size:300% 300%;
-  animation:footGrad 18s ease-in-out infinite;
+  background:linear-gradient(180deg,#1E40AF 0%,#1E3A5F 50%,#0f2440 100%);
+  background-size:100% 200%;
   color:rgba(255,255,255,.85);
   padding:3.6rem 1rem 1.6rem;margin-top:3rem;
   border-top:1px solid rgba(255,255,255,.08);
@@ -612,28 +640,6 @@ footer::after{
       <a id="footWa" href="#" target="_blank" rel="noopener">WhatsApp {{TELEFONO}}</a>
       <a id="footWa2" href="#" target="_blank" rel="noopener" style="display:none;margin-top:.4rem">📱 Línea 2: {{TELEFONO_2}}</a>
       <p style="margin-top:.5rem;font-size:.8rem">Escríbenos y te asesoramos con tu compra.</p>
-    </div>
-    <!-- v2.2.9: Información del comerciante (Ley 1480 art. 23).
-         Muestra NIT, dirección, email y representante legal. Datos inyectados
-         por el backend. Si NIT o email están NULL en la BD, se oculta ese campo. -->
-    <div>
-      <h4>Información del comerciante</h4>
-      <p style="font-size:.78rem;line-height:1.55;color:rgba(255,255,255,.78);margin:0">
-        <strong style="color:#fff">CJP WATCH</strong><br>
-        <span style="display:{{COMERCIO_NIT_DISPLAY}}">NIT: {{COMERCIO_NIT}}</span>
-        <span style="display:{{COMERCIO_REP_DISPLAY}}">Representante: {{COMERCIO_REP}}</span><br>
-        📍 {{DIRECCION}}, {{CIUDAD}}<br>
-        📞 {{TELEFONO}}<br>
-        <a href="mailto:{{COMERCIO_EMAIL}}" style="color:inherit;text-decoration:underline;display:{{COMERCIO_EMAIL_DISPLAY}}">✉️ {{COMERCIO_EMAIL}}</a>
-      </p>
-    </div>
-    <!-- v2.2.9: Links a páginas legales (Ley 1480 + Ley 1581/2012). -->
-    <div>
-      <h4>Legal</h4>
-      <a href="/legal/privacidad">🔒 Política de privacidad</a>
-      <a href="/legal/cookies">🍪 Política de cookies</a>
-      <a href="/legal/terminos">📜 Términos y condiciones</a>
-      <a href="/legal/devoluciones">↩️ Devoluciones y garantía</a>
     </div>
   </div>
   <div class="foot__bot">
