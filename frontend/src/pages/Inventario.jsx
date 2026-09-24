@@ -1006,7 +1006,7 @@ const Inventario = ({ user }) => {
             </div>
             <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <p style={{ margin: 0, color: 'var(--text-light)', fontSize: '0.88rem' }}>
-                Precio de venta actual: < <strong>{formatearCOP(ofertaTarget.precio_venta)}</strong>.
+                Precio de venta actual: <strong>{formatearCOP(ofertaTarget.precio_venta)}</strong>.
                 Define el precio con descuento. La tienda web mostrará precio tachado + nuevo + badge OFERTA.
               </p>
 

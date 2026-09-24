@@ -45,6 +45,7 @@
       "output": "release",
       "buildResources": "build"
     },
+    "afterPack": "scripts/after-pack-copy-node.cjs",
     "asar": true,
     "compression": "normal",
     "icon": "build/icon",

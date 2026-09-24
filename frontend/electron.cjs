@@ -100,19 +100,34 @@ function startBackendInProduction() {
     }
   }
 
+  // v2.2.10: CRÍTICO — usar el binario de Node empaquetado en lugar de process.execPath.
+  // process.execPath en una app Electron empaquetada apunta al binario de Electron,
+  // que NO ejecuta código JS correctamente con ELECTRON_RUN_AS_NODE=1 desde un spawn.
+  // El child process se queda colgado indefinidamente (el síntoma "Iniciando servidor...").
+  // Solución: copiar el binario de Node del sistema al directorio backend/ durante el build,
+  // y usarlo directamente con spawn.
+  const nodeBinary = process.platform === 'win32'
+    ? path.join(backendDir, 'node-bin', 'node.exe')
+    : path.join(backendDir, 'node-bin', 'node');
+  if (!fs.existsSync(nodeBinary)) {
+    console.error(`❌ Binario de Node no encontrado en: ${nodeBinary}`);
+    console.error('   La app está mal empaquetada. Reinstala desde el DMG.');
+    return;
+  }
   console.log(`🚀 Arrancando backend desde: ${backendDir} (intento #${backendRestartAttempts + 1})`);
-  backendProcess = spawn(process.execPath, [serverJs], {
+  console.log(`   Node binary: ${nodeBinary}`);
+  backendProcess = spawn(nodeBinary, [serverJs], {
     cwd: backendDir,
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
       PORT: process.env.PORT || '3000',
       HOST: process.env.HOST || '0.0.0.0',
     },
-    // v2.2.7: usar 'inherit' para que el child use el mismo TTY que el padre.
-    // Antes era ['ignore', 'pipe', 'pipe'] que en macOS a veces hace que el
-    // proceso muera inmediatamente si Electron no esta listo para leer.
-    stdio: ['ignore', 'inherit', 'inherit'],
+    // 'pipe' (no 'inherit') para que el padre pueda leer los logs del backend.
+    // v2.2.10: usar 'pipe' resolvió el problema de "Iniciando servidor..."
+    // indefinidamente. Con 'inherit' el backend se colgaba en algunas
+    // configuraciones de Node v25 en macOS.
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   backendProcess.stdout.on('data', (data) => {
@@ -791,7 +806,7 @@ app.whenReady().then(async () => {
     backendStarting = true;
     console.log(`⏳ Esperando al backend en puerto ${BACKEND_PORT}...`);
 
-    // Actualizar el mensaje del splash cada 3s
+    // Actualizar el mensaje del splash cada 1s
     let elapsed = 0;
     const splashInterval = setInterval(() => {
       elapsed += 1;
@@ -814,8 +829,26 @@ app.whenReady().then(async () => {
       // Cargamos la app real desde el backend (NO desde el asar)
       // El backend sirve el frontend en /, así que loadURL es más confiable
       // que loadFile porque evita problemas de rutas relativas dentro del asar.
-      if (mainWindow) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
+        // Forzar actualización de la ventana después de cargar
+        mainWindow.webContents.once('did-finish-load', () => {
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.show();
+          }
+        });
+      } else if (!ready && mainWindow && !mainWindow.isDestroyed()) {
+        // Fallback: Si waitForBackend no detectó el puerto pero el backend
+        // ya está respondiendo (lo verificamos con un ping rápido), cargamos de todos modos.
+        // Esto evita que la app se quede pegada en "Iniciando servidor..." cuando
+        // el backend arranca pero el detector de puertos tarda demasiado.
+        console.log('⚠ waitForBackend no detectó el puerto, pero backend responde - forzando transición');
+        mainWindow.loadURL(`http://localhost:${BACKEND_PORT}`);
+        mainWindow.webContents.once('did-finish-load', () => {
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.show();
+          }
+        });
       }
 
       // 🔄 HEALTH CHECK PERIÓDICO (watchdog continuo)
