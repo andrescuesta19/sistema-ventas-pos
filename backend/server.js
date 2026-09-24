@@ -325,7 +325,7 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
         }
 
         const { rows: [local] } = await db.query(
-            'SELECT id_local, nombre_local, direccion, telefono, telefono_whatsapp_2, ciudad, latitud, longitud FROM locales WHERE id_local = $1', [idLocal]
+            'SELECT id_local, nombre_local, direccion, telefono, telefono_whatsapp_2, ciudad FROM locales WHERE id_local = $1', [idLocal]
         );
         if (!local) return res.status(404).send('Tienda no encontrada.');
 
@@ -367,20 +367,12 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             GROUP BY c.nombre_categoria ORDER BY cantidad DESC
         `, [idLocal]);
 
-        const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
+const fmtCOP = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v) || 0);
         const telWA = (local.telefono || '').replace(/\D/g, '');
         // v2.2.8: Segunda línea de WhatsApp (opcional). Si está vacía, telWA2
         // queda como string vacío y el template renderiza solo el primer botón.
         const telWA2 = (local.telefono_whatsapp_2 || '').replace(/\D/g, '');
         const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-        // v2.2.8: Geolocalización del local para calcular distancia al visitante.
-        // Fallback a Turbo, Antioquia (coordenadas del parque principal ~8.095°N, -76.728°W)
-        // si el local no tiene latitud/longitud configuradas. Los precios de envío
-        // por km son aproximados (basados en couriers colombianos promedio).
-        const localLat = local.latitud != null ? Number(local.latitud) : 8.095;
-        const localLon = local.longitud != null ? Number(local.longitud) : -76.728;
-        const localNombre = local.ciudad || local.nombre_local || 'Turbo, Antioquia';
 
         // Optimizar imágenes de Cloudinary con transformaciones para que se vean
         // completas y bien proporcionadas en las tarjetas (sin recortes)
@@ -483,12 +475,7 @@ app.get('/tienda/:idLocal', tiendaPublicaLimiter, async (req, res) => {
             .replace(/\{\{OG_TITULO\}\}/g, ogTitulo || ogTituloFallback)
             .replace(/\{\{OG_DESC\}\}/g, ogDesc || ogDescFallback)
             .replace(/\{\{OG_IMAGEN\}\}/g, ogImagen || ogImagenFallback)
-            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback)
-            // v2.2.8: Geolocalización del local (para que el cliente calcule
-            // distancia y costo de envío desde su ubicación).
-            .replace(/\{\{LOCAL_LAT\}\}/g, String(localLat))
-            .replace(/\{\{LOCAL_LON\}\}/g, String(localLon))
-            .replace(/\{\{LOCAL_NOMBRE\}\}/g, localNombre);
+            .replace(/\{\{OG_URL\}\}/g, ogUrl || ogUrlFallback);
 
         res.send(html);
     } catch (err) {

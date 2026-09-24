@@ -78,21 +78,6 @@ button{font-family:inherit}
   padding:0 1rem 0 2.4rem;font-size:.88rem;background:var(--white);color:var(--tx)}
 .head__search input:focus{outline:none;border-color:var(--accent)}
 .head__search .ico{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.55}
-/* v2.2.8: Botón "📍 Mi ubicación" en el header. Geolocalización opcional
-   solo si el visitante lo toca. Muestra etiqueta discreta con distancia
-   y costo de envío estimado cuando se activa. */
-.geo-btn{position:relative;border:1.5px solid var(--border);background:var(--white);
-  color:var(--tx);height:40px;padding:0 .85rem;border-radius:22px;cursor:pointer;
-  font-size:.82rem;font-weight:500;flex:0 0 auto;display:flex;align-items:center;gap:.4rem;
-  transition:background .2s,border-color .2s;white-space:nowrap}
-.geo-btn:hover{border-color:var(--accent);background:var(--bg-app)}
-.geo-btn.on{border-color:var(--accent);background:rgba(37,99,235,.08);color:var(--accent)}
-.geo-btn.on:hover{background:rgba(37,99,235,.14)}
-.geo-btn .clear{background:none;border:0;color:var(--tx-mut);font-size:1rem;
-  cursor:pointer;padding:0 .1rem;line-height:1;margin-left:.2rem}
-.geo-btn .clear:hover{color:#dc2626}
-.geo-loading{font-size:.78rem;color:var(--tx-mut);font-style:italic}
-.geo-loading.error{color:#dc2626;font-style:normal}
 .cart-btn{position:relative;border:0;background:var(--primary);color:#fff;height:40px;padding:0 .95rem;
   border-radius:22px;cursor:pointer;font-weight:600;font-size:.85rem;flex:0 0 auto}
 .cart-btn:hover{background:var(--accent)}
@@ -101,9 +86,6 @@ button{font-family:inherit}
   .head__logo b{display:none}
   .head__search input{font-size:.8rem}
   .cart-btn span.t{display:none}
-  /* En móvil el texto del geo-btn se reduce para no romper el header */
-  .geo-btn{padding:0 .7rem;font-size:.75rem}
-  .geo-btn .glabel{display:none}
 }
 
 /* ─────────── MENÚ LATERAL ─────────── */
@@ -427,13 +409,6 @@ footer::after{
       <span class="ico">🔍</span>
       <input id="buscador" type="search" placeholder="Buscar por nombre, marca o modelo..." oninput="setBusqueda(this.value)">
     </div>
-    <!-- v2.2.8: Botón de geolocalización opcional. Solo pide permiso al
-         navegador cuando el visitante lo toca. Muestra distancia al local
-         (Turbo, Antioquia) y costo de envío estimado. -->
-    <button id="geoBtn" class="geo-btn" type="button"
-            onclick="solicitarUbicacion()" aria-label="Calcular envío a mi ubicación">
-      <span aria-hidden="true">📍</span><span class="glabel">Mi ubicación</span>
-    </button>
     <button class="cart-btn" onclick="abrirCarrito()">🛒<span class="t"> Carrito</span><span class="n" id="cartCount">0</span></button>
   </div>
 </header>
@@ -660,23 +635,6 @@ const PHONE_2 = '{{TELEFONO_2}}';
 // WhatsApp y ver la vista previa del producto con foto + nombre + precio.
 const BASE_URL_JS = '{{BASE_URL}}';
 const TIENDA_PATH = '/tienda/{{ID_LOCAL}}';
-// v2.2.8: Geolocalización del local (Turbo, Antioquia por default).
-// El visitante puede compartir su ubicación y la tienda calcula distancia
-// + costo de envío estimado. Nunca se pide permiso automáticamente.
-const LOCAL_LAT = {{LOCAL_LAT}};
-const LOCAL_LON = {{LOCAL_LON}};
-const LOCAL_NOMBRE = '{{LOCAL_NOMBRE}}';
-// Tabla de envíos (COP) según distancia en km desde Turbo, Antioquia.
-// Fuente: promedio de couriers colombianos (Servientrega, TCC, Envia, Interrapidísimo).
-// Ajustar según política comercial del local.
-const TARIFAS_ENVIO = [
-  { kmMax: 10,    label: 'Turbo (mismo municipio)',     costo: 0,     nota: 'Envío gratis' },
-  { kmMax: 80,    label: 'Antioquia (cercano)',          costo: 12000, nota: 'Moto-courier' },
-  { kmMax: 250,   label: 'Antioquia / Córdoba / Sucre',  costo: 18000, nota: 'Courier estándar' },
-  { kmMax: 600,   label: 'Costa Caribe / Eje Cafetero',  costo: 22000, nota: 'Courier estándar' },
-  { kmMax: 1200,  label: 'Centro / Sur de Colombia',     costo: 26000, nota: 'Courier nacional' },
-  { kmMax: Infinity, label: 'Otros destinos',            costo: 35000, nota: 'Courier nacional largo' },
-];
 
 /* ── Marcas fijas del catálogo ── */
 const MARCAS = ['TechnoMarine', 'MULCO', 'INVICTA'];
@@ -1083,138 +1041,9 @@ function _abrirWhatsApp(url, e){
 }
 
 /* ── Geolocalización (v2.2.8) ── */
-// Fórmula de Haversine: distancia entre dos puntos en km en la esfera terrestre.
-// Precisión ~0.5% (suficiente para estimar envíos en Colombia).
-function distanciaKm(lat1, lon1, lat2, lon2){
-  const R = 6371; // radio de la Tierra en km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) ** 2 +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon/2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// Busca la tarifa de envío correspondiente a la distancia.
-// Devuelve { label, costo, nota } o null si no encuentra.
-function tarifaParaDistancia(km){
-  for (const t of TARIFAS_ENVIO) {
-    if (km <= t.kmMax) return t;
-  }
-  return TARIFAS_ENVIO[TARIFAS_ENVIO.length - 1];
-}
-
-// Formatea la distancia en km para mostrar al usuario.
-// <1 km → "menos de 1 km". >=1 km → redondeo a 1 decimal si <10, sin decimales si >=10.
-function fmtDistancia(km){
-  if (km < 1) return 'menos de 1 km';
-  if (km < 10) return km.toFixed(1) + ' km';
-  return Math.round(km) + ' km';
-}
-
-// Solicita permiso de geolocalización al navegador. SOLO cuando el visitante
-// toca el botón — nunca automáticamente. Si el navegador no soporta la API
-// o el visitante rechaza, muestra mensaje claro sin volver a molestar.
-function solicitarUbicacion(){
-  const btn = document.getElementById('geoBtn');
-  if (!btn) return;
-  if (!('geolocation' in navigator)) {
-    mostrarGeoError('Tu navegador no soporta geolocalización');
-    return;
-  }
-  // Si ya tenemos ubicación activa, el botón hace de "quitar" (toggle)
-  if (btn.classList.contains('on')) {
-    limpiarUbicacion();
-    return;
-  }
-  btn.classList.add('loading');
-  btn.innerHTML = '<span aria-hidden="true">⏳</span><span class="glabel">Buscando…</span>';
-  btn.setAttribute('aria-busy', 'true');
-  navigator.geolocation.getCurrentPosition(
-    exitoUbicacion,
-    errorUbicacion,
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-  );
-}
-
-function exitoUbicacion(pos){
-  const lat = pos.coords.latitude;
-  const lon = pos.coords.longitude;
-  const km = distanciaKm(LOCAL_LAT, LOCAL_LON, lat, lon);
-  const tarifa = tarifaParaDistancia(km);
-  // Guardamos en sessionStorage (solo esta sesión, no persistente)
-  try {
-    sessionStorage.setItem('geoVisitante', JSON.stringify({ lat, lon, km, ts: Date.now() }));
-  } catch(e) { /* sessionStorage puede estar deshabilitado */ }
-  const btn = document.getElementById('geoBtn');
-  if (!btn) return;
-  btn.classList.remove('loading');
-  btn.classList.add('on');
-  btn.setAttribute('aria-busy', 'false');
-  // Texto del botón: distancia + costo
-  const costoTxt = tarifa.costo === 0 ? 'Gratis' : '$' + tarifa.costo.toLocaleString('es-CO');
-  btn.innerHTML =
-    '<span aria-hidden="true">📍</span>' +
-    '<span class="glabel">' + fmtDistancia(km) + ' · ' + costoTxt + '</span>' +
-    '<button class="clear" type="button" onclick="event.stopPropagation();limpiarUbicacion()" aria-label="Quitar mi ubicación">×</button>';
-  btn.setAttribute('title', tarifa.label + ' — ' + tarifa.nota);
-}
-
-function errorUbicacion(err){
-  let msg = 'No pudimos obtener tu ubicación';
-  if (err.code === 1) msg = 'Permiso denegado. Puedes escribir tu ciudad al pedir por WhatsApp.';
-  else if (err.code === 2) msg = 'Ubicación no disponible';
-  else if (err.code === 3) msg = 'Tiempo agotado. Intenta de nuevo.';
-  mostrarGeoError(msg);
-}
-
-function mostrarGeoError(msg){
-  const btn = document.getElementById('geoBtn');
-  if (!btn) return;
-  btn.classList.remove('loading');
-  btn.setAttribute('aria-busy', 'false');
-  // Muestra el error brevemente (3s) y vuelve al estado inicial
-  btn.innerHTML = '<span aria-hidden="true">⚠️</span><span class="glabel">' + msg + '</span>';
-  btn.classList.add('error');
-  setTimeout(() => {
-    btn.classList.remove('error');
-    btn.innerHTML = '<span aria-hidden="true">📍</span><span class="glabel">Mi ubicación</span>';
-  }, 3500);
-}
-
-function limpiarUbicacion(){
-  try { sessionStorage.removeItem('geoVisitante'); } catch(e) {}
-  const btn = document.getElementById('geoBtn');
-  if (!btn) return;
-  btn.classList.remove('on', 'loading', 'error');
-  btn.setAttribute('aria-busy', 'false');
-  btn.innerHTML = '<span aria-hidden="true">📍</span><span class="glabel">Mi ubicación</span>';
-}
-
-// Restaura la última ubicación de la sesión si está vigente (<1 hora).
-// NO vuelve a pedir permiso — solo usa el valor cacheado.
-function restaurarUbicacion(){
-  try {
-    const raw = sessionStorage.getItem('geoVisitante');
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    // Si tiene más de 1 hora, lo descartamos
-    if (Date.now() - (data.ts || 0) > 3600 * 1000) {
-      sessionStorage.removeItem('geoVisitante');
-      return;
-    }
-    const tarifa = tarifaParaDistancia(data.km);
-    const btn = document.getElementById('geoBtn');
-    if (!btn) return;
-    btn.classList.add('on');
-    const costoTxt = tarifa.costo === 0 ? 'Gratis' : '$' + tarifa.costo.toLocaleString('es-CO');
-    btn.innerHTML =
-      '<span aria-hidden="true">📍</span>' +
-      '<span class="glabel">' + fmtDistancia(data.km) + ' · ' + costoTxt + '</span>' +
-      '<button class="clear" type="button" onclick="event.stopPropagation();limpiarUbicacion()" aria-label="Quitar mi ubicación">×</button>';
-    btn.setAttribute('title', tarifa.label + ' — ' + tarifa.nota);
-  } catch(e) { /* ignore */ }
-}
+// NOTA: Esta sección se eliminó de la tienda pública por requerimiento
+// del cliente. La geolocalización ahora vive en el formulario de Registro
+// del POS (frontend/src/pages/Registro.jsx), no en la página web.
 
 // Construye el mensaje del FAB según el contexto actual.
 // - Si hay un producto abierto en el visor → lo menciona por nombre
@@ -1441,9 +1270,6 @@ document.addEventListener('DOMContentLoaded', () => {
   actualizarFabWa();
   if (!phoneOk) console.warn('[WhatsApp] PHONE no configurado o inválido, botones deshabilitados.');
   else if (!phone2Ok) console.log('[WhatsApp] PHONE_2 no configurado, segundo botón oculto.');
-  // v2.2.8: Restaurar la última ubicación de la sesión si está vigente.
-  // No vuelve a pedir permiso, solo usa el valor cacheado.
-  restaurarUbicacion();
   pintarMarquesina();
   pintarNavegacion();
   actualizarCarrito();
