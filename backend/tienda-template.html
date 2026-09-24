@@ -45,11 +45,6 @@
 <style>
 :root{
   --primary:#1E3A5F; --accent:#2563EB; --accent-2:#3B82F6;
-  /* v2.2.9: Paleta extendida para transiciones de color suaves.
-     --accent-3: azul claro (transición header/body)
-     --accent-4: azul muy claro con tinte (transición body/footer)
-     El degradado va de oscuro (header/footer) a claro (body) sin saltos duros. */
-  --accent-3:#DBEAFE; --accent-4:#EFF6FF;
   --silver:#B0B8C4; --silver-l:#D4D8DD;
   --bg:#F5F5F7; --white:#FFFFFF;
   --tx:#1A1A2E; --tx-body:#4A4A5A; --tx-mut:#8A8A9A;
@@ -60,15 +55,8 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
-  font-family:"Inter",system-ui,sans-serif;color:var(--tx);
-  -webkit-font-smoothing:antialiased;overflow-x:hidden;
-  /* v2.2.9: Degradado sutil de blanco a azul muy claro.
-     El header (encima) tiene su propio degradado azul claro→blanco.
-     El body empieza en blanco (parte alta) y baja a azul claro (parte baja).
-     El footer sigue con su azul oscuro.
-     Resultado: una onda de color continua sin saltos duros. */
-  background:linear-gradient(180deg,#FFFFFF 0%,#F5F8FC 35%,#DBEAFE 75%,#BFDBFE 100%);
-  background-attachment:fixed;
+  font-family:"Inter",system-ui,sans-serif;background:var(--bg);color:var(--tx);
+  -webkit-font-smoothing:antialiased;overflow-x:hidden
 }
 img{max-width:100%}
 button{font-family:inherit}
@@ -76,35 +64,29 @@ button{font-family:inherit}
 .wrap{max-width:1240px;margin:0 auto;padding:0 1rem}
 
 /* ─────────── HEADER FIJO ─────────── */
-/* v2.2.9: Header con degradado azul claro → blanco en lugar de fondo
-   sólido blanco. Se integra con el body sin separación dura. */
 .head{position:fixed;top:0;left:0;right:0;height:var(--head-h);z-index:90;
-  background:linear-gradient(180deg,rgba(30,58,95,.96) 0%,rgba(37,99,235,.92) 50%,rgba(59,130,246,.85) 100%);
-  backdrop-filter:blur(12px);
-  box-shadow:0 2px 12px rgba(0,0,0,.10);
-  display:flex;align-items:center;color:#fff}
+  background:rgba(255,255,255,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);display:flex;align-items:center}
 .head__in{display:flex;align-items:center;gap:.9rem;width:100%;max-width:1240px;margin:0 auto;padding:0 1rem;min-height:var(--head-h)}
-.burger{width:40px;height:40px;border:0;background:transparent;cursor:pointer;display:flex;
-  flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;border-radius:9px;flex:0 0 auto;transition:background .2s}
-.burger:hover{background:rgba(255,255,255,.18)}
-.burger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px}
-/* v2.2.9: Logo y textos del header ahora blancos para contrastar con el degradado azul. */
-.head__logo{display:flex;align-items:center;justify-content:center;gap:.55rem;text-decoration:none;color:#fff;flex:0 0 auto;height:40px}
-.head__logo img{width:38px;height:38px;border-radius:50%;object-fit:cover;display:block;
-  border:2px solid rgba(255,255,255,.5)}
-.head__logo b{font-family:"Playfair Display",serif;font-size:1.08rem;letter-spacing:.02em;line-height:1;display:flex;align-items:center;color:#fff}
-.head__logo b span{color:#93C5FD;margin-left:.15rem}
+.burger{width:40px;height:40px;border:0;background:none;cursor:pointer;display:flex;
+  flex-direction:column;justify-content:center;align-items:center;gap:5px;padding:0;border-radius:9px;flex:0 0 auto}
+.burger:hover{background:var(--bg)}
+.burger span{display:block;width:22px;height:2px;background:var(--primary);border-radius:2px}
+.head__logo{display:flex;align-items:center;justify-content:center;gap:.55rem;text-decoration:none;color:var(--tx);flex:0 0 auto;height:40px}
+.head__logo img{width:38px;height:38px;border-radius:50%;object-fit:cover;display:block}
+.head__logo b{font-family:"Playfair Display",serif;font-size:1.08rem;letter-spacing:.02em;line-height:1;display:flex;align-items:center}
+.head__logo b span{color:var(--accent);margin-left:.15rem}
 .head__search{flex:1 1 auto;position:relative;max-width:520px}
-.head__search input{width:100%;height:40px;border:1.5px solid rgba(255,255,255,.35);border-radius:22px;
-  padding:0 1rem 0 2.4rem;font-size:.88rem;background:rgba(255,255,255,.95);color:var(--tx)}
-.head__search input::placeholder{color:#9CA3AF}
-.head__search input:focus{outline:none;border-color:#fff;background:#fff}
-.head__search .ico{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.55;color:var(--tx)}
-.cart-btn{position:relative;border:0;background:#fff;color:var(--primary);height:40px;padding:0 .95rem;
+.head__search input{width:100%;height:40px;border:1.5px solid var(--border);border-radius:22px;
+  padding:0 1rem 0 2.4rem;font-size:.88rem;background:var(--white);color:var(--tx)}
+.head__search input:focus{outline:none;border-color:var(--accent)}
+.head__search .ico{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);font-size:.85rem;opacity:.55}
+.cart-btn{position:relative;border:0;background:var(--primary);color:#fff;height:40px;padding:0 .95rem;
   border-radius:22px;cursor:pointer;font-weight:600;font-size:.85rem;flex:0 0 auto;
-  box-shadow:0 2px 8px rgba(0,0,0,.15);transition:transform .15s,box-shadow .15s}
-.cart-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.cart-btn .n{background:var(--accent);color:#fff;border-radius:10px;padding:0 .4rem;margin-left:.35rem;font-size:.75rem}
+  display:flex;align-items:center;gap:.35rem}
+.cart-btn:hover{background:var(--accent)}
+.cart-btn .ico-cart{width:18px;height:18px;flex:0 0 auto}
+.cart-btn .n{background:#fff;color:var(--primary);border-radius:10px;padding:0 .4rem;margin-left:.35rem;font-size:.75rem}
 @media(max-width:640px){
   .head__logo b{display:none}
   .head__search input{font-size:.8rem}
@@ -133,14 +115,11 @@ button{font-family:inherit}
 .nav-note{padding:1rem 1.2rem;font-size:.78rem;color:var(--tx-mut);line-height:1.5}
 
 /* ─────────── BIENVENIDA CON VIDEO ─────────── */
-/* v2.2.9: Degradado azul que se conecta con el header y el body.
-   Arriba (top): azul medio (encaja con el header azul claro).
-   Abajo (bottom): azul oscuro que se funde con el body. */
 .hero{margin-top:var(--head-h);position:relative;min-height:clamp(300px,52vh,460px);
   display:grid;align-items:center;justify-content:center;overflow:hidden;
-  background:linear-gradient(180deg,#2563EB 0%,#1E40AF 50%,#1E3A5F 100%)}
+  background:linear-gradient(135deg,var(--primary),#2A5298)}
 .hero__vid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(30,58,95,.20) 0%,rgba(30,58,95,.50) 50%,rgba(30,58,95,.85) 100%)}
+.hero__velo{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,20,36,.25) 0%,rgba(8,20,36,.55) 50%,rgba(8,20,36,.92) 100%)}
 .hero__tx{position:relative;padding:2.4rem 1rem 2.6rem;max-width:1240px;margin:0 auto;width:100%;color:#fff;text-align:center;display:flex;flex-direction:column;align-items:center}
 .hero__logo{width:100px;height:100px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.3);box-shadow:0 8px 40px rgba(0,0,0,.3);margin-bottom:1.2rem;flex-shrink:0}
 .hero__logo img{width:100%;height:100%;object-fit:cover}
@@ -151,7 +130,7 @@ button{font-family:inherit}
   padding:.35rem .8rem;border-radius:20px;font-size:.76rem;color:#fff}
 
 /* ─────────── MARQUESINA DE MARCAS ─────────── */
-.marcas{background:rgba(255,255,255,.6);border-bottom:1px solid rgba(0,0,0,.05);overflow:hidden;padding:.9rem 0;backdrop-filter:blur(8px)}
+.marcas{background:var(--white);border-bottom:1px solid var(--border);overflow:hidden;padding:.9rem 0}
 .pista{display:flex;width:max-content;animation:correr 30s linear infinite}
 .marcas:hover .pista,.pista:focus-within{animation-play-state:paused}
 @keyframes correr{from{transform:translateX(0)}to{transform:translateX(-50%)}}
@@ -292,8 +271,10 @@ button{font-family:inherit}
 .toast__v{border:0;background:none;color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer;padding:0;margin-top:.2rem}
 
 .wa-fab{position:fixed;right:18px;bottom:18px;z-index:80;width:54px;height:54px;border-radius:50%;
-  border:0;background:#25D366;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 6px 20px rgba(37,211,102,.4);
-  text-decoration:none;display:grid;place-items:center}
+  border:0;background:#25D366;color:#fff;cursor:pointer;box-shadow:0 6px 20px rgba(37,211,102,.4);
+  text-decoration:none;display:grid;place-items:center;transition:transform .15s,box-shadow .15s}
+.wa-fab:hover{transform:scale(1.07);box-shadow:0 8px 25px rgba(37,211,102,.5)}
+.wa-fab .ico-whatsapp{width:30px;height:30px;color:#fff}
 
 /* ─────────── VISOR ─────────── */
 .visor{position:fixed;inset:0;background:rgba(8,16,28,.92);z-index:120;display:none;
@@ -342,13 +323,11 @@ button{font-family:inherit}
 
 /* ─────────── PIE ─────────── */
 /* ─────────── FOOTER ANIMADO ─────────── */
-/* v2.2.9: Degradado azul oscuro → medio para integrar con el body.
-   El body termina en azul claro (BFDBFE), el footer arranca en azul oscuro.
-   Transición visual sin saltos. */
 footer{
   position:relative;overflow:hidden;
-  background:linear-gradient(180deg,#1E40AF 0%,#1E3A5F 50%,#0f2440 100%);
-  background-size:100% 200%;
+  background:linear-gradient(135deg,#0f2440 0%,#1E3A5F 35%,#2A5298 70%,#1E3A5F 100%);
+  background-size:300% 300%;
+  animation:footGrad 18s ease-in-out infinite;
   color:rgba(255,255,255,.85);
   padding:3.6rem 1rem 1.6rem;margin-top:3rem;
   border-top:1px solid rgba(255,255,255,.08);
@@ -437,7 +416,18 @@ footer::after{
       <span class="ico">🔍</span>
       <input id="buscador" type="search" placeholder="Buscar por nombre, marca o modelo..." oninput="setBusqueda(this.value)">
     </div>
-    <button class="cart-btn" onclick="abrirCarrito()">🛒<span class="t"> Carrito</span><span class="n" id="cartCount">0</span></button>
+    <!-- v2.2.10: Icono SVG real de carrito de compras (Lucide-style).
+         Antes era emoji 🛒, ahora es SVG inline que se ve consistente
+         en todos los navegadores y tamaños. -->
+    <button class="cart-btn" onclick="abrirCarrito()" aria-label="Abrir carrito">
+      <svg class="ico-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="9" cy="21" r="1"></circle>
+        <circle cx="20" cy="21" r="1"></circle>
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+      </svg>
+      <span class="t"> Carrito</span>
+      <span class="n" id="cartCount">0</span>
+    </button>
   </div>
 </header>
 
@@ -584,8 +574,15 @@ footer::after{
      producto, el mensaje menciona ese producto por nombre. Si no, es genérico.
      El onclick usa location.href (no window.open) para evitar el menú
      "Compartir" nativo en móviles. -->
+<!-- v2.2.10: Icono SVG real de WhatsApp (logo oficial). Antes era emoji
+     💬 que se veía como sticker. Ahora usa el path oficial de WhatsApp en
+     blanco sobre fondo verde (#25D366). -->
 <a class="wa-fab" id="waFab" href="#" target="_blank" rel="noopener"
-   onclick="return abrirFabWa(event)" aria-label="WhatsApp">💬</a>
+   onclick="return abrirFabWa(event)" aria-label="Chatear por WhatsApp">
+  <svg class="ico-whatsapp" viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+    <path d="M16.001 3C9.373 3 4 8.373 4 15c0 2.413.732 4.65 1.97 6.527L4 29l7.658-1.93A11.945 11.945 0 0 0 16.001 27c6.627 0 12-5.373 12-12s-5.373-12-12-12zm0 21.6c-1.927 0-3.706-.553-5.193-1.502l-.372-.232-4.546 1.146 1.167-4.43-.244-.382A9.575 9.575 0 0 1 6.4 15c0-5.302 4.298-9.6 9.6-9.6 5.302 0 9.6 4.298 9.6 9.6s-4.298 9.6-9.6 9.6zm5.297-7.236c-.295-.148-1.745-.86-2.014-.958-.27-.099-.466-.148-.662.148-.197.295-.762.958-.935 1.155-.173.197-.346.222-.642.074-.295-.148-1.245-.46-2.37-1.467-.876-.78-1.468-1.745-1.64-2.04-.173-.295-.018-.456.13-.604.133-.132.295-.346.443-.519.148-.173.197-.295.295-.493.099-.197.05-.37-.025-.519-.074-.148-.662-1.596-.908-2.185-.239-.574-.482-.496-.662-.505l-.563-.01c-.197 0-.518.074-.79.37-.27.295-1.034 1.012-1.034 2.467 0 1.455 1.06 2.86 1.208 3.058.148.197 2.087 3.187 5.058 4.47.707.305 1.259.486 1.69.623.71.226 1.357.194 1.868.118.57-.085 1.745-.713 1.99-1.402.246-.69.246-1.28.173-1.402-.074-.123-.27-.197-.563-.345z"/>
+  </svg>
+</a>
 
 <!-- ══════════ VISOR ══════════ -->
 <div class="visor" id="visor" onclick="cerrarVisor(event)">
