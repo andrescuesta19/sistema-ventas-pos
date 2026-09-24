@@ -72,15 +72,31 @@ function startBackendInProduction() {
     return;
   }
 
-  // .env: si no existe, copiar desde .env.production
+  // .env: si no existe O está corrupto (tiene placeholders), copiar desde .env.production
+  // v2.2.10: Validamos que el .env tenga DATABASE_URL válido. Si no, lo regeneramos
+  // desde .env.production (que tiene los secretos reales).
+  // Esto evita que la app se quede colgada en "Iniciando servidor..." por un .env roto.
   const envPath = path.join(backendDir, '.env');
   const envProductionPath = path.join(backendDir, '.env.production');
-  if (!fs.existsSync(envPath) && fs.existsSync(envProductionPath)) {
-    try {
-      fs.copyFileSync(envProductionPath, envPath);
-      console.log('✅ .env creado desde .env.production');
-    } catch (e) {
-      console.error('❌ No se pudo crear .env:', e.message);
+  if (fs.existsSync(envProductionPath)) {
+    let shouldCopy = !fs.existsSync(envPath);
+    if (!shouldCopy) {
+      try {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        // Detectar placeholders [NUEVA_PASSWORD] o [NUEVO_...] que indican .env roto
+        if (/\[NUEV[OA][_\s]/i.test(envContent)) {
+          console.warn('⚠ .env tiene placeholders [NUEVO_*]. Regenerando desde .env.production...');
+          shouldCopy = true;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    if (shouldCopy) {
+      try {
+        fs.copyFileSync(envProductionPath, envPath);
+        console.log('✅ .env regenerado desde .env.production');
+      } catch (e) {
+        console.error('❌ No se pudo crear .env:', e.message);
+      }
     }
   }
 
