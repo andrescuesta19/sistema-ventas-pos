@@ -2,7 +2,7 @@ import { API_URL } from '../config';
 import { apiGet, apiPost, apiPut, apiDelete, getToken } from '../api';
 import { resolverUrlImagen } from '../utils/imageUrl';
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon, Star, GripVertical, Save } from 'lucide-react';
+import { Plus, Trash2, Image as ImageIcon, ImagePlus, Upload, X, Edit3, Link as LinkIcon, Star, GripVertical, Save, Tag } from 'lucide-react';
 
 const CATEGORIAS_DEFAULT = [
   { id_categoria: 1, nombre_categoria: 'Reloj Hombre' },
@@ -27,6 +27,12 @@ const Inventario = ({ user }) => {
   const [destacados, setDestacados] = useState([]);
   const [savingReorder, setSavingReorder] = useState(false);
   const [dragIdx, setDragIdx] = useState(null);
+  // v2.2.10: estado para el modal de gestión de oferta y para saber
+  // qué fila está guardando (muestra spinner).
+  const [showOfertaModal, setShowOfertaModal] = useState(false);
+  const [ofertaTarget, setOfertaTarget] = useState(null);
+  const [ofertaForm, setOfertaForm] = useState({ precio_oferta: '', activa: false });
+  const [guardandoOferta, setGuardandoOferta] = useState(null);
 
   const initialForm = {
     codigo_barras: '',
@@ -287,6 +293,87 @@ const Inventario = ({ user }) => {
     }
   };
 
+  // v2.2.10: Toggle de oferta.
+  // - Si ya está activa → abre modal para editar/desactivar
+  // - Si no está activa → abre modal para configurar el precio de oferta
+  const toggleOferta = (producto) => {
+    setOfertaTarget(producto);
+    setOfertaForm({
+      precio_oferta: producto.precio_oferta != null ? String(producto.precio_oferta) : '',
+      activa: !!producto.oferta_activa
+    });
+    setShowOfertaModal(true);
+  };
+
+  // v2.2.10: guardar la oferta (PUT /api/productos/:id/oferta)
+  const guardarOferta = async () => {
+    if (!ofertaTarget) return;
+    const idProducto = ofertaTarget.id_producto;
+    setGuardandoOferta(idProducto);
+    try {
+      const precioNum = ofertaForm.precio_oferta
+ ? Number(ofertaForm.precio_oferta) : null;
+      // Si está activa pero no hay precio, no permitir guardar
+      if (ofertaForm.activa && (precioNum === null || precioNum <= 0)) {
+        alert('Para activar la oferta debes ingresar un precio válido mayor que 0.');
+        setGuardandoOferta(null);
+        return;
+      }
+      const payload = {
+        precio_oferta: ofertaForm.activa ? precioNum : null,
+        oferta_activa: ofertaForm.activa
+      };
+      const resp = await fetch(`${API_URL}/api/productos/${idProducto}/oferta`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(payload)
+      }).then(r => r.json().then(d => ({ ok: r.ok, body: d })));
+      if (!resp.ok) {
+        alert('Error: ' + (resp.body.error || 'desconocido'));
+        setGuardandoOferta(null);
+        return;
+      }
+      // Éxito: refrescar productos y cerrar modal
+      await fetchProductos();
+      setShowOfertaModal(false);
+      setOfertaTarget(null);
+    } catch (err) {
+      alert('Error al guardar oferta: ' + err.message);
+    } finally {
+      setGuardandoOferta(null);
+    }
+  };
+
+  // v2.2.10: eliminar oferta completamente
+  const eliminarOferta = async () => {
+    if (!ofertaTarget) return;
+    if (!confirm('¿Eliminar la oferta de este producto? El precio volverá al normal.')) return;
+    const idProducto = ofertaTarget.id_producto;
+    setGuardandoOferta(idProducto);
+    try {
+      const resp = await fetch(`${API_URL}/api/productos/${idProducto}/oferta`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${getToken()}`
+        }
+      }).then(r => r.json().then(d => ({ ok: r.ok, body: d })));
+      if (!resp.ok) {
+        alert('Error: ' + (resp.body.error || 'desconocido'));
+        return;
+      }
+      await fetchProductos();
+      setShowOfertaModal(false);
+      setOfertaTarget(null);
+    } catch (err) {
+      alert('Error al eliminar oferta: ' + err.message);
+    } finally {
+      setGuardandoOferta(null);
+    }
+  };
+
   // v2.2.6: Abrir modal de reordenar destacados
   const abrirReorderDestacados = async () => {
     try {
@@ -446,6 +533,7 @@ const Inventario = ({ user }) => {
               <th style={{ padding: '1rem' }}>Precio Venta</th>
               <th style={{ padding: '1rem' }}>Stock</th>
               <th style={{ padding: '1rem', textAlign: 'center' }} title="Destacado: aparece al inicio en la tienda pública">Dest.</th>
+              <th style={{ padding: '1rem', textAlign: 'center' }} title="Oferta activa: badge OFERTA + precio tachado en tienda pública">Oferta</th>
               <th style={{ padding: '1rem', textAlign: 'center' }}>Tienda</th>
               <th style={{ padding: '1rem', textAlign: 'center' }}>Acciones</th>
             </tr>
@@ -506,6 +594,31 @@ const Inventario = ({ user }) => {
                     >
                       <Star size={14} fill={p.destacado ? '#F59E0B' : 'none'} />
                       {p.destacado ? `#${p.posicion_destacado || '?'}` : ''}
+                    </button>
+                  </td>
+                  {/* v2.2.10: Botón toggle de oferta (mismo patrón que destacado). */}
+                  <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <button
+                      onClick={() => toggleOferta(p)}
+                      title={p.oferta_activa ? `Oferta activa: ${formatearCOP(p.precio_oferta)} (clic para gestionar)` : 'Clic para configurar oferta'}
+                      disabled={guardandoOferta === p.id_producto}
+                      style={{
+                        background: p.oferta_activa ? '#FEE2E2' : 'transparent',
+                        border: p.oferta_activa ? '1px solid #dc2626' : '1px dashed #cbd5e1',
+                        color: p.oferta_activa ? '#dc2626' : '#94a3b8',
+                        cursor: p.oferta_activa ? 'pointer' : 'pointer',
+                        padding: '0.35rem 0.6rem',
+                        borderRadius: '8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        transition: 'all .2s'
+                      }}
+                    >
+                      <Tag size={14} fill={p.oferta_activa ? '#dc2626' : 'none'} />
+                      {p.oferta_activa ? formatearCOP(p.precio_oferta) : ''}
                     </button>
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center' }}>
@@ -876,6 +989,91 @@ const Inventario = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* v2.2.10: Modal de gestión de oferta (activar/desactivar/configurar). */}
+      {showOfertaModal && ofertaTarget && (
+        <div className="modal-overlay" onClick={() => setShowOfertaModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Tag size={20} color="#dc2626" />
+                Oferta: {ofertaTarget.nombre_producto}
+              </h2>
+              <button className="close-btn" onClick={() => setShowOfertaModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ margin: 0, color: 'var(--text-light)', fontSize: '0.88rem' }}>
+                Precio de venta actual: < <strong>{formatearCOP(ofertaTarget.precio_venta)}</strong>.
+                Define el precio con descuento. La tienda web mostrará precio tachado + nuevo + badge OFERTA.
+              </p>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  Precio con oferta (COP) *
+                </label>
+                <input
+                  type="number"
+                  step="100"
+                  min="1"
+                  max={ofertaTarget.precio_venta - 1}
+                  placeholder="Ej: 580000"
+                  value={ofertaForm.precio_oferta}
+                  onChange={e => setOfertaForm({ ...ofertaForm, precio_oferta: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', border: '1.5px solid var(--border-color)', borderRadius: '8px', fontSize: '1rem' }}
+                />
+                {ofertaForm.precio_oferta && Number(ofertaForm.precio_oferta) > 0 && Number(ofertaForm.precio_oferta) < Number(ofertaTarget.precio_venta) && (
+                  <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#dc2626', fontWeight: 600 }}>
+                    Descuento: −{Math.round((1 - Number(ofertaForm.precio_oferta) / Number(ofertaTarget.precio_venta)) * 100)}% ({formatearCOP(Number(ofertaTarget.precio_venta) - Number(ofertaForm.precio_oferta))} menos)
+                  </div>
+                )}
+                {ofertaForm.precio_oferta && Number(ofertaForm.precio_oferta) >= Number(ofertaTarget.precio_venta) && (
+                  <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#dc2626' }}>
+                    ⚠️ El precio con oferta debe ser menor que {formatearCOP(ofertaTarget.precio_venta)}.
+                  </div>
+                )}
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={ofertaForm.activa}
+                  onChange={e => setOfertaForm({ ...ofertaForm, activa: e.target.checked })}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Oferta activa</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-light)' }}>(visible en la tienda pública)</span>
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                {ofertaTarget.oferta_activa && (
+                  <button
+                    type="button"
+                    onClick={eliminarOferta}
+                    disabled={guardandoOferta === ofertaTarget.id_producto}
+                    style={{ background: 'transparent', border: '1px solid #dc2626', color: '#dc2626', padding: '0.55rem 0.9rem', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Eliminar oferta
+                  </button>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowOfertaModal(false)}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={guardarOferta}
+                    disabled={guardandoOferta === ofertaTarget.id_producto || !ofertaForm.activa}
+                    style={{ background: '#dc2626', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    {guardandoOferta === ofertaTarget.id_producto ? 'Guardando…' : (ofertaForm.activa ? 'Activar oferta' : 'Guardar')}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
